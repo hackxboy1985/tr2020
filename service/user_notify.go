@@ -2,11 +2,15 @@ package service
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
@@ -101,6 +105,14 @@ func NotifyUser(userId int, userEmail string, userSetting dto.UserSetting, data 
 			return nil
 		}
 		return sendGotifyNotify(gotifyUrl, gotifyToken, userSetting.GotifyPriority, data)
+	case dto.NotifyTypeFeishu:
+		feishuUrl := userSetting.FeishuUrl
+		if feishuUrl == "" {
+			common.SysLog(fmt.Sprintf("user %d has no feishu url, skip sending feishu", userId))
+			return nil
+		}
+		feishuSecret := userSetting.FeishuSecret
+		return sendFeishuNotify(feishuUrl, feishuSecret, data)
 	}
 	return nil
 }
@@ -274,6 +286,102 @@ func sendGotifyNotify(gotifyUrl string, gotifyToken string, priority int, data d
 		// 检查响应状态
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			return fmt.Errorf("gotify request failed with status code: %d", resp.StatusCode)
+		}
+	}
+
+	return nil
+}
+
+func sendFeishuNotify(feishuUrl string, secret string, data dto.Notify) error {
+	// 处理占位符
+	content := data.Content
+	for _, value := range data.Values {
+		content = strings.Replace(content, dto.ContentValueParam, fmt.Sprintf("%v", value), 1)
+	}
+
+	// 构建飞书消息格式
+	textContent := data.Title + "\n" + content
+
+	type FeishuContent struct {
+		Text string `json:"text"`
+	}
+	type FeishuMessage struct {
+		MsgType   string        `json:"msg_type"`
+		Content   FeishuContent `json:"content"`
+		Timestamp string        `json:"timestamp,omitempty"`
+		Sign      string        `json:"sign,omitempty"`
+	}
+
+	msg := FeishuMessage{
+		MsgType: "text",
+		Content: FeishuContent{
+			Text: textContent,
+		},
+	}
+
+	// 如果配置了签名密钥，生成签名
+	if secret != "" {
+		timestamp := fmt.Sprintf("%d", time.Now().Unix())
+		msg.Timestamp = timestamp
+
+		stringToSign := timestamp + "\n" + secret
+		h := hmac.New(sha256.New, []byte(secret))
+		h.Write([]byte(stringToSign))
+		msg.Sign = base64.StdEncoding.EncodeToString(h.Sum(nil))
+	}
+
+	payloadBytes, err := json.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal feishu payload: %v", err)
+	}
+
+	var req *http.Request
+	var resp *http.Response
+
+	if system_setting.EnableWorker() {
+		workerReq := &WorkerRequest{
+			URL:    feishuUrl,
+			Key:    system_setting.WorkerValidKey,
+			Method: http.MethodPost,
+			Headers: map[string]string{
+				"Content-Type": "application/json; charset=utf-8",
+				"User-Agent":   "NewAPI-Feishu-Notify/1.0",
+			},
+			Body: payloadBytes,
+		}
+
+		resp, err = DoWorkerRequest(workerReq)
+		if err != nil {
+			return fmt.Errorf("failed to send feishu request through worker: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return fmt.Errorf("feishu request failed with status code: %d", resp.StatusCode)
+		}
+	} else {
+		fetchSetting := system_setting.GetFetchSetting()
+		if err := common.ValidateURLWithFetchSetting(feishuUrl, fetchSetting.EnableSSRFProtection, fetchSetting.AllowPrivateIp, fetchSetting.DomainFilterMode, fetchSetting.IpFilterMode, fetchSetting.DomainList, fetchSetting.IpList, fetchSetting.AllowedPorts, fetchSetting.ApplyIPFilterForDomain); err != nil {
+			return fmt.Errorf("request reject: %v", err)
+		}
+
+		req, err = http.NewRequest(http.MethodPost, feishuUrl, bytes.NewBuffer(payloadBytes))
+		if err != nil {
+			return fmt.Errorf("failed to create feishu request: %v", err)
+		}
+
+		req.Header.Set("Content-Type", "application/json; charset=utf-8")
+		req.Header.Set("User-Agent", "NewAPI-Feishu-Notify/1.0")
+
+		client := GetHttpClient()
+		resp, err = client.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to send feishu request: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return fmt.Errorf("feishu request failed with status code: %d", resp.StatusCode)
 		}
 	}
 

@@ -1774,7 +1774,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "相关项目",
     "footer.defaultCopyright": "版权所有。",
-    "footer.new\u0061pi.projectAttributionSuffix": "版权所有，由项目贡献者设计与开发。",
+    "footer.newapi.projectAttributionSuffix": "版权所有，由项目贡献者设计与开发。",
     "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment": "对于 2025 年 5 月 10 日之后添加的渠道，在部署时无需从模型名称中移除 \".\"",
     "For private deployments, format: https://fastgpt.run/api/openapi": "对于私有部署，格式为：https://fastgpt.run/api/openapi",
     "Force a syntactically valid JSON response": "强制返回语法合法的 JSON",
@@ -4522,6 +4522,17 @@
     "Zero retention": "零数据保留",
     "Zhipu": "智谱",
     "Zhipu V4": "智谱 V4",
-    "Zoom": "缩放"
+    "Zoom": "缩放",
+    "Feishu": "飞书",
+    "Feishu Webhook URL": "飞书Webhook地址",
+    "Copy from Feishu group bot settings": "从飞书群机器人设置中复制",
+    "Feishu Signing Secret": "飞书签名校验密钥",
+    "Optional signing key": "签名密钥（可选）",
+    "Leave empty if signature validation is not enabled": "未启用签名校验请留空",
+    "1. Add a custom bot in your Feishu group": "1. 在飞书群中添加自定义机器人",
+    "2. Copy the webhook URL": "2. 复制 Webhook 地址",
+    "3. Optionally set up a signing secret for security": "3. 可选：设置签名校验密钥",
+    "4. Paste the webhook URL above": "4. 将地址粘贴到上方输入框",
+    "Feishu Bot Documentation": "飞书机器人文档"
   }
 }

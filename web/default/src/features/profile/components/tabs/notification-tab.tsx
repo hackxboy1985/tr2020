@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useState, useEffect, useCallback } from 'react'
-import { Bell, Loader2, Mail, Server, Webhook } from 'lucide-react'
+import { Bell, Loader2, Mail, Send, Server, Webhook } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { ROLE } from '@/lib/roles'
@@ -40,6 +40,7 @@ const NOTIFICATION_ICONS: Record<string, typeof Mail> = {
   webhook: Webhook,
   bark: Bell,
   gotify: Server,
+  feishu: Send,
 }
 
 // ============================================================================
@@ -65,6 +66,8 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
     gotify_url: '',
     gotify_token: '',
     gotify_priority: 5,
+    feishu_url: '',
+    feishu_secret: '',
     accept_unset_model_ratio_model: false,
     record_ip_log: false,
     upstream_model_update_notify_enabled: false,
@@ -92,6 +95,8 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
         gotify_url: parsed.gotify_url ?? '',
         gotify_token: parsed.gotify_token ?? '',
         gotify_priority: parsed.gotify_priority ?? 5,
+        feishu_url: parsed.feishu_url ?? '',
+        feishu_secret: parsed.feishu_secret ?? '',
         accept_unset_model_ratio_model:
           parsed.accept_unset_model_ratio_model || false,
         record_ip_log: parsed.record_ip_log || false,
@@ -129,7 +134,7 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
           onValueChange={(value) =>
             updateField('notify_type', value as NotifyType)
           }
-          className='grid grid-cols-4 gap-1.5 sm:gap-3'
+          className='grid grid-cols-5 gap-1.5 sm:gap-3'
         >
           {NOTIFICATION_METHODS.map((method) => {
             const Icon = NOTIFICATION_ICONS[method.value]
@@ -303,6 +308,60 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
                 className='text-primary hover:underline'
               >
                 {t('Gotify Documentation')}
+              </a>
+            </p>
+          </div>
+        </>
+      )}
+
+      {/* Feishu Settings */}
+      {settings.notify_type === 'feishu' && (
+        <>
+          <div className='space-y-1.5'>
+            <Label htmlFor='feishuUrl'>{t('Feishu Webhook URL')}</Label>
+            <Input
+              id='feishuUrl'
+              type='url'
+              className='h-9'
+              value={settings.feishu_url}
+              onChange={(e) => updateField('feishu_url', e.target.value)}
+              placeholder={t('https://open.feishu.cn/open-apis/bot/v2/hook/xxx')}
+            />
+            <p className='text-muted-foreground text-xs'>
+              {t('Copy from Feishu group bot settings')}
+            </p>
+          </div>
+          <div className='space-y-1.5'>
+            <Label htmlFor='feishuSecret'>{t('Feishu Signing Secret')}</Label>
+            <PasswordInput
+              id='feishuSecret'
+              value={settings.feishu_secret}
+              onChange={(e) => updateField('feishu_secret', e.target.value)}
+              placeholder={t('Optional signing key')}
+            />
+            <p className='text-muted-foreground text-xs'>
+              {t('Leave empty if signature validation is not enabled')}
+            </p>
+          </div>
+          <div className='bg-muted/50 rounded-lg border p-3 sm:p-4'>
+            <h5 className='mb-1.5 text-sm font-medium sm:mb-2'>
+              {t('Setup Instructions')}
+            </h5>
+            <ol className='text-muted-foreground space-y-1 text-xs'>
+              <li>{t('1. Add a custom bot in your Feishu group')}</li>
+              <li>{t('2. Copy the webhook URL')}</li>
+              <li>{t('3. Optionally set up a signing secret for security')}</li>
+              <li>{t('4. Paste the webhook URL above')}</li>
+            </ol>
+            <p className='text-muted-foreground mt-3 text-xs'>
+              {t('Learn more:')}{' '}
+              <a
+                href='https://open.feishu.cn/document/client-docs/bot/v3/add-custom-bot'
+                target='_blank'
+                rel='noopener noreferrer'
+                className='text-primary hover:underline'
+              >
+                {t('Feishu Bot Documentation')}
               </a>
             </p>
           </div>

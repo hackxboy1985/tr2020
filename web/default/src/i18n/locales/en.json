@@ -1774,7 +1774,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "Related Projects",
     "footer.defaultCopyright": "All rights reserved.",
-    "footer.new\u0061pi.projectAttributionSuffix": "All rights reserved. Designed and developed by the project contributors.",
+    "footer.newapi.projectAttributionSuffix": "All rights reserved. Designed and developed by the project contributors.",
     "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment": "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment",
     "For private deployments, format: https://fastgpt.run/api/openapi": "For private deployments, format: https://fastgpt.run/api/openapi",
     "Force a syntactically valid JSON response": "Force a syntactically valid JSON response",
@@ -4522,6 +4522,17 @@
     "Zero retention": "Zero retention",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Feishu": "Feishu",
+    "Feishu Webhook URL": "Feishu Webhook URL",
+    "Copy from Feishu group bot settings": "Copy from Feishu group bot settings",
+    "Feishu Signing Secret": "Feishu Signing Secret",
+    "Optional signing key": "Optional signing key",
+    "Leave empty if signature validation is not enabled": "Leave empty if signature validation is not enabled",
+    "1. Add a custom bot in your Feishu group": "1. Add a custom bot in your Feishu group",
+    "2. Copy the webhook URL": "2. Copy the webhook URL",
+    "3. Optionally set up a signing secret for security": "3. Optionally set up a signing secret for security",
+    "4. Paste the webhook URL above": "4. Paste the webhook URL above",
+    "Feishu Bot Documentation": "Feishu Bot Documentation"
   }
 }

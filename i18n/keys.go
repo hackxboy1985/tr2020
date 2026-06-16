@@ -246,6 +246,8 @@ const (
 	MsgSettingGotifyUrlEmpty   = "setting.gotify_url_empty"
 	MsgSettingGotifyTokenEmpty = "setting.gotify_token_empty"
 	MsgSettingGotifyUrlInvalid = "setting.gotify_url_invalid"
+	MsgSettingFeishuUrlEmpty   = "setting.feishu_url_empty"
+	MsgSettingFeishuUrlInvalid = "setting.feishu_url_invalid"
 	MsgSettingUrlMustHttp      = "setting.url_must_http"
 	MsgSettingSaved            = "setting.saved"
 )

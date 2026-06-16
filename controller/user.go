@@ -1148,6 +1148,8 @@ type UpdateUserSettingRequest struct {
 	GotifyUrl                        string  `json:"gotify_url,omitempty"`
 	GotifyToken                      string  `json:"gotify_token,omitempty"`
 	GotifyPriority                   int     `json:"gotify_priority,omitempty"`
+	FeishuUrl                        string  `json:"feishu_url,omitempty"`
+	FeishuSecret                     string  `json:"feishu_secret,omitempty"`
 	UpstreamModelUpdateNotifyEnabled *bool   `json:"upstream_model_update_notify_enabled,omitempty"`
 	AcceptUnsetModelRatioModel       bool    `json:"accept_unset_model_ratio_model"`
 	RecordIpLog                      bool    `json:"record_ip_log"`
@@ -1161,7 +1163,7 @@ func UpdateUserSetting(c *gin.Context) {
 	}
 
 	// 验证预警类型
-	if req.QuotaWarningType != dto.NotifyTypeEmail && req.QuotaWarningType != dto.NotifyTypeWebhook && req.QuotaWarningType != dto.NotifyTypeBark && req.QuotaWarningType != dto.NotifyTypeGotify {
+	if req.QuotaWarningType != dto.NotifyTypeEmail && req.QuotaWarningType != dto.NotifyTypeWebhook && req.QuotaWarningType != dto.NotifyTypeBark && req.QuotaWarningType != dto.NotifyTypeGotify && req.QuotaWarningType != dto.NotifyTypeFeishu {
 		common.ApiErrorI18n(c, i18n.MsgSettingInvalidType)
 		return
 	}
@@ -1234,6 +1236,24 @@ func UpdateUserSetting(c *gin.Context) {
 		}
 	}
 
+	// 如果是飞书类型，验证飞书Webhook地址
+	if req.QuotaWarningType == dto.NotifyTypeFeishu {
+		if req.FeishuUrl == "" {
+			common.ApiErrorI18n(c, i18n.MsgSettingFeishuUrlEmpty)
+			return
+		}
+		// 验证URL格式
+		if _, err := url.ParseRequestURI(req.FeishuUrl); err != nil {
+			common.ApiErrorI18n(c, i18n.MsgSettingFeishuUrlInvalid)
+			return
+		}
+		// 检查是否是HTTP或HTTPS
+		if !strings.HasPrefix(req.FeishuUrl, "https://") && !strings.HasPrefix(req.FeishuUrl, "http://") {
+			common.ApiErrorI18n(c, i18n.MsgSettingUrlMustHttp)
+			return
+		}
+	}
+
 	userId := c.GetInt("id")
 	user, err := model.GetUserById(userId, true)
 	if err != nil {
@@ -1282,6 +1302,14 @@ func UpdateUserSetting(c *gin.Context) {
 			settings.GotifyPriority = 5
 		} else {
 			settings.GotifyPriority = req.GotifyPriority
+		}
+	}
+
+	// 如果是飞书类型，添加飞书配置到设置中
+	if req.QuotaWarningType == dto.NotifyTypeFeishu {
+		settings.FeishuUrl = req.FeishuUrl
+		if req.FeishuSecret != "" {
+			settings.FeishuSecret = req.FeishuSecret
 		}
 	}
 
