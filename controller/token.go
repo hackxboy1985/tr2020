@@ -301,6 +301,7 @@ func UpdateToken(c *gin.Context) {
 		cleanToken.Group = token.Group
 		cleanToken.CrossGroupRetry = token.CrossGroupRetry
 		cleanToken.SavePrompt = token.SavePrompt
+	}
 	err = cleanToken.Update()
 	if err != nil {
 		common.ApiError(c, err)

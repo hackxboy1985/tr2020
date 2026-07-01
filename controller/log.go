@@ -24,8 +24,6 @@ func GetPromptLog(c *gin.Context) {
 	common.ApiSuccess(c, promptLog)
 }
 
-func init() {
-)
 
 func GetAllLogs(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
