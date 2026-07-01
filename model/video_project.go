@@ -13,8 +13,11 @@ type VideoProject struct {
 	UpdatedAt time.Time `json:"updated_at"`
 
 	// 项目基础信息
-	ProjectName string `gorm:"type:varchar(255);index" json:"project_name"` // 项目名称
-	UserId      int    `gorm:"index" json:"user_id"`                        // 创建用户 ID
+	ProjectName     string `gorm:"type:varchar(255);index" json:"project_name"`     // 项目名称
+	UserId          int    `gorm:"index" json:"user_id"`                            // 创建用户 ID
+	Username        string `gorm:"index;default:''" json:"username"`                // 用户名（冗余，便于查询）
+	ChannelType     string `gorm:"type:varchar(20);index;default:'platform'" json:"channel_type"` // 渠道类型: 'coze' 或 'platform'
+	RemoteProjectId string `gorm:"type:varchar(255);index" json:"remote_project_id"` // 三方平台的项目ID
 
 	// 广告基础信息
 	ProductImgUrl string `gorm:"type:text" json:"product_img_url"` // 产品图 OSS URL
@@ -41,14 +44,16 @@ type VideoProject struct {
 	VideoModel string `gorm:"type:varchar(50)" json:"video_model,omitempty"` // AI视频模型
 	Whstr      string `gorm:"type:varchar(20)" json:"whstr"`       // 视频宽高比
 
-	// Coze 回调结果
+	// 回调结果
 	MainImageUrl     string `gorm:"type:text" json:"main_image_url,omitempty"`      // 主分镜图 URL
 	MainImageAssetId string `gorm:"type:varchar(255)" json:"main_image_asset_id,omitempty"` // 主分镜图资产 ID
-	GeneratedResult  string `gorm:"type:text" json:"generated_result,omitempty"`    // Coze 回调原始 JSON
+	GeneratedResult  string `gorm:"type:text" json:"generated_result,omitempty"`    // 回调原始 JSON
+	FirstVideoUrl    string `gorm:"type:text" json:"first_video_url,omitempty"`     // 第一个视频 URL
 
 	// 系统字段
 	Status   string `gorm:"type:varchar(50);index" json:"status"`      // 项目状态
 	ErrorMsg string `gorm:"type:text" json:"error_msg,omitempty"`      // 失败原因
+	Progress string `gorm:"type:varchar(255)" json:"progress,omitempty"` // 进度信息
 	Deleted  int    `gorm:"type:tinyint;default:0;index" json:"deleted"` // 0=未删 1=软删
 }
 
@@ -86,6 +91,17 @@ func GetVideoProjectById(id int64, userId int) (*VideoProject, error) {
 func GetVideoProjectByIdAdmin(id int64) (*VideoProject, error) {
 	var project VideoProject
 	err := DB.Where("id = ? AND deleted = 0", id).First(&project).Error
+	if err != nil {
+		return nil, err
+	}
+	return &project, nil
+}
+
+// GetVideoProjectByRemoteId 根据渠道和远程ID获取项目
+func GetVideoProjectByRemoteId(channelType, remoteId string) (*VideoProject, error) {
+	var project VideoProject
+	err := DB.Where("channel_type = ? AND remote_project_id = ? AND deleted = 0",
+		channelType, remoteId).First(&project).Error
 	if err != nil {
 		return nil, err
 	}

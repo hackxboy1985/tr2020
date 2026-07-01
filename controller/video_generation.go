@@ -1,20 +1,19 @@
 package controller
 
 import (
-	"fmt"
+	"io"
 	"net/http"
 	"strconv"
-	"time"
 
-	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 )
 
 // CreateVideoProject 创建视频生成项目
 func CreateVideoProject(c *gin.Context) {
-	var req dto.VideoGenerationRequest
+	var req dto.CreateVideoProjectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": http.StatusBadRequest,
@@ -26,35 +25,25 @@ func CreateVideoProject(c *gin.Context) {
 
 	userId := c.GetInt("id")
 
-	// 生成项目名称（用户名+日期+时间戳）
-	username := c.GetString("username")
-	projectName := fmt.Sprintf("%s_%s_%d", username, time.Now().Format("20060102"), time.Now().Unix())
-
-	project := &model.VideoProject{
-		ProjectName:   projectName,
-		UserId:        userId,
-		ProductImgUrl: req.ProductImgUrl,
-		Brand:         req.Brand,
-		ProductName:   req.ProductName,
-		Tagline:       req.Tagline,
-		SellingPoints: req.SellingPoints,
-		Prompt:        req.Prompt,
-		Vtype:         req.Vtype,
-		VtypeAdd:      req.VtypeAdd,
-		Language:      req.Language,
-		Platform:      req.Platform,
-		Region:        req.Region,
-		Roles:         req.Roles,
-		SelectAudios:  req.SelectAudios,
-		Duration:      req.Duration,
-		Resolution:    req.Resolution,
-		VideoModel:    req.VideoModel,
-		Whstr:         req.Whstr,
-		Status:        model.VideoProjectStatusCreated,
-		Deleted:       0,
+	// 获取渠道类型：优先使用请求参数，否则使用系统默认配置
+	channelType := req.ChannelType
+	if channelType == "" {
+		channelType = service.GetDefaultChannelType()
 	}
 
-	err := model.CreateVideoProject(project)
+	// 创建服务实例
+	videoService, err := service.NewVideoGenerationService(channelType)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": http.StatusInternalServerError,
+			"msg":  "failed to initialize service: " + err.Error(),
+			"data": nil,
+		})
+		return
+	}
+
+	// 创建项目（包含调用上游API）
+	project, err := videoService.CreateProject(c.Request.Context(), userId, &req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": http.StatusInternalServerError,
@@ -64,11 +53,8 @@ func CreateVideoProject(c *gin.Context) {
 		return
 	}
 
-	// TODO: 这里应该调用 Coze 工作流接口，触发视频生成
-	// 暂时返回项目创建成功，后续需要实现异步调用逻辑
-
-	resp := dto.VideoGenerationResponse{
-		ProjectID:   project.Id,
+	resp := dto.VideoProjectResponse{
+		ProjectId:   project.Id,
 		ProjectName: project.ProjectName,
 		Status:      project.Status,
 		CreatedAt:   project.CreatedAt.Unix(),
@@ -96,6 +82,7 @@ func GetVideoProject(c *gin.Context) {
 	userId := c.GetInt("id")
 	isAdmin := c.GetBool("is_admin")
 
+	// 获取项目（会自动从数据库获取channel_type）
 	var project *model.VideoProject
 	if isAdmin {
 		project, err = model.GetVideoProjectByIdAdmin(projectId)
@@ -112,20 +99,41 @@ func GetVideoProject(c *gin.Context) {
 		return
 	}
 
-	// TODO: 这里可以查询关联的视频 URL（从 good_project_media 表）
-	// 暂时不实现，需要时再补充
+	// 创建对应渠道的服务实例
+	videoService, err := service.NewVideoGenerationService(project.ChannelType)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": http.StatusInternalServerError,
+			"msg":  "failed to initialize service: " + err.Error(),
+			"data": nil,
+		})
+		return
+	}
 
-	resp := &dto.VideoProjectStatus{
-		ProjectID:        project.Id,
+	// 获取最新状态（会自动同步上游状态）
+	project, err = videoService.GetProject(c.Request.Context(), projectId, userId, isAdmin)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": http.StatusInternalServerError,
+			"msg":  "failed to get project: " + err.Error(),
+			"data": nil,
+		})
+		return
+	}
+
+	resp := dto.VideoProjectDetailResponse{
+		ProjectId:        project.Id,
 		ProjectName:      project.ProjectName,
 		Status:           project.Status,
 		ErrorMsg:         project.ErrorMsg,
+		Progress:         project.Progress,
 		ProductImgUrl:    project.ProductImgUrl,
 		Brand:            project.Brand,
 		ProductName:      project.ProductName,
 		MainImageUrl:     project.MainImageUrl,
 		MainImageAssetId: project.MainImageAssetId,
 		GeneratedResult:  project.GeneratedResult,
+		FirstVideoUrl:    project.FirstVideoUrl,
 		CreatedAt:        project.CreatedAt.Unix(),
 		UpdatedAt:        project.UpdatedAt.Unix(),
 	}
@@ -137,134 +145,38 @@ func GetVideoProject(c *gin.Context) {
 	})
 }
 
-// GetUserVideoProjects 获取用户的视频项目列表
-func GetUserVideoProjects(c *gin.Context) {
+// ListVideoProjects 获取视频项目列表
+func ListVideoProjects(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 10
+	}
+
 	userId := c.GetInt("id")
-	pageInfo := common.GetPageQuery(c)
+	isAdmin := c.GetBool("is_admin")
+	statusFilter := c.Query("status")
 
-	projects, total, err := model.GetUserVideoProjects(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	// 使用默认渠道服务
+	videoService, err := service.NewVideoGenerationService(service.GetDefaultChannelType())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": http.StatusInternalServerError,
-			"msg":  "failed to get video projects: " + err.Error(),
+			"msg":  "failed to initialize service: " + err.Error(),
 			"data": nil,
 		})
 		return
 	}
 
-	// 转换为响应格式
-	projectList := make([]*dto.VideoProjectStatus, 0, len(projects))
-	for _, p := range projects {
-		projectList = append(projectList, &dto.VideoProjectStatus{
-			ProjectID:   p.Id,
-			ProjectName: p.ProjectName,
-			Status:      p.Status,
-			ErrorMsg:    p.ErrorMsg,
-			Brand:       p.Brand,
-			ProductName: p.ProductName,
-			CreatedAt:   p.CreatedAt.Unix(),
-			UpdatedAt:   p.UpdatedAt.Unix(),
-		})
-	}
-
-	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(projectList)
-
-	c.JSON(http.StatusOK, gin.H{
-		"code": http.StatusOK,
-		"msg":  "success",
-		"data": pageInfo,
-	})
-}
-
-// GetAllVideoProjects 管理员获取所有视频项目列表
-func GetAllVideoProjects(c *gin.Context) {
-	pageInfo := common.GetPageQuery(c)
-	status := c.Query("status")
-
-	projects, total, err := model.GetAllVideoProjects(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), status)
+	resp, err := videoService.ListProjects(c.Request.Context(), userId, page, pageSize, isAdmin, statusFilter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": http.StatusInternalServerError,
-			"msg":  "failed to get video projects: " + err.Error(),
-			"data": nil,
-		})
-		return
-	}
-
-	// 转换为响应格式
-	projectList := make([]*dto.VideoProjectStatus, 0, len(projects))
-	for _, p := range projects {
-		projectList = append(projectList, &dto.VideoProjectStatus{
-			ProjectID:   p.Id,
-			ProjectName: p.ProjectName,
-			Status:      p.Status,
-			ErrorMsg:    p.ErrorMsg,
-			Brand:       p.Brand,
-			ProductName: p.ProductName,
-			CreatedAt:   p.CreatedAt.Unix(),
-			UpdatedAt:   p.UpdatedAt.Unix(),
-		})
-	}
-
-	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(projectList)
-
-	c.JSON(http.StatusOK, gin.H{
-		"code": http.StatusOK,
-		"msg":  "success",
-		"data": pageInfo,
-	})
-}
-
-// UpdateVideoProjectStatus 更新视频项目状态（管理员）
-func UpdateVideoProjectStatus(c *gin.Context) {
-	projectId, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code": http.StatusBadRequest,
-			"msg":  "invalid project id",
-			"data": nil,
-		})
-		return
-	}
-
-	var req struct {
-		Status           string `json:"status" binding:"required"`
-		ErrorMsg         string `json:"error_msg,omitempty"`
-		MainImageUrl     string `json:"main_image_url,omitempty"`
-		MainImageAssetId string `json:"main_image_asset_id,omitempty"`
-		GeneratedResult  string `json:"generated_result,omitempty"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"code": http.StatusBadRequest,
-			"msg":  "invalid request: " + err.Error(),
-			"data": nil,
-		})
-		return
-	}
-
-	// 如果有 Coze 回调结果，更新相关字段
-	if req.MainImageUrl != "" || req.GeneratedResult != "" {
-		err = model.UpdateVideoProjectCozeResult(projectId, req.MainImageUrl, req.MainImageAssetId, req.GeneratedResult)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"code": http.StatusInternalServerError,
-				"msg":  "failed to update coze result: " + err.Error(),
-				"data": nil,
-			})
-			return
-		}
-	}
-
-	// 更新状态
-	err = model.UpdateVideoProjectStatus(projectId, req.Status, req.ErrorMsg)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": http.StatusInternalServerError,
-			"msg":  "failed to update video project status: " + err.Error(),
+			"msg":  "failed to list projects: " + err.Error(),
 			"data": nil,
 		})
 		return
@@ -272,12 +184,12 @@ func UpdateVideoProjectStatus(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"code": http.StatusOK,
-		"msg":  "video project status updated successfully",
-		"data": nil,
+		"msg":  "success",
+		"data": resp,
 	})
 }
 
-// DeleteVideoProject 删除视频项目（用户）
+// DeleteVideoProject 删除视频项目
 func DeleteVideoProject(c *gin.Context) {
 	projectId, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -290,12 +202,24 @@ func DeleteVideoProject(c *gin.Context) {
 	}
 
 	userId := c.GetInt("id")
+	isAdmin := c.GetBool("is_admin")
 
-	err = model.DeleteVideoProject(projectId, userId)
+	// 使用默认渠道服务
+	videoService, err := service.NewVideoGenerationService(service.GetDefaultChannelType())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": http.StatusInternalServerError,
-			"msg":  "failed to delete video project: " + err.Error(),
+			"msg":  "failed to initialize service: " + err.Error(),
+			"data": nil,
+		})
+		return
+	}
+
+	err = videoService.DeleteProject(c.Request.Context(), projectId, userId, isAdmin)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": http.StatusInternalServerError,
+			"msg":  "failed to delete project: " + err.Error(),
 			"data": nil,
 		})
 		return
@@ -308,8 +232,8 @@ func DeleteVideoProject(c *gin.Context) {
 	})
 }
 
-// DeleteVideoProjectAdmin 删除视频项目（管理员）
-func DeleteVideoProjectAdmin(c *gin.Context) {
+// UpdateVideoProjectStatus 管理员更新项目状态
+func UpdateVideoProjectStatus(c *gin.Context) {
 	projectId, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -320,36 +244,7 @@ func DeleteVideoProjectAdmin(c *gin.Context) {
 		return
 	}
 
-	err = model.DeleteVideoProjectAdmin(projectId)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code": http.StatusInternalServerError,
-			"msg":  "failed to delete video project: " + err.Error(),
-			"data": nil,
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"code": http.StatusOK,
-		"msg":  "video project deleted successfully",
-		"data": nil,
-	})
-}
-
-// CozeWebhook Coze 工作流回调接口
-func CozeWebhook(c *gin.Context) {
-	// TODO: 实现签名验证，确保请求来自 Coze
-
-	var req struct {
-		ProjectID        int64  `json:"project_id" binding:"required"`
-		Status           string `json:"status" binding:"required"`
-		ErrorMsg         string `json:"error_msg,omitempty"`
-		MainImageUrl     string `json:"main_image_url,omitempty"`
-		MainImageAssetId string `json:"main_image_asset_id,omitempty"`
-		GeneratedResult  string `json:"generated_result,omitempty"`
-	}
-
+	var req dto.UpdateVideoProjectStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": http.StatusBadRequest,
@@ -359,25 +254,68 @@ func CozeWebhook(c *gin.Context) {
 		return
 	}
 
-	// 如果有 Coze 回调结果，更新相关字段
-	if req.MainImageUrl != "" || req.GeneratedResult != "" {
-		err := model.UpdateVideoProjectCozeResult(req.ProjectID, req.MainImageUrl, req.MainImageAssetId, req.GeneratedResult)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"code": http.StatusInternalServerError,
-				"msg":  "failed to update coze result: " + err.Error(),
-				"data": nil,
-			})
-			return
-		}
-	}
-
-	// 更新状态
-	err := model.UpdateVideoProjectStatus(req.ProjectID, req.Status, req.ErrorMsg)
+	// 使用默认渠道服务
+	videoService, err := service.NewVideoGenerationService(service.GetDefaultChannelType())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": http.StatusInternalServerError,
-			"msg":  "failed to update video project status: " + err.Error(),
+			"msg":  "failed to initialize service: " + err.Error(),
+			"data": nil,
+		})
+		return
+	}
+
+	err = videoService.UpdateProjectStatus(c.Request.Context(), projectId, &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": http.StatusInternalServerError,
+			"msg":  "failed to update project status: " + err.Error(),
+			"data": nil,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": http.StatusOK,
+		"msg":  "project status updated successfully",
+		"data": nil,
+	})
+}
+
+// HandleWebhook 处理 Webhook 回调（通用）
+func HandleWebhook(c *gin.Context) {
+	channelType := c.Param("channel") // 'coze' 或 'platform'
+
+	// 读取请求体
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": http.StatusBadRequest,
+			"msg":  "failed to read request body",
+			"data": nil,
+		})
+		return
+	}
+
+	signature := c.GetHeader("X-Signature")
+
+	// 创建对应渠道的服务实例
+	videoService, err := service.NewVideoGenerationService(channelType)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": http.StatusInternalServerError,
+			"msg":  "failed to initialize service: " + err.Error(),
+			"data": nil,
+		})
+		return
+	}
+
+	// 处理 webhook
+	err = videoService.HandleWebhook(c.Request.Context(), signature, body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": http.StatusInternalServerError,
+			"msg":  "failed to handle webhook: " + err.Error(),
 			"data": nil,
 		})
 		return

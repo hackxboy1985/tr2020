@@ -49,4 +49,33 @@ func SetVideoRouter(router *gin.Engine) {
 		// Maps to: /?Action=CVSync2AsyncSubmitTask&Version=2022-08-31 and /?Action=CVSync2AsyncGetResult&Version=2022-08-31
 		jimengOfficialGroup.POST("/", controller.RelayTask)
 	}
+
+	// Video Generation Project Management
+	videoGenRouter := router.Group("/api/video-generation")
+	videoGenRouter.Use(middleware.RouteTag("api"))
+	videoGenRouter.Use(middleware.UserAuth())
+	{
+		// 用户接口
+		videoGenRouter.POST("/create", controller.CreateVideoProject)
+		videoGenRouter.GET("/projects", controller.ListVideoProjects)
+		videoGenRouter.GET("/projects/:id", controller.GetVideoProject)
+		videoGenRouter.DELETE("/projects/:id", controller.DeleteVideoProject)
+	}
+
+	// 管理员接口
+	videoGenAdminRouter := router.Group("/api/video-generation/admin")
+	videoGenAdminRouter.Use(middleware.RouteTag("api"))
+	videoGenAdminRouter.Use(middleware.UserAuth(), middleware.AdminAuth())
+	{
+		videoGenAdminRouter.GET("/projects", controller.ListVideoProjects)
+		videoGenAdminRouter.GET("/projects/:id", controller.GetVideoProject)
+		videoGenAdminRouter.PUT("/projects/:id/status", controller.UpdateVideoProjectStatus)
+		videoGenAdminRouter.DELETE("/projects/:id", controller.DeleteVideoProject)
+	}
+
+	// Webhook 回调接口（无需认证，通过签名验证）
+	videoGenWebhookRouter := router.Group("/api/video-generation/webhook")
+	{
+		videoGenWebhookRouter.POST("/:channel", controller.HandleWebhook) // :channel = 'coze' 或 'platform'
+	}
 }

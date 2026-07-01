@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LeaferJS 无限画布演示</title>
+  <style>
+    * { margin: 0; padding: 0; }
+    body { height: 100vh; overflow: hidden; }
+    #canvas {
+      width: 100%;
+      height: 100%;
+      background: #f7f8fa;
+    }
+  </style>
+  <!-- 引入 Leafer 在线 CDN -->
+  <script src="https://unpkg.com/leafer-ui@latest/dist/leafer-ui.min.js"></script>
+  <!-- 编辑器插件、无限视口插件 CDN -->
+  <script src="https://unpkg.com/@leafer-in/editor@latest/dist/editor.min.js"></script>
+  <script src="https://unpkg.com/@leafer-in/viewport@latest/dist/viewport.min.js"></script>
+</head>
+<body>
+  <div id="canvas"></div>
+
+  <script>
+    const { App, Image, Text } = leaferUI
+
+    // 初始化画布，开启编辑器、默认等比缩放
+    const app = new App({
+      view: '#canvas',
+      editor: { lockRatio: true }, // 图片缩放默认等比例不变形
+      viewport: true // 开启无限画布平移缩放
+    })
+
+    // 1. 创建可编辑图片
+    const img = new Image({
+      x: 100,
+      y: 100,
+      width: 300,
+      height: 200,
+      // 示例图，可替换为自己的图片地址
+      url: 'https://picsum.photos/id/237/300/200',
+      editable: true // 开启拖拽、缩放、旋转、倾斜
+    })
+    app.tree.add(img)
+
+    // 2. 新增可编辑文字（快捷键 T 切换文字工具，点击画布新建文字）
+    const demoText = new Text({
+      x: 120,
+      y: 330,
+      text: '双击我编辑文字 | 快捷键T新建文字',
+      fontSize: 22,
+      fill: '#222',
+      editable: true
+    })
+    app.tree.add(demoText)
+
+    // 快捷切换文字工具
+    window.switchTextTool = () => {
+      app.editor.editTool = 'text'
+    }
+  </script>
+</body>
+</html>
