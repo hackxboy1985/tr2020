@@ -280,19 +280,35 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 
 // savePrompt checks settings and enqueues prompt text for storage.
 func savePrompt(c *gin.Context, logId int, userId int) {
+	// 1. Check global master switch
 	if !common.SavePromptEnabled {
 		return
 	}
-	// Check token-level override (highest priority)
-	if common.GetContextKeyBool(c, constant.ContextKeyTokenSavePrompt) {
-		// Token override enables saving, continue
-	} else if settingMap, err := GetUserSetting(userId, false); err != nil || !settingMap.SavePrompt {
-		return
-	}
+
 	promptText := c.GetString(string(constant.ContextKeyPromptToSave))
 	if promptText == "" {
 		return
 	}
+
+	// 2. If user visibility is disabled, force save for all users
+	if !common.SavePromptUserVisible {
+		EnqueuePromptLog(logId, promptText)
+		return
+	}
+
+	// 3. User-visible mode: check token and user settings
+	// Check token-level override (highest priority)
+	if common.GetContextKeyBool(c, constant.ContextKeyTokenSavePrompt) {
+		EnqueuePromptLog(logId, promptText)
+		return
+	}
+
+	// Check user setting
+	settingMap, err := GetUserSetting(userId, false)
+	if err != nil || !settingMap.SavePrompt {
+		return
+	}
+
 	EnqueuePromptLog(logId, promptText)
 }
 

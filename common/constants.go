@@ -114,6 +114,7 @@ var MemoryCacheEnabled bool
 
 var LogConsumeEnabled = true
 var SavePromptEnabled = false
+var SavePromptUserVisible = false
 
 var TLSInsecureSkipVerify bool
 var InsecureTLSConfig = &tls.Config{InsecureSkipVerify: true}
