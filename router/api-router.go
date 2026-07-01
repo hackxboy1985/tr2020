@@ -312,6 +312,7 @@ func SetApiRouter(router *gin.Engine) {
 		logRoute.GET("/search", middleware.AdminAuth(), controller.SearchAllLogs)
 		logRoute.GET("/self", middleware.UserAuth(), controller.GetUserLogs)
 		logRoute.GET("/self/search", middleware.UserAuth(), middleware.SearchRateLimit(), controller.SearchUserLogs)
+			logRoute.GET("/:id/prompt", middleware.AdminAuth(), controller.GetPromptLog)
 
 		dataRoute := apiRouter.Group("/data")
 		dataRoute.GET("/", middleware.AdminAuth(), controller.GetAllQuotaDates)
@@ -396,6 +397,28 @@ func SetApiRouter(router *gin.Engine) {
 			deploymentsRoute.PUT("/:id/name", controller.UpdateDeploymentName)
 			deploymentsRoute.POST("/:id/extend", controller.ExtendDeployment)
 			deploymentsRoute.DELETE("/:id", controller.DeleteDeployment)
+		}
+
+		// Video Generation API
+		videoRoute := apiRouter.Group("/video-generation")
+		videoRoute.Use(middleware.UserAuth())
+		{
+			videoRoute.POST("/create", controller.CreateVideoProject)
+			videoRoute.GET("/projects", controller.GetUserVideoProjects)
+			videoRoute.GET("/projects/:id", controller.GetVideoProject)
+			videoRoute.DELETE("/projects/:id", controller.DeleteVideoProject)
+
+			// Admin routes
+			adminVideoRoute := videoRoute.Group("/")
+			adminVideoRoute.Use(middleware.AdminAuth())
+			{
+				adminVideoRoute.GET("/admin/projects", controller.GetAllVideoProjects)
+				adminVideoRoute.PUT("/admin/projects/:id/status", controller.UpdateVideoProjectStatus)
+				adminVideoRoute.DELETE("/admin/projects/:id", controller.DeleteVideoProjectAdmin)
+			}
+
+			// Webhook for Coze callback (no auth required, should use signature verification)
+			apiRouter.POST("/video-generation/webhook/coze", controller.CozeWebhook)
 		}
 	}
 }
