@@ -28,10 +28,10 @@ type CozeAdapter struct {
 // NewCozeAdapter 创建 Coze 适配器
 func NewCozeAdapter() *CozeAdapter {
 	return &CozeAdapter{
-		apiKey:        common.GetEnvOrDefault("COZE_API_KEY", ""),
-		workflowID:    common.GetEnvOrDefault("COZE_WORKFLOW_ID", ""),
-		webhookSecret: common.GetEnvOrDefault("COZE_WEBHOOK_SECRET", ""),
-		baseURL:       common.GetEnvOrDefault("COZE_BASE_URL", "https://api.coze.cn"),
+		apiKey:        common.GetEnvOrDefaultString("COZE_API_KEY", ""),
+		workflowID:    common.GetEnvOrDefaultString("COZE_WORKFLOW_ID", ""),
+		webhookSecret: common.GetEnvOrDefaultString("COZE_WEBHOOK_SECRET", ""),
+		baseURL:       common.GetEnvOrDefaultString("COZE_BASE_URL", "https://api.coze.cn"),
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},

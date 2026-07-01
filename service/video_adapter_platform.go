@@ -24,9 +24,9 @@ type PlatformAdapter struct {
 // NewPlatformAdapter 创建三方平台适配器
 func NewPlatformAdapter() *PlatformAdapter {
 	return &PlatformAdapter{
-		baseURL:   common.GetEnvOrDefault("PLATFORM_BASE_URL", ""),
-		apiKey:    common.GetEnvOrDefault("PLATFORM_API_KEY", ""),
-		apiSecret: common.GetEnvOrDefault("PLATFORM_API_SECRET", ""),
+		baseURL:   common.GetEnvOrDefaultString("PLATFORM_BASE_URL", ""),
+		apiKey:    common.GetEnvOrDefaultString("PLATFORM_API_KEY", ""),
+		apiSecret: common.GetEnvOrDefaultString("PLATFORM_API_SECRET", ""),
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
