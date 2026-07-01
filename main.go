@@ -144,6 +144,8 @@ func main() {
 		common.SysLog("batch update enabled with interval " + strconv.Itoa(common.BatchUpdateInterval) + "s")
 		model.InitBatchUpdater()
 	}
+	model.InitPromptLogWriter()
+	defer model.FlushPromptLogs()
 
 	if os.Getenv("ENABLE_PPROF") == "true" {
 		gopool.Go(func() {

@@ -221,7 +221,8 @@ func AddToken(c *gin.Context) {
 		AllowIps:           token.AllowIps,
 		Group:              token.Group,
 		CrossGroupRetry:    token.CrossGroupRetry,
-	}
+		SavePrompt:         token.SavePrompt,
+		}
 	err = cleanToken.Insert()
 	if err != nil {
 		common.ApiError(c, err)
@@ -299,7 +300,7 @@ func UpdateToken(c *gin.Context) {
 		cleanToken.AllowIps = token.AllowIps
 		cleanToken.Group = token.Group
 		cleanToken.CrossGroupRetry = token.CrossGroupRetry
-	}
+		cleanToken.SavePrompt = token.SavePrompt
 	err = cleanToken.Update()
 	if err != nil {
 		common.ApiError(c, err)

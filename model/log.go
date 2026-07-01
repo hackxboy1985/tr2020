@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/types"
 
@@ -53,6 +54,7 @@ type Log struct {
 	RequestId         string `json:"request_id,omitempty" gorm:"type:varchar(64);index:idx_logs_request_id;default:''"`
 	UpstreamRequestId string `json:"upstream_request_id,omitempty" gorm:"type:varchar(128);index:idx_logs_upstream_request_id;default:''"`
 	Other             string `json:"other"`
+	PromptText        string `json:"prompt_text,omitempty" gorm:"-"`
 }
 
 // don't use iota, avoid change log type value
@@ -268,8 +270,30 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	if common.DataExportEnabled {
 		gopool.Go(func() {
 			LogQuotaData(userId, username, params.ModelName, params.Quota, common.GetTimestamp(), params.PromptTokens+params.CompletionTokens)
+			})
 		})
 	}
+		if err == nil && log.Id > 0 {
+			savePrompt(c, log.Id, userId)
+		}
+}
+
+// savePrompt checks settings and enqueues prompt text for storage.
+func savePrompt(c *gin.Context, logId int, userId int) {
+	if !common.SavePromptEnabled {
+		return
+	}
+	// Check token-level override (highest priority)
+	if common.GetContextKeyBool(c, constant.ContextKeyTokenSavePrompt) {
+		// Token override enables saving, continue
+	} else if settingMap, err := GetUserSetting(userId, false); err != nil || !settingMap.SavePrompt {
+		return
+	}
+	promptText := c.GetString(string(constant.ContextKeyPromptToSave))
+	if promptText == "" {
+		return
+	}
+	EnqueuePromptLog(logId, promptText)
 }
 
 type RecordTaskBillingLogParams struct {
@@ -548,6 +572,15 @@ func DeleteOldLog(ctx context.Context, targetTimestamp int64, limit int) (int64,
 
 		if result.RowsAffected < int64(limit) {
 			break
+		}
+	}
+
+	// Cascade: also clean up prompt_logs with the same time range
+	if total > 0 {
+		promptCtx, promptCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer promptCancel()
+		if _, err := DeleteOldPromptLog(promptCtx, targetTimestamp, limit); err != nil {
+			common.SysLog("failed to delete old prompt logs: " + err.Error())
 		}
 	}
 

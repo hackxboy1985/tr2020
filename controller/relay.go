@@ -142,7 +142,13 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 	}
 
+	// Store prompt text in context for optional prompt saving (checked later in RecordConsumeLog)
+	if meta != nil && meta.CombineText != "" {
+		c.Set(string(constant.ContextKeyPromptToSave), meta.CombineText)
+	}
+
 	tokens, err := service.EstimateRequestToken(c, meta, relayInfo)
+
 	if err != nil {
 		newAPIError = types.NewError(err, types.ErrorCodeCountTokenFailed)
 		return

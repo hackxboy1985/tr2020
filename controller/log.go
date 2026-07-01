@@ -10,6 +10,23 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func GetPromptLog(c *gin.Context) {
+	logId, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	promptLog, err := model.GetPromptLogByLogId(logId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, promptLog)
+}
+
+func init() {
+)
+
 func GetAllLogs(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	logType, _ := strconv.Atoi(c.Query("type"))
@@ -26,6 +43,25 @@ func GetAllLogs(c *gin.Context) {
 	if err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	// Attach prompt_text for admin users
+	if common.SavePromptEnabled {
+		logIds := make([]int, 0, len(logs))
+		for _, l := range logs {
+			if l.Type == model.LogTypeConsume {
+				logIds = append(logIds, l.Id)
+			}
+		}
+		if len(logIds) > 0 {
+			promptMap, err := model.SearchPromptLogsByLogIds(logIds)
+			if err == nil {
+				for _, l := range logs {
+					if pl, ok := promptMap[l.Id]; ok {
+						l.PromptText = pl.PromptText
+					}
+				}
+			}
+		}
 	}
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(logs)
