@@ -60,9 +60,3 @@ type VideoProjectStatus struct {
 	CreatedAt int64 `json:"created_at"` // 创建时间
 	UpdatedAt int64 `json:"updated_at"` // 更新时间
 }
-
-// VideoProjectListResponse 视频项目列表响应
-type VideoProjectListResponse struct {
-	Projects []*VideoProjectStatus `json:"projects"` // 项目列表
-	Total    int64                 `json:"total"`    // 总数
-}
