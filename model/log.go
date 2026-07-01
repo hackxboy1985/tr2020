@@ -270,12 +270,11 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	if common.DataExportEnabled {
 		gopool.Go(func() {
 			LogQuotaData(userId, username, params.ModelName, params.Quota, common.GetTimestamp(), params.PromptTokens+params.CompletionTokens)
-			})
 		})
 	}
-		if err == nil && log.Id > 0 {
-			savePrompt(c, log.Id, userId)
-		}
+	if err == nil && log.Id > 0 {
+		savePrompt(c, log.Id, userId)
+	}
 }
 
 // savePrompt checks settings and enqueues prompt text for storage.
