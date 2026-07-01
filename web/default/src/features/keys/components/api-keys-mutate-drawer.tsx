@@ -99,6 +99,10 @@ export function ApiKeysMutateDrawer({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const defaultUseAutoGroup = status?.default_use_auto_group === true
+  const isAdmin = (status?.role ?? 0) >= 10 // ROLE.ADMIN
+  const savePromptEnabled = status?.save_prompt_enabled === true
+  const savePromptUserVisible = status?.save_prompt_user_visible === true
+  const shouldShowSavePrompt = savePromptEnabled && (isAdmin || savePromptUserVisible)
 
   // Fetch models
   const { data: modelsData } = useQuery({
@@ -570,6 +574,37 @@ export function ApiKeysMutateDrawer({
                         </FormItem>
                       )}
                     />
+
+                    {shouldShowSavePrompt && (
+                      <FormField
+                        control={form.control}
+                        name='save_prompt'
+                        render={({ field }) => (
+                          <FormItem className={sideDrawerSwitchItemClassName()}>
+                            <div className='flex flex-col gap-0.5'>
+                              <FormLabel className='text-sm'>
+                                {t('Force Save Prompts')}
+                              </FormLabel>
+                              <FormDescription className='text-xs'>
+                                {isAdmin
+                                  ? t(
+                                      'Force save all prompts from this token, ignoring user settings'
+                                    )
+                                  : t(
+                                      'Override your personal settings to always save prompts from this token'
+                                    )}
+                              </FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    )}
                   </div>
                 </CollapsibleContent>
               </SideDrawerSection>
