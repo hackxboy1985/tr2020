@@ -56,6 +56,13 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
   const { t } = useTranslation()
   const isAdmin = (profile?.role ?? 0) >= ROLE.ADMIN
   const [loading, setLoading] = useState(false)
+  const [systemConfig, setSystemConfig] = useState<{
+    save_prompt_enabled: boolean
+    save_prompt_user_visible: boolean
+  }>({
+    save_prompt_enabled: false,
+    save_prompt_user_visible: false,
+  })
   const [settings, setSettings] = useState<UserSettings>({
     notify_type: 'email',
     quota_warning_threshold: DEFAULT_QUOTA_WARNING_THRESHOLD,
@@ -71,6 +78,7 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
     accept_unset_model_ratio_model: false,
     record_ip_log: false,
     upstream_model_update_notify_enabled: false,
+    save_prompt: false,
   })
 
   // Update form field helper
@@ -102,9 +110,27 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
         record_ip_log: parsed.record_ip_log || false,
         upstream_model_update_notify_enabled:
           parsed.upstream_model_update_notify_enabled || false,
+        save_prompt: parsed.save_prompt || false,
       })
     }
   }, [profile])
+
+  // Fetch system config
+  useEffect(() => {
+    fetch('/api/status')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success !== false) {
+          setSystemConfig({
+            save_prompt_enabled: Boolean(data.save_prompt_enabled),
+            save_prompt_user_visible: Boolean(data.save_prompt_user_visible),
+          })
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch system config:', err)
+      })
+  }, [])
 
   const handleSave = async () => {
     try {
@@ -439,6 +465,29 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
             onCheckedChange={(checked) => updateField('record_ip_log', checked)}
           />
         </div>
+
+        {/* Save Prompt (conditionally displayed) */}
+        {systemConfig.save_prompt_enabled &&
+          systemConfig.save_prompt_user_visible && (
+            <div className='flex items-start justify-between gap-3 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 p-3 sm:items-center sm:p-4'>
+              <div className='space-y-0.5'>
+                <Label htmlFor='savePrompt'>{t('Save My Prompts')}</Label>
+                <p className='text-muted-foreground text-xs sm:text-sm'>
+                  {t(
+                    'Save prompt content in requests for audit and analysis (admin only view)'
+                  )}
+                </p>
+              </div>
+              <Switch
+                id='savePrompt'
+                className='shrink-0'
+                checked={settings.save_prompt}
+                onCheckedChange={(checked) =>
+                  updateField('save_prompt', checked)
+                }
+              />
+            </div>
+          )}
       </div>
 
       {/* Save Button */}

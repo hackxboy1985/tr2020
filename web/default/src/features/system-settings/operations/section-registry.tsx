@@ -100,6 +100,8 @@ const OPERATIONS_SECTIONS = [
     build: (settings: OperationsSettings) => (
       <LogSettingsSection
         defaultEnabled={Boolean(settings.LogConsumeEnabled)}
+        defaultSavePromptEnabled={Boolean(settings.SavePromptEnabled)}
+        defaultSavePromptUserVisible={Boolean(settings.SavePromptUserVisible)}
       />
     ),
   },

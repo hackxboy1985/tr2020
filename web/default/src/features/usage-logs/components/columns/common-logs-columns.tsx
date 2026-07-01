@@ -56,6 +56,7 @@ import {
 } from '../../lib/utils'
 import type { LogOtherData } from '../../types'
 import { DetailsDialog } from '../dialogs/details-dialog'
+import { LogPromptDialog } from '../dialogs/log-prompt-dialog'
 import { ModelBadge } from '../model-badge'
 import { useUsageLogsContext } from '../usage-logs-provider'
 
@@ -824,6 +825,54 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
       maxSize: 200,
     }
   )
+
+  // Add Prompt column (admin only)
+  if (isAdmin) {
+    columns.push({
+      accessorKey: 'prompt_text',
+      header: t('Prompt'),
+      cell: function PromptCell({ row }) {
+        const [dialogOpen, setDialogOpen] = useState(false)
+        const log = row.original
+        const promptText = log.prompt_text
+
+        // Only show for CONSUME logs (type=2) that have prompt_text
+        if (log.type !== 2 || !promptText) {
+          return <span className='text-muted-foreground/40'>—</span>
+        }
+
+        const charCount = promptText.length
+        const displayText =
+          charCount > 50 ? `${charCount} ${t('chars')}` : t('Short')
+
+        return (
+          <>
+            <button
+              type='button'
+              className='group flex items-center gap-2 text-left text-xs'
+              onClick={() => setDialogOpen(true)}
+              title={t('Click to view prompt')}
+            >
+              <span className='border-border/80 bg-blue-50 dark:bg-blue-950/30 inline-flex h-6 items-center rounded-md border border-blue-200 dark:border-blue-800 px-2 text-xs font-medium text-blue-700 dark:text-blue-300'>
+                {displayText}
+              </span>
+              <span className='text-muted-foreground group-hover:text-foreground group-hover:underline'>
+                {t('View')}
+              </span>
+            </button>
+            <LogPromptDialog
+              log={log}
+              open={dialogOpen}
+              onOpenChange={setDialogOpen}
+            />
+          </>
+        )
+      },
+      meta: { label: t('Prompt') },
+      size: 100,
+      maxSize: 120,
+    })
+  }
 
   return columns
 }

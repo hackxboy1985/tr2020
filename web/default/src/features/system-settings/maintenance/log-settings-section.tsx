@@ -57,12 +57,16 @@ import { useUpdateOption } from '../hooks/use-update-option'
 
 const logSettingsSchema = z.object({
   LogConsumeEnabled: z.boolean(),
+  SavePromptEnabled: z.boolean(),
+  SavePromptUserVisible: z.boolean(),
 })
 
 type LogSettingsFormValues = z.infer<typeof logSettingsSchema>
 
 type LogSettingsSectionProps = {
   defaultEnabled: boolean
+  defaultSavePromptEnabled: boolean
+  defaultSavePromptUserVisible: boolean
 }
 
 const HOURS_IN_DAY = 24
@@ -92,6 +96,8 @@ const quickSelectOptions = [
 
 export function LogSettingsSection({
   defaultEnabled,
+  defaultSavePromptEnabled,
+  defaultSavePromptUserVisible,
 }: LogSettingsSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
@@ -99,6 +105,8 @@ export function LogSettingsSection({
     resolver: zodResolver(logSettingsSchema),
     defaultValues: {
       LogConsumeEnabled: defaultEnabled,
+      SavePromptEnabled: defaultSavePromptEnabled,
+      SavePromptUserVisible: defaultSavePromptUserVisible,
     },
   })
 
@@ -108,9 +116,15 @@ export function LogSettingsSection({
   const [isCleaning, setIsCleaning] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
 
+  const savePromptEnabled = form.watch('SavePromptEnabled')
+
   useEffect(() => {
-    form.reset({ LogConsumeEnabled: defaultEnabled })
-  }, [defaultEnabled, form])
+    form.reset({
+      LogConsumeEnabled: defaultEnabled,
+      SavePromptEnabled: defaultSavePromptEnabled,
+      SavePromptUserVisible: defaultSavePromptUserVisible,
+    })
+  }, [defaultEnabled, defaultSavePromptEnabled, defaultSavePromptUserVisible, form])
 
   const purgeTimestamp = useMemo(() => {
     if (!purgeDate) return null
@@ -123,11 +137,34 @@ export function LogSettingsSection({
   }, [purgeDate])
 
   const onSubmit = async (values: LogSettingsFormValues) => {
-    if (values.LogConsumeEnabled === defaultEnabled) return
-    await updateOption.mutateAsync({
-      key: 'LogConsumeEnabled',
-      value: values.LogConsumeEnabled,
-    })
+    const changes: Array<{ key: string; value: boolean }> = []
+
+    if (values.LogConsumeEnabled !== defaultEnabled) {
+      changes.push({
+        key: 'LogConsumeEnabled',
+        value: values.LogConsumeEnabled,
+      })
+    }
+
+    if (values.SavePromptEnabled !== defaultSavePromptEnabled) {
+      changes.push({
+        key: 'SavePromptEnabled',
+        value: values.SavePromptEnabled,
+      })
+    }
+
+    if (values.SavePromptUserVisible !== defaultSavePromptUserVisible) {
+      changes.push({
+        key: 'SavePromptUserVisible',
+        value: values.SavePromptUserVisible,
+      })
+    }
+
+    if (changes.length === 0) return
+
+    for (const change of changes) {
+      await updateOption.mutateAsync(change)
+    }
   }
 
   const handleRequestCleanLogs = () => {
@@ -198,6 +235,60 @@ export function LogSettingsSection({
               </SettingsSwitchItem>
             )}
           />
+
+          <FormField
+            control={form.control}
+            name='SavePromptEnabled'
+            render={({ field }) => (
+              <SettingsSwitchItem>
+                <SettingsSwitchContent>
+                  <FormLabel>{t('Save prompts')}</FormLabel>
+                  <FormDescription>
+                    {t(
+                      'Enable prompt saving feature. When disabled, no prompts will be saved regardless of user or token settings.'
+                    )}
+                  </FormDescription>
+                </SettingsSwitchContent>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <FormMessage />
+              </SettingsSwitchItem>
+            )}
+          />
+
+          {savePromptEnabled && (
+            <FormField
+              control={form.control}
+              name='SavePromptUserVisible'
+              render={({ field }) => (
+                <SettingsSwitchItem>
+                  <SettingsSwitchContent>
+                    <FormLabel>{t('User prompt visibility')}</FormLabel>
+                    <FormDescription>
+                      {field.value
+                        ? t(
+                            'Users can see and control prompt saving in their settings. Token owners can also enable/disable per-token saving.'
+                          )
+                        : t(
+                            'Prompt saving is invisible to users. All prompts are automatically saved for audit purposes. Only admins can view saved prompts.'
+                          )}
+                    </FormDescription>
+                  </SettingsSwitchContent>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </SettingsSwitchItem>
+              )}
+            />
+          )}
 
           <SettingsControlGroup className='space-y-3'>
             <div>
