@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -295,5 +294,5 @@ func (s *VideoGenerationService) HandleWebhook(ctx context.Context, signature st
 
 // GetDefaultChannelType 获取默认渠道类型
 func GetDefaultChannelType() string {
-	return common.GetEnvOrDefault("VIDEO_GENERATION_CHANNEL", "platform")
+	return common.GetEnvOrDefaultString("VIDEO_GENERATION_CHANNEL", "platform")
 }

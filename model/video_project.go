@@ -167,6 +167,15 @@ func UpdateVideoProjectStatus(id int64, status string, errorMsg string) error {
 	return DB.Model(&VideoProject{}).Where("id = ?", id).Updates(updates).Error
 }
 
+// UpdateVideoProjectFields 更新视频项目的指定字段
+func UpdateVideoProjectFields(id int64, updates map[string]interface{}) error {
+	if updates == nil {
+		updates = make(map[string]interface{})
+	}
+	updates["updated_at"] = time.Now()
+	return DB.Model(&VideoProject{}).Where("id = ?", id).Updates(updates).Error
+}
+
 // UpdateVideoProjectCozeResult 更新 Coze 回调结果
 func UpdateVideoProjectCozeResult(id int64, mainImageUrl string, mainImageAssetId string, generatedResult string) error {
 	updates := map[string]interface{}{
