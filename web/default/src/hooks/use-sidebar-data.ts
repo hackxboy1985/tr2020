@@ -30,6 +30,7 @@ import {
   Settings,
   Ticket,
   User,
+  Video,
   Users,
   Wallet,
 } from 'lucide-react'
@@ -120,6 +121,11 @@ export function useSidebarData(): SidebarData {
             title: t('Channels'),
             url: '/channels',
             icon: Radio,
+          },
+          {
+            title: t('Video Channels'),
+            url: '/video-channels',
+            icon: Video,
           },
           {
             title: t('Models'),
