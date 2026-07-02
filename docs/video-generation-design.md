@@ -95,7 +95,8 @@
 | `api_key` | TEXT | API 密钥 |
 | `api_secret` | TEXT | Webhook 签名密钥 |
 | `workflow_id` | VARCHAR(255) | Coze 专用，工作流 ID |
-| `status_query_path` | VARCHAR(512) | 状态查询路径模板，含 `{id}` 占位符 |
+| `create_path` | VARCHAR(512) | 创建项目的接口路径，如 `/v1/workflow/run`、`/api/video/create` |
+| `status_query_path` | VARCHAR(512) | 状态查询路径模板，含 `{id}` 占位符，如 `/v1/workflow/run/{id}` |
 | `groups` | VARCHAR(255) | 逗号分隔，空=不限组（所有组可用） |
 | `weight` | INT | 权重，同组内按权重随机选 |
 | `enabled` | TINYINT | 1=启用，0=禁用 |
@@ -103,13 +104,29 @@
 | `created_at` | BIGINT | 创建时间 |
 | `updated_at` | BIGINT | 更新时间 |
 
+**调用方式**（适配器统一行为）：
+
+```
+创建项目：POST {base_url}{create_path}
+查询状态：GET  {base_url}{status_query_path}  （{id} 替换为 remote_project_id）
+```
+
+只要上游平台鉴权方式为 Bearer Token，任意平台均可通过配置接入，无需改代码。
+
+**各渠道类型的默认路径**：
+
+| channel_type | create_path 默认值 | status_query_path 默认值 |
+|-------------|-------------------|------------------------|
+| `coze` | `/v1/workflow/run` | `/v1/workflow/run/{id}` |
+| `platform` | `/api/video/create` | `/api/video/projects/{id}` |
+
 **示例数据**：
 
 ```
-id=1  name="Coze-A"     type=coze      workflow_id=111  groups="default,vip"  weight=3
-id=2  name="Coze-B"     type=coze      workflow_id=222  groups="vip"          weight=1
-id=3  name="Platform-A" type=platform  base_url=http://p1  groups=""          weight=2
-id=4  name="Platform-B" type=platform  base_url=http://p2  groups="default"   weight=2
+id=1  name="Coze-A"     type=coze      workflow_id=111  create_path=/v1/workflow/run  status_query_path=/v1/workflow/run/{id}     groups="default,vip"  weight=3
+id=2  name="Coze-B"     type=coze      workflow_id=222  create_path=/v1/workflow/run  status_query_path=/v1/workflow/run/{id}     groups="vip"          weight=1
+id=3  name="Platform-A" type=platform  base_url=http://p1  create_path=/api/video/create  status_query_path=/api/video/projects/{id}  groups=""          weight=2
+id=4  name="Platform-B" type=platform  base_url=http://p2  create_path=/api/video/create  status_query_path=/api/video/projects/{id}  groups="default"   weight=2
 ```
 
 ### video_projects 表（新增字段）
