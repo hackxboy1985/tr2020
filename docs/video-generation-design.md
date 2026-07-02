@@ -373,12 +373,31 @@ type VideoGenerationAdapter interface {
 
 ## 配置管理
 
-### 环境变量
+### 方式1：管理员后台（推荐）
+
+系统设置 → Content → Video Generation，支持运行时动态配置，无需重启服务。
+
+| 字段 | 说明 |
+|------|------|
+| Enable video generation | 全局开关 |
+| Channel | 渠道选择：`platform`（三方平台）或 `coze` |
+| **Platform 配置** | 选择 platform 渠道时显示 |
+| Base URL | 三方平台 API 地址 |
+| API Key | 三方平台密钥 |
+| Webhook Secret | Webhook 签名验证密钥（可选） |
+| **Coze 配置** | 选择 coze 渠道时显示 |
+| API Key | Coze API 密钥 |
+| Workflow ID | Coze 工作流 ID |
+| Webhook Secret | Webhook 签名验证密钥 |
+| Base URL | Coze API 地址（默认 https://api.coze.cn） |
+
+页面底部还会显示当前渠道对应的 Webhook 回调地址，便于复制到上游平台配置。
+
+### 方式2：环境变量（兜底初始值）
+
+环境变量仅作为系统首次启动的初始默认值，后台保存后以数据库为准。
 
 ```bash
-# 渠道选择（全局默认）
-VIDEO_GENERATION_CHANNEL=platform  # 或 coze
-
 # Coze 配置
 COZE_API_KEY=your_coze_api_key
 COZE_WORKFLOW_ID=your_workflow_id
@@ -393,9 +412,27 @@ PLATFORM_API_SECRET=your_platform_secret
 
 ### 配置优先级
 
-1. **请求参数指定**：`req.channel_type`（优先级最高）
-2. **环境变量**：`VIDEO_GENERATION_CHANNEL`
+1. **请求参数指定**：`req.channel_type`（每次请求可覆盖，优先级最高）
+2. **数据库配置**：管理员后台保存的值（`common.VideoGenerationChannel`）
 3. **默认值**：`platform`
+
+### 配置存储实现
+
+所有配置项通过 `model/option.go` 的 `OptionMap` 机制持久化到数据库，启动时加载到 `common` 包全局变量：
+
+| 变量 | Option Key |
+|------|-----------|
+| `common.VideoGenerationEnabled` | `VideoGenerationEnabled` |
+| `common.VideoGenerationChannel` | `VideoGenerationChannel` |
+| `common.VideoGenerationPlatformBaseURL` | `VideoGenerationPlatformBaseURL` |
+| `common.VideoGenerationPlatformApiKey` | `VideoGenerationPlatformApiKey` |
+| `common.VideoGenerationPlatformApiSecret` | `VideoGenerationPlatformApiSecret` |
+| `common.VideoGenerationCozeApiKey` | `VideoGenerationCozeApiKey` |
+| `common.VideoGenerationCozeWorkflowId` | `VideoGenerationCozeWorkflowId` |
+| `common.VideoGenerationCozeWebhookSecret` | `VideoGenerationCozeWebhookSecret` |
+| `common.VideoGenerationCozeBaseURL` | `VideoGenerationCozeBaseURL` |
+
+> **注意**：`ApiKey`、`Secret` 等敏感字段在 `GetOptions` 接口中会被过滤，不会返回到前端，符合现有安全规范。
 
 ## 数据一致性保障
 

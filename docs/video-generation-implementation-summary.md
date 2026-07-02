@@ -108,11 +108,18 @@ CREATED → COZE_RUNNING → VIDEO_PROCESSING → VIDEO_CONCAT → ONE_CLICK_GEN
 
 ## 配置说明
 
-### 环境变量
+### 方式1：管理员后台（推荐，运行时动态配置）
+
+路径：系统设置 → Content → **Video Generation**
+
+无需重启服务，保存后立即生效。页面底部自动显示当前渠道的 Webhook 回调地址。
+
+### 方式2：环境变量（兜底初始值）
+
+仅作为系统首次启动的默认值，后台保存后以数据库为准。
 
 #### Coze渠道
 ```bash
-VIDEO_GENERATION_CHANNEL=coze
 COZE_API_KEY=your_coze_api_key
 COZE_WORKFLOW_ID=your_workflow_id
 COZE_WEBHOOK_SECRET=your_webhook_secret
@@ -121,11 +128,16 @@ COZE_BASE_URL=https://api.coze.cn  # 可选
 
 #### 三方平台渠道
 ```bash
-VIDEO_GENERATION_CHANNEL=platform  # 默认
 PLATFORM_BASE_URL=https://platform.example.com
 PLATFORM_API_KEY=your_platform_api_key
 PLATFORM_API_SECRET=your_platform_secret  # 可选
 ```
+
+### 配置优先级
+
+1. `req.channel_type`（请求参数，每次请求可覆盖）
+2. `common.VideoGenerationChannel`（数据库 / 后台配置）
+3. 默认值 `platform`
 
 ### Webhook回调地址
 
@@ -199,10 +211,38 @@ DB.AutoMigrate(
 - [ ] 权限隔离（用户只能看自己的项目）
 - [ ] 状态自动同步
 - [ ] 数据库迁移
-- [ ] 配置切换（Coze <-> Platform）
+- [ ] 后台切换渠道（Coze ↔ Platform），立即生效
 
 ---
 
-**实现日期**: 2026-07-01  
+## 第二阶段更新（2026-07-02）
+
+### 动态配置功能
+
+将渠道配置从环境变量迁移到管理员后台，支持运行时切换，无需重启服务。
+
+**后端改动**：
+
+| 文件 | 改动内容 |
+|------|---------|
+| `common/constants.go` | 新增9个 `VideoGeneration*` 全局变量 |
+| `model/option.go` | `InitOptionMap` 注册9个 option；`updateOptionMap` 添加对应 case |
+| `service/video_adapter_coze.go` | `NewCozeAdapter` 改从 `common` 变量读取，不再依赖环境变量 |
+| `service/video_adapter_platform.go` | 同上 |
+| `service/video_generation_service.go` | `GetDefaultChannelType` 改读 `common.VideoGenerationChannel` |
+
+**前端改动**：
+
+| 文件 | 改动内容 |
+|------|---------|
+| `web/default/src/features/system-settings/types.ts` | `ContentSettings` 新增9个字段 |
+| `web/default/src/features/system-settings/content/video-generation-settings-section.tsx` | 新建：渠道选择 + 分组配置表单（含 Webhook 地址提示） |
+| `web/default/src/features/system-settings/content/section-registry.tsx` | 注册 `video-generation` section |
+
+**编译验证**：✅ `go build ./...` 通过（Go 1.25.1）
+
+---
+
+**实现日期**: 2026-07-01 / 2026-07-02  
 **实现者**: Claude (Opus 4.8)  
-**架构**: 方案A（本地保存 + 多渠道）
+**架构**: 方案A（本地保存 + 多渠道 + 后台动态配置）
