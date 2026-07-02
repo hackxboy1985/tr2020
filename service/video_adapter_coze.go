@@ -92,19 +92,18 @@ func (a *CozeAdapter) CreateProject(ctx context.Context, req *dto.CreateVideoPro
 			"brand":        req.Brand,
 			"product":      req.ProductName,   // Coze 用 product 而非 productName
 			"slogan":       req.Tagline,        // Coze 用 slogan 而非 tagline
-			"points":       req.SellingPoints,  // Coze 用 points 而非 sellingPoints
-			"propmt":       req.Prompt,         // Coze 工作流的拼写（非 prompt）
-			"vtype":        req.Vtype,
-			"vtypeAdd":     req.VtypeAdd,
-			"language":     req.Language,
-			"platform":     req.Platform,
-			"region":       req.Region,
-			"duration":     req.Duration,
-			"resolution":   req.Resolution,
-			"model":        req.VideoModel,
-			"whstr":        req.Whstr,
-			"time":         "",   // 必填字段，当前无对应入参，传空字符串
-			"system":       "",   // 可选字段
+			"points":     req.SellingPoints,
+			"propmt":     req.Prompt,
+			"vtype":      req.Vtype,
+			"vtypeAdd":   req.VtypeAdd,
+			"language":   req.Language,
+			"platform":   req.Platform,
+			"region":     req.Region,
+			"time":       req.Duration, // Coze 工作流里叫 time，对应视频时长
+			"resolution": req.Resolution,
+			"model":      req.VideoModel,
+			"whstr":      req.Whstr,
+			"system":     "",
 		},
 	}
 
