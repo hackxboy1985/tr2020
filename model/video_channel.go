@@ -87,6 +87,7 @@ func GetAllVideoChannels() ([]*VideoChannel, error) {
 }
 
 // GetEnabledVideoChannelsForGroup 获取指定用户组可用的启用渠道
+// 注意：组匹配使用 HasGroup() 精确比较，不使用 SQL LIKE，避免子串误匹配（如 supervip 匹配 vip）
 func GetEnabledVideoChannelsForGroup(userGroup, channelType string) ([]*VideoChannel, error) {
 	var channels []*VideoChannel
 	err := DB.Where("enabled = 1").Order("id ASC").Find(&channels).Error

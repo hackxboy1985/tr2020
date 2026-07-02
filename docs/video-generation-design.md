@@ -97,7 +97,7 @@
 | `workflow_id` | VARCHAR(255) | Coze 专用，工作流 ID |
 | `create_path` | VARCHAR(512) | 创建项目的接口路径，如 `/v1/workflow/run`、`/api/video/create` |
 | `status_query_path` | VARCHAR(512) | 状态查询路径模板，含 `{id}` 占位符，如 `/v1/workflow/run/{id}` |
-| `groups` | VARCHAR(255) | 逗号分隔，空=不限组（所有组可用） |
+| `groups` | VARCHAR(255) | 逗号分隔用户组，**不允许为空**（空字符串不匹配任何组，渠道将不可用） |
 | `weight` | INT | 权重，同组内按权重随机选 |
 | `enabled` | TINYINT | 1=启用，0=禁用 |
 | `remark` | VARCHAR(255) | 管理员备注 |
@@ -113,12 +113,14 @@
 
 只要上游平台鉴权方式为 Bearer Token，任意平台均可通过配置接入，无需改代码。
 
-**各渠道类型的默认路径**：
+**各渠道类型的默认路径**（字段为空时回退到以下值）：
 
 | channel_type | create_path 默认值 | status_query_path 默认值 |
 |-------------|-------------------|------------------------|
 | `coze` | `/v1/workflow/run` | `/v1/workflow/run/{id}` |
 | `platform` | `/api/video/create` | `/api/video/projects/{id}` |
+
+> `create_path` 和 `status_query_path` 对所有渠道类型（包括 Coze）均从配置字段读取，字段为空时才使用上表默认值。Coze 渠道填写 `status_query_path` 字段是有效的，可覆盖默认值。
 
 **示例数据**：
 
@@ -139,7 +141,7 @@ id=4  name="Platform-B" type=platform  base_url=http://p2  create_path=/api/vide
 |------|------|------|
 | `channel_id` | INT | 实际使用的渠道 ID，关联 video_channels.id |
 
-> `channel_type` 和 `remote_project_id` 字段保留，`channel_type` 通过 `channel_id` 关联获取。
+> `channel_type` 字段保留，**仅在创建时从 VideoChannel 快照写入，后续不更新**。即使管理员修改了 VideoChannel 的 channel_type，video_projects 中已有记录的 channel_type 不变，仅供历史查看，实际路由逻辑以 `channel_id` 为准。
 
 ---
 
@@ -193,15 +195,14 @@ status 是终态（FAILED / ONE_CLICK_GENERATED）？
 - `FAILED`
 - `ONE_CLICK_GENERATED`
 
-**需要透传的状态**：
+**需要透传的状态**（每次查询都调上游同步）：
 - `COZE_RUNNING`
 - `VIDEO_PROCESSING`
 - `VIDEO_CONCAT`
 - `VIDEO_PREPARING`
 
 **不透传的状态**：
-- `CREATED`：上游调用在创建流程中同步发出，若调用成功则立即更新为 `COZE_RUNNING`，若失败则为 `FAILED`。查询时遇到 `CREATED` 说明上游调用尚未完成或 `remote_project_id` 还未写入，直接返回本地数据即可。
-- `VIDEO_PREPARING`
+- `CREATED`：上游调用在创建流程中同步发出，若调用成功则立即更新为 `COZE_RUNNING`，若失败则为 `FAILED`。查询时遇到 `CREATED` 说明 `remote_project_id` 还未写入（极短暂的中间态），直接返回本地数据即可。
 
 ---
 
@@ -309,24 +310,47 @@ dto/
 ## 渠道选择逻辑（伪代码）
 
 ```go
-func selectChannel(userGroup string, reqChannelId int, reqChannelType string) (*VideoChannel, error) {
-    // 1. 直接指定渠道 ID
-    if reqChannelId > 0 {
-        ch := GetVideoChannelById(reqChannelId)
-        // 校验该渠道对用户组可用
-        if ch.groups != "" && !ch.hasGroup(userGroup) {
-            return nil, ErrNoPermission
+// selectChannel 选择渠道
+// - isAdmin=true 时 reqChannelId 生效，否则忽略
+// - reqChannelType 可选，用于过滤渠道类型；channel_id 优先，同时传时 channel_type 被忽略
+// - 渠道调用失败直接返回错误，不自动切换其他渠道
+func selectChannel(userGroup string, isAdmin bool, reqChannelId int, reqChannelType string) (*VideoChannel, error) {
+    // 1. 管理员指定 channel_id（普通用户传了直接忽略）
+    if isAdmin && reqChannelId > 0 {
+        ch, err := GetVideoChannelById(reqChannelId)
+        if err != nil {
+            return nil, ErrChannelNotFound
+        }
+        if !ch.Enabled {
+            return nil, ErrChannelDisabled
         }
         return ch, nil
+        // 注：管理员指定渠道时不校验 groups，允许跨组操作
     }
 
-    // 2. 按组 + 可选类型过滤，按权重随机选
-    channels := GetEnabledVideoChannels(userGroup, reqChannelType)
+    // 2. 按用户组 + 可选渠道类型过滤，按权重随机选
+    // groups 精确匹配：用 FIND_IN_SET(userGroup, groups) 或内存过滤，避免 LIKE '%vip%' 的子串 bug
+    channels, err := GetEnabledVideoChannelsForGroup(userGroup, reqChannelType)
+    if err != nil {
+        return nil, err
+    }
     if len(channels) == 0 {
         return nil, ErrNoAvailableChannel
     }
     return weightedRandom(channels), nil
 }
+```
+
+**渠道调用失败处理**：
+
+选中渠道后调用上游 API 失败，**直接返回错误给用户，不自动切换其他渠道**。原因：
+- 负载均衡是选渠道策略，不是容错策略
+- 自动切换会隐藏上游故障，难以排查
+- 如需容错，管理员手动禁用故障渠道即可
+
+用户收到的错误示例：
+```json
+{"code": 500, "msg": "upstream channel error: connection timeout", "data": null}
 ```
 
 ---
