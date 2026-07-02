@@ -199,10 +199,10 @@ status 是终态（FAILED / ONE_CLICK_GENERATED）？
 - `COZE_RUNNING`
 - `VIDEO_PROCESSING`
 - `VIDEO_CONCAT`
-- `VIDEO_PREPARING`
 
 **不透传的状态**：
-- `CREATED`：上游调用在创建流程中同步发出，若调用成功则立即更新为 `COZE_RUNNING`，若失败则为 `FAILED`。查询时遇到 `CREATED` 说明 `remote_project_id` 还未写入（极短暂的中间态），直接返回本地数据即可。
+- `CREATED`：上游调用在创建流程中同步发出，若调用成功则立即更新为 `COZE_RUNNING`，若失败则为 `FAILED`。查询时遇到 `CREATED` 说明 `remote_project_id` 还未写入，直接返回本地数据。
+- `VIDEO_PREPARING`：本地拼接失败状态，由 new-api 内部流程产生，上游 API 此时已是 `succeeded`。再查上游只会得到成功响应，无法反映拼接失败原因。该状态需管理员手动介入重试，不透传上游。
 
 ---
 
@@ -216,10 +216,11 @@ POST /api/video-generation/webhook/{channel_id}
 
 处理逻辑：
 1. 通过 `channel_id` 加载 `VideoChannel` 配置
-2. 找不到渠道 → 返回 **200**（防止上游无限重试）并记录错误日志
+2. 找不到渠道 → 返回 **200** + 记录日志（防止上游无限重试）
 3. 构造对应 Adapter 验证签名；签名验证失败 → 返回 **401**
-4. 解析载荷，通过 `remote_project_id` 找到本地 `video_projects` 记录
-5. 更新状态字段
+4. 解析载荷，通过 `channel_id + remote_project_id` 查找本地 `video_projects` 记录
+5. 找不到对应项目记录 → 返回 **200** + 记录日志（可能是已删除或数据不一致，同样不触发重试）
+6. 更新状态字段
 
 ---
 
@@ -256,9 +257,8 @@ GET    /api/video-generation/projects            用户：我的项目列表
 GET    /api/video-generation/projects/:id        用户：只能查自己的项目
                                                  管理员：可查任意项目
 DELETE /api/video-generation/projects/:id        用户：只能删自己的项目
-                                                 管理员：可删任意项目
+                                                 管理员：可删任意项目（统一路由，无需重复）
 PUT    /api/video-generation/admin/projects/:id/status  手动更新状态（仅管理员路由）
-DELETE /api/video-generation/admin/projects/:id         删除项目（仅管理员路由）
 ```
 
 Controller 内通过 `c.GetInt("role") >= common.RoleAdminUser` 判断是否管理员，与现有实现一致。
@@ -329,7 +329,9 @@ func selectChannel(userGroup string, isAdmin bool, reqChannelId int, reqChannelT
     }
 
     // 2. 按用户组 + 可选渠道类型过滤，按权重随机选
-    // groups 精确匹配：用 FIND_IN_SET(userGroup, groups) 或内存过滤，避免 LIKE '%vip%' 的子串 bug
+    // 注意：groups 字段不使用 SQL LIKE 或 FIND_IN_SET（FIND_IN_SET 是 MySQL 专有，不兼容 PostgreSQL/SQLite）
+    // 实现方式：先 SELECT 所有 enabled 渠道，在 Go 内存中用 strings.Split 精确匹配 userGroup
+    // 数据量小（渠道通常 <100），内存过滤无性能问题
     channels, err := GetEnabledVideoChannelsForGroup(userGroup, reqChannelType)
     if err != nil {
         return nil, err
@@ -366,8 +368,10 @@ func selectChannel(userGroup string, isAdmin bool, reqChannelId int, reqChannelT
 - 系统设置 → 渠道管理 → 视频生成渠道（列表 + 增删改查，类似现有 AI 渠道管理页）
 
 表单字段：
-- 名称、渠道类型（下拉）、Base URL、API Key、API Secret、Workflow ID（Coze时显示）
-- 状态查询路径（Platform时显示，默认值 `/api/video/projects/{id}`）
+- 名称、渠道类型（下拉：coze / platform）、Base URL、API Key、API Secret
+- Workflow ID（仅 Coze 渠道显示）
+- 创建接口路径 `create_path`（两种渠道均显示，占位提示默认值）
+- 状态查询路径 `status_query_path`（**两种渠道均显示**，占位提示默认值；字段为空则运行时回退默认值）
 - 用户组、权重、备注
 
 ---
@@ -388,9 +392,9 @@ func selectChannel(userGroup string, isAdmin bool, reqChannelId int, reqChannelT
 
 ## 实现步骤（按优先级）
 
-1. **model/video_channel.go** — 更新表结构（加 groups、status_query_path）
+1. **model/video_channel.go** — **新建**表（含 groups、create_path、status_query_path 字段）
 2. **model/video_project.go** — 新增 channel_id 字段
-3. **model/main.go** — AutoMigrate 已包含 VideoChannel ✅
+3. **model/main.go** — 在 AutoMigrate 中添加 `&VideoChannel{}`
 4. **service/video_adapter.go** — 构造函数改为接收 `*model.VideoChannel`
 5. **service/video_adapter_coze.go** — 从 VideoChannel 读配置
 6. **service/video_adapter_platform.go** — 从 VideoChannel 读配置 + 支持 status_query_path
@@ -404,10 +408,17 @@ func selectChannel(userGroup string, isAdmin bool, reqChannelId int, reqChannelT
 
 ---
 
+## 待清理内容（第二阶段引入）
+
+> ✅ 已于第三阶段实现时全部清理完毕。
+
+---
+
 ## 编译状态
 
 | 阶段 | 时间 | 结果 |
 |------|------|------|
 | 第一阶段（基础实现） | 2026-07-01 | ✅ 通过 |
-| 第二阶段（动态配置） | 2026-07-02 | ✅ 通过 `go build ./...` |
-| 第三阶段（多渠道管理） | 待实现 | — |
+| 第二阶段（动态配置） | 2026-07-02 | ✅ 通过 |
+| 第三阶段（多渠道管理） | 2026-07-02 | ✅ 通过 `go build ./...` |
+| 第四阶段（前端渠道管理页面） | 待实现 | — |

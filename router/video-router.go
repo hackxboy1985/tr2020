@@ -58,7 +58,7 @@ func SetVideoRouter(router *gin.Engine) {
 		videoGenRouter.GET("/projects/:id", controller.GetVideoProject)
 		videoGenRouter.DELETE("/projects/:id", controller.DeleteVideoProject)
 		videoGenRouter.PUT("/admin/projects/:id/status", controller.UpdateVideoProjectStatus)
-		videoGenRouter.DELETE("/admin/projects/:id", controller.DeleteVideoProject)
+		// 注：DELETE /projects/:id 已支持管理员删任意项目（role 分流），无需重复路由
 	}
 
 	// 渠道管理（仅管理员）

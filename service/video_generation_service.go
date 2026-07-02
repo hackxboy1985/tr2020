@@ -11,12 +11,12 @@ import (
 )
 
 // needsStatusPullthrough 判断该状态是否需要透传查询上游
+// VIDEO_PREPARING 是本地拼接失败状态，上游此时已是 succeeded，透传无意义，不包含
 func needsStatusPullthrough(status string) bool {
 	switch status {
 	case model.VideoProjectStatusCozeRunning,
 		model.VideoProjectStatusVideoProcessing,
-		model.VideoProjectStatusVideoConcat,
-		model.VideoProjectStatusVideoPreparing:
+		model.VideoProjectStatusVideoConcat:
 		return true
 	}
 	return false
