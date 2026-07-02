@@ -44,25 +44,28 @@ func (a *CozeAdapter) CreateProject(ctx context.Context, req *dto.CreateVideoPro
 	// 从 mediaList 拆分出 products / roles / others（Coze 工作流期望的格式）
 	var products, roles, others []map[string]interface{}
 	for _, m := range req.MediaList {
-		item := map[string]interface{}{"uri": m.MediaUrl}
-		if m.RoleName != "" {
-			item["roleName"] = m.RoleName
-		}
 		switch m.MediaType {
 		case "PRODUCT":
-			products = append(products, item)
+			products = append(products, map[string]interface{}{"url": m.MediaUrl})
 		case "ROLE":
+			item := map[string]interface{}{
+				"url":   m.MediaUrl,
+				"audio": "", // audio 可选，暂为空
+			}
+			if m.RoleName != "" {
+				item["roleName"] = m.RoleName
+			}
 			roles = append(roles, item)
 		default:
-			others = append(others, item)
+			others = append(others, map[string]interface{}{"url": m.MediaUrl})
 		}
 	}
 	// 旧字段兜底
 	if len(products) == 0 && req.ProductImgUrl != "" {
-		products = append(products, map[string]interface{}{"uri": req.ProductImgUrl})
+		products = append(products, map[string]interface{}{"url": req.ProductImgUrl})
 	}
 
-	// selectAudios：从旧字段解析
+	// selectAudios：从旧字段解析（roles 的 audio 字段）
 	var selectAudios []map[string]interface{}
 	if req.SelectAudios != "" {
 		var parsed []struct {
@@ -72,7 +75,7 @@ func (a *CozeAdapter) CreateProject(ctx context.Context, req *dto.CreateVideoPro
 		if err := common.UnmarshalJsonStr(req.SelectAudios, &parsed); err == nil {
 			for _, a := range parsed {
 				selectAudios = append(selectAudios, map[string]interface{}{
-					"uri":    a.URL,
+					"url":    a.URL,
 					"remark": a.Remark,
 				})
 			}
@@ -82,24 +85,26 @@ func (a *CozeAdapter) CreateProject(ctx context.Context, req *dto.CreateVideoPro
 	cozeReq := map[string]interface{}{
 		"workflow_id": a.ch.WorkflowId,
 		"parameters": map[string]interface{}{
-			"products":      products,
-			"roles":         roles,
-			"others":        others,
-			"selectAudios":  selectAudios,
-			"brand":         req.Brand,
-			"productName":   req.ProductName,
-			"tagline":       req.Tagline,
-			"sellingPoints": req.SellingPoints,
-			"propmt":        req.Prompt, // Coze 工作流的拼写
-			"vtype":         req.Vtype,
-			"vtypeAdd":      req.VtypeAdd,
-			"language":      req.Language,
-			"platform":      req.Platform,
-			"region":        req.Region,
-			"duration":      req.Duration,
-			"resolution":    req.Resolution,
-			"model":         req.VideoModel, // Coze 用 model 而非 video_model
-			"whstr":         req.Whstr,
+			"products":     products,
+			"roles":        roles,
+			"others":       others,
+			"selectAudios": selectAudios,
+			"brand":        req.Brand,
+			"product":      req.ProductName,   // Coze 用 product 而非 productName
+			"slogan":       req.Tagline,        // Coze 用 slogan 而非 tagline
+			"points":       req.SellingPoints,  // Coze 用 points 而非 sellingPoints
+			"propmt":       req.Prompt,         // Coze 工作流的拼写（非 prompt）
+			"vtype":        req.Vtype,
+			"vtypeAdd":     req.VtypeAdd,
+			"language":     req.Language,
+			"platform":     req.Platform,
+			"region":       req.Region,
+			"duration":     req.Duration,
+			"resolution":   req.Resolution,
+			"model":        req.VideoModel,
+			"whstr":        req.Whstr,
+			"time":         "",   // 必填字段，当前无对应入参，传空字符串
+			"system":       "",   // 可选字段
 		},
 	}
 
