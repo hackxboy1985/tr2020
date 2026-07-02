@@ -38,24 +38,25 @@ func (a *PlatformAdapter) CreateProject(ctx context.Context, req *dto.CreateVide
 		return nil, errors.New("platform base url or api key not configured")
 	}
 
+	// 构建 camelCase 请求体以兼容 OpenAPI 服务端（Spring Boot Jackson 默认 camelCase）
 	platformReq := map[string]interface{}{
-		"product_img_url": req.ProductImgUrl,
-		"brand":           req.Brand,
-		"product_name":    req.ProductName,
-		"tagline":         req.Tagline,
-		"selling_points":  req.SellingPoints,
-		"prompt":          req.Prompt,
-		"vtype":           req.Vtype,
-		"vtype_add":       req.VtypeAdd,
-		"language":        req.Language,
-		"platform":        req.Platform,
-		"region":          req.Region,
-		"roles":           req.Roles,
-		"select_audios":   req.SelectAudios,
-		"duration":        req.Duration,
-		"resolution":      req.Resolution,
-		"video_model":     req.VideoModel,
-		"whstr":           req.Whstr,
+		"productImgUrl": req.ProductImgUrl,
+		"brand":         req.Brand,
+		"productName":   req.ProductName,
+		"tagline":       req.Tagline,
+		"sellingPoints": req.SellingPoints,
+		"prompt":        req.Prompt,
+		"vtype":         req.Vtype,
+		"vtypeAdd":      req.VtypeAdd,
+		"language":      req.Language,
+		"platform":      req.Platform,
+		"region":        req.Region,
+		"roles":         req.Roles,
+		"selectAudios":  req.SelectAudios,
+		"duration":      req.Duration,
+		"resolution":    req.Resolution,
+		"videoModel":    req.VideoModel,
+		"whstr":         req.Whstr,
 	}
 
 	body, err := common.Marshal(platformReq)
@@ -90,6 +91,8 @@ func (a *PlatformAdapter) CreateProject(ctx context.Context, req *dto.CreateVide
 		Code int    `json:"code"`
 		Msg  string `json:"msg"`
 		Data struct {
+			// OpenAPI 返回 taskId（数字），兼容 project_id（字符串）两种格式
+			TaskId      int64  `json:"taskId"`
 			ProjectId   string `json:"project_id"`
 			ProjectName string `json:"project_name"`
 			Status      string `json:"status"`
@@ -104,8 +107,14 @@ func (a *PlatformAdapter) CreateProject(ctx context.Context, req *dto.CreateVide
 		return nil, fmt.Errorf("platform api error: code=%d, msg=%s", platformResp.Code, platformResp.Msg)
 	}
 
+	// taskId 优先（OpenAPI），fallback 到 project_id（旧格式）
+	remoteId := platformResp.Data.ProjectId
+	if platformResp.Data.TaskId > 0 {
+		remoteId = fmt.Sprintf("%d", platformResp.Data.TaskId)
+	}
+
 	return &dto.AdapterCreateResponse{
-		RemoteProjectId: platformResp.Data.ProjectId,
+		RemoteProjectId: remoteId,
 		Status:          platformResp.Data.Status,
 		Message:         platformResp.Msg,
 	}, nil
@@ -142,8 +151,12 @@ func (a *PlatformAdapter) GetProjectStatus(ctx context.Context, remoteProjectId 
 		Code int    `json:"code"`
 		Msg  string `json:"msg"`
 		Data struct {
-			Status           string `json:"status"`
-			ErrorMsg         string `json:"error_msg"`
+			Status string `json:"status"`
+			// camelCase（OpenAPI）
+			VideoUrl string `json:"videoUrl"`
+			ErrorMsg string `json:"errorMsg"`
+			// snake_case（旧格式兼容）
+			ErrorMsgSnake    string `json:"error_msg"`
 			Progress         string `json:"progress"`
 			MainImageUrl     string `json:"main_image_url"`
 			MainImageAssetId string `json:"main_image_asset_id"`
@@ -160,14 +173,24 @@ func (a *PlatformAdapter) GetProjectStatus(ctx context.Context, remoteProjectId 
 		return nil, fmt.Errorf("platform api error: code=%d, msg=%s", platformResp.Code, platformResp.Msg)
 	}
 
+	// camelCase 优先，fallback 到 snake_case
+	errorMsg := platformResp.Data.ErrorMsg
+	if errorMsg == "" {
+		errorMsg = platformResp.Data.ErrorMsgSnake
+	}
+	firstVideoUrl := platformResp.Data.VideoUrl
+	if firstVideoUrl == "" {
+		firstVideoUrl = platformResp.Data.FirstVideoUrl
+	}
+
 	return &dto.AdapterStatusResponse{
 		Status:           platformResp.Data.Status,
-		ErrorMsg:         platformResp.Data.ErrorMsg,
+		ErrorMsg:         errorMsg,
 		Progress:         platformResp.Data.Progress,
 		MainImageUrl:     platformResp.Data.MainImageUrl,
 		MainImageAssetId: platformResp.Data.MainImageAssetId,
 		GeneratedResult:  platformResp.Data.GeneratedResult,
-		FirstVideoUrl:    platformResp.Data.FirstVideoUrl,
+		FirstVideoUrl:    firstVideoUrl,
 	}, nil
 }
 
