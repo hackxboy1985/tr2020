@@ -41,26 +41,65 @@ func (a *CozeAdapter) CreateProject(ctx context.Context, req *dto.CreateVideoPro
 		return nil, errors.New("coze api key or workflow id not configured")
 	}
 
+	// 从 mediaList 拆分出 products / roles / others（Coze 工作流期望的格式）
+	var products, roles, others []map[string]interface{}
+	for _, m := range req.MediaList {
+		item := map[string]interface{}{"uri": m.MediaUrl}
+		if m.RoleName != "" {
+			item["roleName"] = m.RoleName
+		}
+		switch m.MediaType {
+		case "PRODUCT":
+			products = append(products, item)
+		case "ROLE":
+			roles = append(roles, item)
+		default:
+			others = append(others, item)
+		}
+	}
+	// 旧字段兜底
+	if len(products) == 0 && req.ProductImgUrl != "" {
+		products = append(products, map[string]interface{}{"uri": req.ProductImgUrl})
+	}
+
+	// selectAudios：从旧字段解析
+	var selectAudios []map[string]interface{}
+	if req.SelectAudios != "" {
+		var parsed []struct {
+			URL    string `json:"url"`
+			Remark string `json:"remark"`
+		}
+		if err := common.UnmarshalJsonStr(req.SelectAudios, &parsed); err == nil {
+			for _, a := range parsed {
+				selectAudios = append(selectAudios, map[string]interface{}{
+					"uri":    a.URL,
+					"remark": a.Remark,
+				})
+			}
+		}
+	}
+
 	cozeReq := map[string]interface{}{
 		"workflow_id": a.ch.WorkflowId,
 		"parameters": map[string]interface{}{
-			"product_img_url": req.ProductImgUrl,
-			"brand":           req.Brand,
-			"product_name":    req.ProductName,
-			"tagline":         req.Tagline,
-			"selling_points":  req.SellingPoints,
-			"prompt":          req.Prompt,
-			"vtype":           req.Vtype,
-			"vtype_add":       req.VtypeAdd,
-			"language":        req.Language,
-			"platform":        req.Platform,
-			"region":          req.Region,
-			"roles":           req.Roles,
-			"select_audios":   req.SelectAudios,
-			"duration":        req.Duration,
-			"resolution":      req.Resolution,
-			"video_model":     req.VideoModel,
-			"whstr":           req.Whstr,
+			"products":      products,
+			"roles":         roles,
+			"others":        others,
+			"selectAudios":  selectAudios,
+			"brand":         req.Brand,
+			"productName":   req.ProductName,
+			"tagline":       req.Tagline,
+			"sellingPoints": req.SellingPoints,
+			"propmt":        req.Prompt, // Coze 工作流的拼写
+			"vtype":         req.Vtype,
+			"vtypeAdd":      req.VtypeAdd,
+			"language":      req.Language,
+			"platform":      req.Platform,
+			"region":        req.Region,
+			"duration":      req.Duration,
+			"resolution":    req.Resolution,
+			"model":         req.VideoModel, // Coze 用 model 而非 video_model
+			"whstr":         req.Whstr,
 		},
 	}
 
