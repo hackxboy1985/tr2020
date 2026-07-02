@@ -134,6 +134,15 @@ export type ContentSettings = {
   MjForwardUrlEnabled: boolean
   MjModeClearEnabled: boolean
   MjActionCheckSuccessEnabled: boolean
+  VideoGenerationEnabled: boolean
+  VideoGenerationChannel: string
+  VideoGenerationPlatformBaseURL: string
+  VideoGenerationPlatformApiKey: string
+  VideoGenerationPlatformApiSecret: string
+  VideoGenerationCozeApiKey: string
+  VideoGenerationCozeWorkflowId: string
+  VideoGenerationCozeWebhookSecret: string
+  VideoGenerationCozeBaseURL: string
 }
 
 export type ModelSettings = {

@@ -27,11 +27,15 @@ type CozeAdapter struct {
 
 // NewCozeAdapter 创建 Coze 适配器
 func NewCozeAdapter() *CozeAdapter {
+	baseURL := common.VideoGenerationCozeBaseURL
+	if baseURL == "" {
+		baseURL = "https://api.coze.cn"
+	}
 	return &CozeAdapter{
-		apiKey:        common.GetEnvOrDefaultString("COZE_API_KEY", ""),
-		workflowID:    common.GetEnvOrDefaultString("COZE_WORKFLOW_ID", ""),
-		webhookSecret: common.GetEnvOrDefaultString("COZE_WEBHOOK_SECRET", ""),
-		baseURL:       common.GetEnvOrDefaultString("COZE_BASE_URL", "https://api.coze.cn"),
+		apiKey:        common.VideoGenerationCozeApiKey,
+		workflowID:    common.VideoGenerationCozeWorkflowId,
+		webhookSecret: common.VideoGenerationCozeWebhookSecret,
+		baseURL:       baseURL,
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},

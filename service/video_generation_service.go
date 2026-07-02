@@ -294,5 +294,8 @@ func (s *VideoGenerationService) HandleWebhook(ctx context.Context, signature st
 
 // GetDefaultChannelType 获取默认渠道类型
 func GetDefaultChannelType() string {
-	return common.GetEnvOrDefaultString("VIDEO_GENERATION_CHANNEL", "platform")
+	if common.VideoGenerationChannel != "" {
+		return common.VideoGenerationChannel
+	}
+	return "platform"
 }

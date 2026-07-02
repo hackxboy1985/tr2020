@@ -66,6 +66,17 @@ var DisplayTokenStatEnabled = true
 var DrawingEnabled = true
 var TaskEnabled = true
 var DataExportEnabled = true
+
+// 视频生成配置
+var VideoGenerationEnabled = true
+var VideoGenerationChannel = "platform" // 'coze' 或 'platform'
+var VideoGenerationPlatformBaseURL = ""
+var VideoGenerationPlatformApiKey = ""
+var VideoGenerationPlatformApiSecret = ""
+var VideoGenerationCozeApiKey = ""
+var VideoGenerationCozeWorkflowId = ""
+var VideoGenerationCozeWebhookSecret = ""
+var VideoGenerationCozeBaseURL = "https://api.coze.cn"
 var DataExportInterval = 5         // unit: minute
 var DataExportDefaultTime = "hour" // unit: minute
 var DefaultCollapseSidebar = false // default value of collapse sidebar

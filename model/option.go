@@ -55,6 +55,15 @@ common.OptionMap["SavePromptEnabled"] = strconv.FormatBool(common.SavePromptEnab
 	common.OptionMap["DrawingEnabled"] = strconv.FormatBool(common.DrawingEnabled)
 	common.OptionMap["TaskEnabled"] = strconv.FormatBool(common.TaskEnabled)
 	common.OptionMap["DataExportEnabled"] = strconv.FormatBool(common.DataExportEnabled)
+	common.OptionMap["VideoGenerationEnabled"] = strconv.FormatBool(common.VideoGenerationEnabled)
+	common.OptionMap["VideoGenerationChannel"] = common.VideoGenerationChannel
+	common.OptionMap["VideoGenerationPlatformBaseURL"] = common.VideoGenerationPlatformBaseURL
+	common.OptionMap["VideoGenerationPlatformApiKey"] = common.VideoGenerationPlatformApiKey
+	common.OptionMap["VideoGenerationPlatformApiSecret"] = common.VideoGenerationPlatformApiSecret
+	common.OptionMap["VideoGenerationCozeApiKey"] = common.VideoGenerationCozeApiKey
+	common.OptionMap["VideoGenerationCozeWorkflowId"] = common.VideoGenerationCozeWorkflowId
+	common.OptionMap["VideoGenerationCozeWebhookSecret"] = common.VideoGenerationCozeWebhookSecret
+	common.OptionMap["VideoGenerationCozeBaseURL"] = common.VideoGenerationCozeBaseURL
 	common.OptionMap["ChannelDisableThreshold"] = strconv.FormatFloat(common.ChannelDisableThreshold, 'f', -1, 64)
 	common.OptionMap["EmailDomainRestrictionEnabled"] = strconv.FormatBool(common.EmailDomainRestrictionEnabled)
 	common.OptionMap["EmailAliasRestrictionEnabled"] = strconv.FormatBool(common.EmailAliasRestrictionEnabled)
@@ -326,6 +335,8 @@ func updateOptionMap(key string, value string) (err error) {
 			common.TaskEnabled = boolValue
 		case "DataExportEnabled":
 			common.DataExportEnabled = boolValue
+		case "VideoGenerationEnabled":
+			common.VideoGenerationEnabled = boolValue
 		case "DefaultCollapseSidebar":
 			common.DefaultCollapseSidebar = boolValue
 		case "MjNotifyEnabled":
@@ -520,6 +531,22 @@ func updateOptionMap(key string, value string) (err error) {
 		common.DataExportInterval, _ = strconv.Atoi(value)
 	case "DataExportDefaultTime":
 		common.DataExportDefaultTime = value
+	case "VideoGenerationChannel":
+		common.VideoGenerationChannel = value
+	case "VideoGenerationPlatformBaseURL":
+		common.VideoGenerationPlatformBaseURL = value
+	case "VideoGenerationPlatformApiKey":
+		common.VideoGenerationPlatformApiKey = value
+	case "VideoGenerationPlatformApiSecret":
+		common.VideoGenerationPlatformApiSecret = value
+	case "VideoGenerationCozeApiKey":
+		common.VideoGenerationCozeApiKey = value
+	case "VideoGenerationCozeWorkflowId":
+		common.VideoGenerationCozeWorkflowId = value
+	case "VideoGenerationCozeWebhookSecret":
+		common.VideoGenerationCozeWebhookSecret = value
+	case "VideoGenerationCozeBaseURL":
+		common.VideoGenerationCozeBaseURL = value
 	case "ModelRatio":
 		err = ratio_setting.UpdateModelRatioByJSONString(value)
 	case "GroupRatio":

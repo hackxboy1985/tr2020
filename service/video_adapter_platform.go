@@ -24,9 +24,9 @@ type PlatformAdapter struct {
 // NewPlatformAdapter 创建三方平台适配器
 func NewPlatformAdapter() *PlatformAdapter {
 	return &PlatformAdapter{
-		baseURL:   common.GetEnvOrDefaultString("PLATFORM_BASE_URL", ""),
-		apiKey:    common.GetEnvOrDefaultString("PLATFORM_API_KEY", ""),
-		apiSecret: common.GetEnvOrDefaultString("PLATFORM_API_SECRET", ""),
+		baseURL:   common.VideoGenerationPlatformBaseURL,
+		apiKey:    common.VideoGenerationPlatformApiKey,
+		apiSecret: common.VideoGenerationPlatformApiSecret,
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
