@@ -14,28 +14,18 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/model"
 )
 
 // CozeAdapter Coze 渠道适配器
 type CozeAdapter struct {
-	apiKey        string
-	workflowID    string
-	webhookSecret string
-	baseURL       string
-	client        *http.Client
+	ch     *model.VideoChannel
+	client *http.Client
 }
 
-// NewCozeAdapter 创建 Coze 适配器
-func NewCozeAdapter() *CozeAdapter {
-	baseURL := common.VideoGenerationCozeBaseURL
-	if baseURL == "" {
-		baseURL = "https://api.coze.cn"
-	}
+func NewCozeAdapter(ch *model.VideoChannel) *CozeAdapter {
 	return &CozeAdapter{
-		apiKey:        common.VideoGenerationCozeApiKey,
-		workflowID:    common.VideoGenerationCozeWorkflowId,
-		webhookSecret: common.VideoGenerationCozeWebhookSecret,
-		baseURL:       baseURL,
+		ch: ch,
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -47,13 +37,12 @@ func (a *CozeAdapter) GetName() string {
 }
 
 func (a *CozeAdapter) CreateProject(ctx context.Context, req *dto.CreateVideoProjectRequest) (*dto.AdapterCreateResponse, error) {
-	if a.apiKey == "" || a.workflowID == "" {
+	if a.ch.ApiKey == "" || a.ch.WorkflowId == "" {
 		return nil, errors.New("coze api key or workflow id not configured")
 	}
 
-	// 构建 Coze 工作流请求参数
 	cozeReq := map[string]interface{}{
-		"workflow_id": a.workflowID,
+		"workflow_id": a.ch.WorkflowId,
 		"parameters": map[string]interface{}{
 			"product_img_url": req.ProductImgUrl,
 			"brand":           req.Brand,
@@ -75,19 +64,17 @@ func (a *CozeAdapter) CreateProject(ctx context.Context, req *dto.CreateVideoPro
 		},
 	}
 
-	// 序列化请求
 	body, err := common.Marshal(cozeReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// 发送请求到 Coze
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", a.baseURL+"/v1/workflow/run", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", a.ch.GetCreateURL(), bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	httpReq.Header.Set("Authorization", "Bearer "+a.apiKey)
+	httpReq.Header.Set("Authorization", "Bearer "+a.ch.ApiKey)
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := a.client.Do(httpReq)
@@ -105,7 +92,6 @@ func (a *CozeAdapter) CreateProject(ctx context.Context, req *dto.CreateVideoPro
 		return nil, fmt.Errorf("coze api error: status=%d, body=%s", resp.StatusCode, string(respBody))
 	}
 
-	// 解析响应
 	var cozeResp struct {
 		Code int    `json:"code"`
 		Msg  string `json:"msg"`
@@ -125,24 +111,22 @@ func (a *CozeAdapter) CreateProject(ctx context.Context, req *dto.CreateVideoPro
 
 	return &dto.AdapterCreateResponse{
 		RemoteProjectId: cozeResp.Data.ExecuteID,
-		Status:          "COZE_RUNNING",
+		Status:          model.VideoProjectStatusCozeRunning,
 		Message:         "coze workflow started",
 	}, nil
 }
 
 func (a *CozeAdapter) GetProjectStatus(ctx context.Context, remoteProjectId string) (*dto.AdapterStatusResponse, error) {
-	if a.apiKey == "" {
+	if a.ch.ApiKey == "" {
 		return nil, errors.New("coze api key not configured")
 	}
 
-	// 查询 Coze 工作流执行状态
-	url := fmt.Sprintf("%s/v1/workflow/run/%s", a.baseURL, remoteProjectId)
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", a.ch.GetStatusQueryURL(remoteProjectId), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	httpReq.Header.Set("Authorization", "Bearer "+a.apiKey)
+	httpReq.Header.Set("Authorization", "Bearer "+a.ch.ApiKey)
 
 	resp, err := a.client.Do(httpReq)
 	if err != nil {
@@ -159,7 +143,6 @@ func (a *CozeAdapter) GetProjectStatus(ctx context.Context, remoteProjectId stri
 		return nil, fmt.Errorf("coze api error: status=%d, body=%s", resp.StatusCode, string(respBody))
 	}
 
-	// 解析响应
 	var cozeResp struct {
 		Code int    `json:"code"`
 		Msg  string `json:"msg"`
@@ -177,22 +160,18 @@ func (a *CozeAdapter) GetProjectStatus(ctx context.Context, remoteProjectId stri
 		return nil, fmt.Errorf("coze api error: code=%d, msg=%s", cozeResp.Code, cozeResp.Msg)
 	}
 
-	// 映射状态
-	status := mapCozeStatus(cozeResp.Data.Status)
-
 	return &dto.AdapterStatusResponse{
-		Status:   status,
+		Status:   mapCozeStatus(cozeResp.Data.Status),
 		Progress: cozeResp.Data.Status,
 	}, nil
 }
 
 func (a *CozeAdapter) ValidateWebhook(ctx context.Context, signature string, body []byte) error {
-	if a.webhookSecret == "" {
+	if a.ch.ApiSecret == "" {
 		return errors.New("coze webhook secret not configured")
 	}
 
-	// 计算 HMAC-SHA256 签名
-	mac := hmac.New(sha256.New, []byte(a.webhookSecret))
+	mac := hmac.New(sha256.New, []byte(a.ch.ApiSecret))
 	mac.Write(body)
 	expectedSignature := hex.EncodeToString(mac.Sum(nil))
 
@@ -221,12 +200,9 @@ func (a *CozeAdapter) ParseWebhookPayload(body []byte) (*dto.WebhookPayload, err
 		return nil, fmt.Errorf("failed to parse coze webhook: %w", err)
 	}
 
-	// 映射到通用格式
-	status := mapCozeStatus(cozePayload.Status)
-
 	return &dto.WebhookPayload{
 		RemoteProjectId:  cozePayload.ExecuteID,
-		Status:           status,
+		Status:           mapCozeStatus(cozePayload.Status),
 		ErrorMsg:         cozePayload.Error.Message,
 		MainImageUrl:     cozePayload.Output.MainImageUrl,
 		MainImageAssetId: cozePayload.Output.MainImageAssetId,
@@ -234,16 +210,15 @@ func (a *CozeAdapter) ParseWebhookPayload(body []byte) (*dto.WebhookPayload, err
 	}, nil
 }
 
-// mapCozeStatus 映射 Coze 状态到内部状态
 func mapCozeStatus(cozeStatus string) string {
 	switch cozeStatus {
 	case "running":
-		return "COZE_RUNNING"
+		return model.VideoProjectStatusCozeRunning
 	case "succeeded":
-		return "VIDEO_PROCESSING"
+		return model.VideoProjectStatusVideoProcessing
 	case "failed":
-		return "FAILED"
+		return model.VideoProjectStatusFailed
 	default:
-		return "COZE_RUNNING"
+		return model.VideoProjectStatusCozeRunning
 	}
 }

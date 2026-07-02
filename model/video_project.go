@@ -11,11 +11,12 @@ type VideoProject struct {
 	UpdatedAt time.Time `json:"updated_at"`
 
 	// 项目基础信息
-	ProjectName     string `gorm:"type:varchar(255);index" json:"project_name"`     // 项目名称
-	UserId          int    `gorm:"index" json:"user_id"`                            // 创建用户 ID
-	Username        string `gorm:"index;default:''" json:"username"`                // 用户名（冗余，便于查询）
-	ChannelType     string `gorm:"type:varchar(20);index;default:'platform'" json:"channel_type"` // 渠道类型: 'coze' 或 'platform'
-	RemoteProjectId string `gorm:"type:varchar(255);index" json:"remote_project_id"` // 三方平台的项目ID
+	ProjectName     string `gorm:"type:varchar(255);index" json:"project_name"`
+	UserId          int    `gorm:"index" json:"user_id"`
+	Username        string `gorm:"index;default:''" json:"username"`
+	ChannelId       int    `gorm:"index;default:0" json:"channel_id"`              // 关联 video_channels.id
+	ChannelType     string `gorm:"type:varchar(20);index;default:'platform'" json:"channel_type"` // 创建时快照，后续不更新
+	RemoteProjectId string `gorm:"type:varchar(255);index" json:"remote_project_id"`
 
 	// 广告基础信息
 	ProductImgUrl string `gorm:"type:text" json:"product_img_url"` // 产品图 OSS URL
@@ -95,11 +96,22 @@ func GetVideoProjectByIdAdmin(id int64) (*VideoProject, error) {
 	return &project, nil
 }
 
-// GetVideoProjectByRemoteId 根据渠道和远程ID获取项目
+// GetVideoProjectByRemoteId 根据渠道类型和远程ID获取项目（旧接口，保留兼容）
 func GetVideoProjectByRemoteId(channelType, remoteId string) (*VideoProject, error) {
 	var project VideoProject
 	err := DB.Where("channel_type = ? AND remote_project_id = ? AND deleted = 0",
 		channelType, remoteId).First(&project).Error
+	if err != nil {
+		return nil, err
+	}
+	return &project, nil
+}
+
+// GetVideoProjectByChannelAndRemoteId 根据渠道ID和远程ID获取项目（精确匹配）
+func GetVideoProjectByChannelAndRemoteId(channelId int, remoteId string) (*VideoProject, error) {
+	var project VideoProject
+	err := DB.Where("channel_id = ? AND remote_project_id = ? AND deleted = 0",
+		channelId, remoteId).First(&project).Error
 	if err != nil {
 		return nil, err
 	}

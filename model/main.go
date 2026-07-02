@@ -283,6 +283,7 @@ func migrateDB() error {
 		&PerfMetric{},
 		&PromptLog{},
 		&VideoProject{},
+		&VideoChannel{},
 	)
 	if err != nil {
 		return err

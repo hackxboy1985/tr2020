@@ -25,7 +25,6 @@ func SetVideoRouter(router *gin.Engine) {
 		videoV1Router.POST("/videos/:video_id/remix", controller.RelayTask)
 	}
 	// openai compatible API video routes
-	// docs: https://platform.openai.com/docs/api-reference/videos/create
 	{
 		videoV1Router.POST("/videos", controller.RelayTask)
 		videoV1Router.GET("/videos/:task_id", controller.RelayTaskFetch)
@@ -41,12 +40,39 @@ func SetVideoRouter(router *gin.Engine) {
 		klingV1Router.GET("/videos/image2video/:task_id", controller.RelayTaskFetch)
 	}
 
-	// Jimeng official API routes - direct mapping to official API format
+	// Jimeng official API routes
 	jimengOfficialGroup := router.Group("jimeng")
 	jimengOfficialGroup.Use(middleware.RouteTag("relay"))
 	jimengOfficialGroup.Use(middleware.JimengRequestConvert(), middleware.TokenAuth(), middleware.Distribute())
 	{
-		// Maps to: /?Action=CVSync2AsyncSubmitTask&Version=2022-08-31 and /?Action=CVSync2AsyncGetResult&Version=2022-08-31
 		jimengOfficialGroup.POST("/", controller.RelayTask)
 	}
+
+	// 视频生成项目管理（用户 + 管理员共用路由，内部按 role 分流）
+	videoGenRouter := router.Group("/api/video-generation")
+	videoGenRouter.Use(middleware.RouteTag("api"))
+	videoGenRouter.Use(middleware.UserAuth())
+	{
+		videoGenRouter.POST("/create", controller.CreateVideoProject)
+		videoGenRouter.GET("/projects", controller.ListVideoProjects)
+		videoGenRouter.GET("/projects/:id", controller.GetVideoProject)
+		videoGenRouter.DELETE("/projects/:id", controller.DeleteVideoProject)
+		videoGenRouter.PUT("/admin/projects/:id/status", controller.UpdateVideoProjectStatus)
+		videoGenRouter.DELETE("/admin/projects/:id", controller.DeleteVideoProject)
+	}
+
+	// 渠道管理（仅管理员）
+	videoChannelRouter := router.Group("/api/video-generation/channels")
+	videoChannelRouter.Use(middleware.RouteTag("api"))
+	videoChannelRouter.Use(middleware.UserAuth(), middleware.AdminAuth())
+	{
+		videoChannelRouter.GET("", controller.ListVideoChannels)
+		videoChannelRouter.POST("", controller.CreateVideoChannel)
+		videoChannelRouter.PUT("/:id", controller.UpdateVideoChannel)
+		videoChannelRouter.DELETE("/:id", controller.DeleteVideoChannel)
+		videoChannelRouter.PUT("/:id/status", controller.UpdateVideoChannelStatus)
+	}
+
+	// Webhook 回调（无需认证，通过签名验证）
+	router.POST("/api/video-generation/webhook/:channel_id", controller.HandleWebhook)
 }

@@ -27,8 +27,11 @@ type CreateVideoProjectRequest struct {
 	VideoModel string `json:"video_model"`                   // 视频模型: seedance
 	Whstr      string `json:"whstr" binding:"required"`      // 宽高比: 16:9, 9:16
 
-	// 渠道选择（可选，默认使用系统配置）
-	ChannelType string `json:"channel_type"` // 'coze' 或 'platform'，为空则使用默认配置
+	// 渠道选择（可选）
+	// - channel_id: 管理员可指定，普通用户传了静默忽略
+	// - channel_type: 过滤渠道类型；channel_id 有效时忽略此字段
+	ChannelId   int    `json:"channel_id"`
+	ChannelType string `json:"channel_type"`
 }
 
 // VideoProjectResponse 视频项目响应

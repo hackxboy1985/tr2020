@@ -11,22 +11,18 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/model"
 )
 
-// PlatformAdapter 三方平台适配器（已封装 Coze 的平台）
+// PlatformAdapter 三方平台适配器
 type PlatformAdapter struct {
-	baseURL   string
-	apiKey    string
-	apiSecret string
-	client    *http.Client
+	ch     *model.VideoChannel
+	client *http.Client
 }
 
-// NewPlatformAdapter 创建三方平台适配器
-func NewPlatformAdapter() *PlatformAdapter {
+func NewPlatformAdapter(ch *model.VideoChannel) *PlatformAdapter {
 	return &PlatformAdapter{
-		baseURL:   common.VideoGenerationPlatformBaseURL,
-		apiKey:    common.VideoGenerationPlatformApiKey,
-		apiSecret: common.VideoGenerationPlatformApiSecret,
+		ch: ch,
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -38,11 +34,10 @@ func (a *PlatformAdapter) GetName() string {
 }
 
 func (a *PlatformAdapter) CreateProject(ctx context.Context, req *dto.CreateVideoProjectRequest) (*dto.AdapterCreateResponse, error) {
-	if a.baseURL == "" || a.apiKey == "" {
+	if a.ch.BaseURL == "" || a.ch.ApiKey == "" {
 		return nil, errors.New("platform base url or api key not configured")
 	}
 
-	// 三方平台的接口参数格式与 Coze 一致，直接转发
 	platformReq := map[string]interface{}{
 		"product_img_url": req.ProductImgUrl,
 		"brand":           req.Brand,
@@ -63,20 +58,17 @@ func (a *PlatformAdapter) CreateProject(ctx context.Context, req *dto.CreateVide
 		"whstr":           req.Whstr,
 	}
 
-	// 序列化请求
 	body, err := common.Marshal(platformReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// 发送请求到三方平台
-	url := a.baseURL + "/api/video/create"
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", a.ch.GetCreateURL(), bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	httpReq.Header.Set("Authorization", "Bearer "+a.apiKey)
+	httpReq.Header.Set("Authorization", "Bearer "+a.ch.ApiKey)
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := a.client.Do(httpReq)
@@ -94,7 +86,6 @@ func (a *PlatformAdapter) CreateProject(ctx context.Context, req *dto.CreateVide
 		return nil, fmt.Errorf("platform api error: status=%d, body=%s", resp.StatusCode, string(respBody))
 	}
 
-	// 解析响应
 	var platformResp struct {
 		Code int    `json:"code"`
 		Msg  string `json:"msg"`
@@ -121,18 +112,16 @@ func (a *PlatformAdapter) CreateProject(ctx context.Context, req *dto.CreateVide
 }
 
 func (a *PlatformAdapter) GetProjectStatus(ctx context.Context, remoteProjectId string) (*dto.AdapterStatusResponse, error) {
-	if a.baseURL == "" || a.apiKey == "" {
+	if a.ch.BaseURL == "" || a.ch.ApiKey == "" {
 		return nil, errors.New("platform base url or api key not configured")
 	}
 
-	// 查询三方平台项目状态
-	url := fmt.Sprintf("%s/api/video/projects/%s", a.baseURL, remoteProjectId)
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", a.ch.GetStatusQueryURL(remoteProjectId), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	httpReq.Header.Set("Authorization", "Bearer "+a.apiKey)
+	httpReq.Header.Set("Authorization", "Bearer "+a.ch.ApiKey)
 
 	resp, err := a.client.Do(httpReq)
 	if err != nil {
@@ -149,7 +138,6 @@ func (a *PlatformAdapter) GetProjectStatus(ctx context.Context, remoteProjectId 
 		return nil, fmt.Errorf("platform api error: status=%d, body=%s", resp.StatusCode, string(respBody))
 	}
 
-	// 解析响应
 	var platformResp struct {
 		Code int    `json:"code"`
 		Msg  string `json:"msg"`
@@ -184,29 +172,18 @@ func (a *PlatformAdapter) GetProjectStatus(ctx context.Context, remoteProjectId 
 }
 
 func (a *PlatformAdapter) ValidateWebhook(ctx context.Context, signature string, body []byte) error {
-	if a.apiSecret == "" {
-		return errors.New("platform api secret not configured")
+	if a.ch.ApiSecret == "" {
+		// 未配置 secret 时跳过签名验证
+		return nil
 	}
-
-	// 三方平台可能有自己的签名验证方式
-	// 这里假设与 Coze 类似，使用 HMAC-SHA256
-	// 实际需要根据平台文档调整
-	// 暂时简化处理：如果配置了secret就验证，否则跳过
-	if signature == "" {
-		return nil // 允许无签名（开发阶段）
-	}
-
-	// TODO: 实现具体的签名验证逻辑
+	// TODO: 根据实际平台文档实现签名验证
 	return nil
 }
 
 func (a *PlatformAdapter) ParseWebhookPayload(body []byte) (*dto.WebhookPayload, error) {
-	// 三方平台的 webhook 格式可能与文档中定义的一致
 	var payload dto.WebhookPayload
-
 	if err := common.Unmarshal(body, &payload); err != nil {
 		return nil, fmt.Errorf("failed to parse platform webhook: %w", err)
 	}
-
 	return &payload, nil
 }

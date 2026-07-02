@@ -25,7 +25,6 @@ import { DashboardSection } from './dashboard-section'
 import { DrawingSettingsSection } from './drawing-settings-section'
 import { FAQSection } from './faq-section'
 import { UptimeKumaSection } from './uptime-kuma-section'
-import { VideoGenerationSettingsSection } from './video-generation-settings-section'
 
 /**
  * Validate and coerce DataExportDefaultTime to a safe value
@@ -113,25 +112,6 @@ const CONTENT_SECTIONS = [
           MjForwardUrlEnabled: settings.MjForwardUrlEnabled,
           MjModeClearEnabled: settings.MjModeClearEnabled,
           MjActionCheckSuccessEnabled: settings.MjActionCheckSuccessEnabled,
-        }}
-      />
-    ),
-  },
-  {
-    id: 'video-generation',
-    titleKey: 'Video Generation',
-    build: (settings: ContentSettings) => (
-      <VideoGenerationSettingsSection
-        defaultValues={{
-          VideoGenerationEnabled: settings.VideoGenerationEnabled,
-          VideoGenerationChannel: (settings.VideoGenerationChannel || 'platform') as 'platform' | 'coze',
-          VideoGenerationPlatformBaseURL: settings.VideoGenerationPlatformBaseURL || '',
-          VideoGenerationPlatformApiKey: settings.VideoGenerationPlatformApiKey || '',
-          VideoGenerationPlatformApiSecret: settings.VideoGenerationPlatformApiSecret || '',
-          VideoGenerationCozeApiKey: settings.VideoGenerationCozeApiKey || '',
-          VideoGenerationCozeWorkflowId: settings.VideoGenerationCozeWorkflowId || '',
-          VideoGenerationCozeWebhookSecret: settings.VideoGenerationCozeWebhookSecret || '',
-          VideoGenerationCozeBaseURL: settings.VideoGenerationCozeBaseURL || '',
         }}
       />
     ),

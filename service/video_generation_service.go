@@ -10,48 +10,72 @@ import (
 	"github.com/QuantumNous/new-api/model"
 )
 
-// VideoGenerationService 视频生成服务
-type VideoGenerationService struct {
-	adapter     VideoGenerationAdapter
-	channelType string
-}
-
-// NewVideoGenerationService 创建视频生成服务
-func NewVideoGenerationService(channelType string) (*VideoGenerationService, error) {
-	var adapter VideoGenerationAdapter
-
-	switch channelType {
-	case "coze":
-		adapter = NewCozeAdapter()
-	case "platform":
-		adapter = NewPlatformAdapter()
-	default:
-		return nil, fmt.Errorf("unsupported video generation channel: %s", channelType)
+// needsStatusPullthrough 判断该状态是否需要透传查询上游
+func needsStatusPullthrough(status string) bool {
+	switch status {
+	case model.VideoProjectStatusCozeRunning,
+		model.VideoProjectStatusVideoProcessing,
+		model.VideoProjectStatusVideoConcat,
+		model.VideoProjectStatusVideoPreparing:
+		return true
 	}
-
-	return &VideoGenerationService{
-		adapter:     adapter,
-		channelType: channelType,
-	}, nil
+	return false
 }
 
 // CreateProject 创建视频项目
-func (s *VideoGenerationService) CreateProject(ctx context.Context, userId int, req *dto.CreateVideoProjectRequest) (*model.VideoProject, error) {
+// isAdmin=true 时 req.ChannelId 生效，否则忽略
+func CreateProject(ctx context.Context, userId int, isAdmin bool, req *dto.CreateVideoProjectRequest) (*model.VideoProject, error) {
 	// 获取用户名
 	username, err := model.GetUsernameById(userId, false)
 	if err != nil {
 		username = fmt.Sprintf("user_%d", userId)
 	}
 
+	// 获取用户分组
+	user, err := model.GetUserById(userId, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+	userGroup := user.Group
+	if userGroup == "" {
+		userGroup = "default"
+	}
+
+	// 选择渠道
+	var ch *model.VideoChannel
+	if isAdmin && req.ChannelId > 0 {
+		// 管理员指定渠道
+		ch, err = model.GetVideoChannelById(req.ChannelId)
+		if err != nil {
+			return nil, fmt.Errorf("channel not found: %w", err)
+		}
+		if ch.Enabled == 0 {
+			return nil, fmt.Errorf("channel %d is disabled", req.ChannelId)
+		}
+	} else {
+		// 按用户组 + 可选渠道类型，按权重随机选
+		ch, err = model.SelectVideoChannel(userGroup, req.ChannelType)
+		if err != nil {
+			return nil, fmt.Errorf("no available video channel for group '%s': %w", userGroup, err)
+		}
+	}
+
+	// 构建适配器
+	adapter, err := NewAdapterFromChannel(ch)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build adapter: %w", err)
+	}
+
 	// 生成项目名称
 	projectName := fmt.Sprintf("%s_%s_%d", username, time.Now().Format("20060102"), time.Now().Unix())
 
-	// 1. 创建本地记录
+	// 创建本地记录
 	project := &model.VideoProject{
 		UserId:        userId,
 		Username:      username,
 		ProjectName:   projectName,
-		ChannelType:   s.channelType,
+		ChannelId:     ch.Id,
+		ChannelType:   ch.ChannelType, // 快照，后续不更新
 		ProductImgUrl: req.ProductImgUrl,
 		Brand:         req.Brand,
 		ProductName:   req.ProductName,
@@ -76,32 +100,27 @@ func (s *VideoGenerationService) CreateProject(ctx context.Context, userId int, 
 		return nil, fmt.Errorf("failed to create project: %w", err)
 	}
 
-	// 2. 调用渠道适配器
-	resp, err := s.adapter.CreateProject(ctx, req)
+	// 调用上游
+	resp, err := adapter.CreateProject(ctx, req)
 	if err != nil {
-		// 更新本地状态为失败
 		_ = model.UpdateVideoProjectStatus(project.Id, model.VideoProjectStatusFailed, err.Error())
-		return nil, fmt.Errorf("failed to call adapter: %w", err)
+		return nil, fmt.Errorf("upstream channel error: %w", err)
 	}
 
-	// 3. 更新远程项目ID和状态
-	project.RemoteProjectId = resp.RemoteProjectId
-	project.Status = resp.Status
-
+	// 更新 remote_project_id 和状态
 	updates := map[string]interface{}{
 		"remote_project_id": resp.RemoteProjectId,
 		"status":            resp.Status,
 	}
-
-	if err := model.UpdateVideoProjectFields(project.Id, updates); err != nil {
-		return nil, fmt.Errorf("failed to update project: %w", err)
-	}
+	_ = model.UpdateVideoProjectFields(project.Id, updates)
+	project.RemoteProjectId = resp.RemoteProjectId
+	project.Status = resp.Status
 
 	return project, nil
 }
 
-// GetProject 获取项目详情
-func (s *VideoGenerationService) GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) (*model.VideoProject, error) {
+// GetProject 获取项目详情，进行中状态会透传查询上游
+func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) (*model.VideoProject, error) {
 	var project *model.VideoProject
 	var err error
 
@@ -110,54 +129,68 @@ func (s *VideoGenerationService) GetProject(ctx context.Context, projectId int64
 	} else {
 		project, err = model.GetVideoProjectById(projectId, userId)
 	}
-
 	if err != nil {
 		return nil, err
 	}
 
-	// 如果项目处于运行中状态，尝试同步最新状态
-	if project.Status == model.VideoProjectStatusCozeRunning || project.Status == model.VideoProjectStatusVideoProcessing {
-		if statusResp, err := s.adapter.GetProjectStatus(ctx, project.RemoteProjectId); err == nil {
-			// 更新状态
-			updates := map[string]interface{}{
-				"status":   statusResp.Status,
-				"progress": statusResp.Progress,
-			}
+	// 终态或无 remote_project_id：直接返回本地数据
+	if !needsStatusPullthrough(project.Status) || project.RemoteProjectId == "" {
+		return project, nil
+	}
 
-			if statusResp.ErrorMsg != "" {
-				updates["error_msg"] = statusResp.ErrorMsg
-			}
+	// 透传查询上游
+	ch, err := model.GetVideoChannelById(project.ChannelId)
+	if err != nil {
+		// 渠道已删除，返回本地数据
+		common.SysLog(fmt.Sprintf("video project %d channel %d not found: %v", project.Id, project.ChannelId, err))
+		return project, nil
+	}
 
-			if statusResp.MainImageUrl != "" {
-				updates["main_image_url"] = statusResp.MainImageUrl
-			}
+	adapter, err := NewAdapterFromChannel(ch)
+	if err != nil {
+		return project, nil
+	}
 
-			if statusResp.MainImageAssetId != "" {
-				updates["main_image_asset_id"] = statusResp.MainImageAssetId
-			}
+	statusResp, err := adapter.GetProjectStatus(ctx, project.RemoteProjectId)
+	if err != nil {
+		// 上游查询失败，返回本地数据（不报错）
+		common.SysLog(fmt.Sprintf("video project %d status query failed: %v", project.Id, err))
+		return project, nil
+	}
 
-			if statusResp.GeneratedResult != "" {
-				updates["generated_result"] = statusResp.GeneratedResult
-			}
+	// 更新本地
+	updates := map[string]interface{}{
+		"status":   statusResp.Status,
+		"progress": statusResp.Progress,
+	}
+	if statusResp.ErrorMsg != "" {
+		updates["error_msg"] = statusResp.ErrorMsg
+	}
+	if statusResp.MainImageUrl != "" {
+		updates["main_image_url"] = statusResp.MainImageUrl
+	}
+	if statusResp.MainImageAssetId != "" {
+		updates["main_image_asset_id"] = statusResp.MainImageAssetId
+	}
+	if statusResp.GeneratedResult != "" {
+		updates["generated_result"] = statusResp.GeneratedResult
+	}
+	if statusResp.FirstVideoUrl != "" {
+		updates["first_video_url"] = statusResp.FirstVideoUrl
+	}
+	_ = model.UpdateVideoProjectFields(project.Id, updates)
 
-			if statusResp.FirstVideoUrl != "" {
-				updates["first_video_url"] = statusResp.FirstVideoUrl
-			}
-
-			_ = model.UpdateVideoProjectFields(project.Id, updates)
-
-			// 更新本地对象
-			project.Status = statusResp.Status
-			project.Progress = statusResp.Progress
-			project.ErrorMsg = statusResp.ErrorMsg
-		}
+	project.Status = statusResp.Status
+	project.Progress = statusResp.Progress
+	if statusResp.ErrorMsg != "" {
+		project.ErrorMsg = statusResp.ErrorMsg
 	}
 
 	return project, nil
 }
 
 // ListProjects 获取项目列表
-func (s *VideoGenerationService) ListProjects(ctx context.Context, userId int, page, pageSize int, isAdmin bool, statusFilter string) (*dto.VideoProjectListResponse, error) {
+func ListProjects(ctx context.Context, userId int, page, pageSize int, isAdmin bool, statusFilter string) (*dto.VideoProjectListResponse, error) {
 	var projects []*model.VideoProject
 	var total int64
 	var err error
@@ -167,12 +200,10 @@ func (s *VideoGenerationService) ListProjects(ctx context.Context, userId int, p
 	} else {
 		projects, total, err = model.GetUserVideoProjects(userId, (page-1)*pageSize, pageSize)
 	}
-
 	if err != nil {
 		return nil, err
 	}
 
-	// 转换为响应格式
 	items := make([]dto.VideoProjectItemResponse, len(projects))
 	for i, p := range projects {
 		items[i] = dto.VideoProjectItemResponse{
@@ -194,8 +225,8 @@ func (s *VideoGenerationService) ListProjects(ctx context.Context, userId int, p
 	}, nil
 }
 
-// DeleteProject 删除项目
-func (s *VideoGenerationService) DeleteProject(ctx context.Context, projectId int64, userId int, isAdmin bool) error {
+// DeleteProject 软删除项目
+func DeleteProject(ctx context.Context, projectId int64, userId int, isAdmin bool) error {
 	if isAdmin {
 		return model.DeleteVideoProjectAdmin(projectId)
 	}
@@ -203,75 +234,75 @@ func (s *VideoGenerationService) DeleteProject(ctx context.Context, projectId in
 }
 
 // UpdateProjectStatus 管理员更新项目状态
-func (s *VideoGenerationService) UpdateProjectStatus(ctx context.Context, projectId int64, req *dto.UpdateVideoProjectStatusRequest) error {
+func UpdateProjectStatus(ctx context.Context, projectId int64, req *dto.UpdateVideoProjectStatusRequest) error {
 	updates := map[string]interface{}{
 		"status": req.Status,
 	}
-
 	if req.ErrorMsg != "" {
 		updates["error_msg"] = req.ErrorMsg
 	}
-
 	if req.MainImageUrl != "" {
 		updates["main_image_url"] = req.MainImageUrl
 	}
-
 	if req.MainImageAssetId != "" {
 		updates["main_image_asset_id"] = req.MainImageAssetId
 	}
-
 	if req.GeneratedResult != "" {
 		updates["generated_result"] = req.GeneratedResult
 	}
-
 	return model.UpdateVideoProjectFields(projectId, updates)
 }
 
 // HandleWebhook 处理 webhook 回调
-func (s *VideoGenerationService) HandleWebhook(ctx context.Context, signature string, body []byte) error {
-	// 1. 验证签名
-	if err := s.adapter.ValidateWebhook(ctx, signature, body); err != nil {
+func HandleWebhook(ctx context.Context, channelId int, signature string, body []byte) error {
+	ch, err := model.GetVideoChannelById(channelId)
+	if err != nil {
+		// 渠道不存在：返回 200（防止上游重试），记录日志
+		common.SysLog(fmt.Sprintf("webhook: channel %d not found", channelId))
+		return nil
+	}
+
+	adapter, err := NewAdapterFromChannel(ch)
+	if err != nil {
+		common.SysLog(fmt.Sprintf("webhook: failed to build adapter for channel %d: %v", channelId, err))
+		return nil
+	}
+
+	// 验证签名（失败返回 error，调用方返回 401）
+	if err := adapter.ValidateWebhook(ctx, signature, body); err != nil {
 		return fmt.Errorf("webhook signature validation failed: %w", err)
 	}
 
-	// 2. 解析载荷
-	payload, err := s.adapter.ParseWebhookPayload(body)
+	payload, err := adapter.ParseWebhookPayload(body)
 	if err != nil {
 		return fmt.Errorf("failed to parse webhook payload: %w", err)
 	}
 
-	// 3. 根据 remote_project_id 查找本地项目
-	project, err := model.GetVideoProjectByRemoteId(s.channelType, payload.RemoteProjectId)
+	// 通过 channel_id + remote_project_id 查找本地项目
+	project, err := model.GetVideoProjectByChannelAndRemoteId(channelId, payload.RemoteProjectId)
 	if err != nil {
-		return fmt.Errorf("project not found: channel=%s, remote_id=%s, err=%w",
-			s.channelType, payload.RemoteProjectId, err)
+		common.SysLog(fmt.Sprintf("webhook: project not found for channel=%d remote_id=%s", channelId, payload.RemoteProjectId))
+		return nil
 	}
 
-	// 4. 更新项目状态
 	updates := map[string]interface{}{
 		"status": payload.Status,
 	}
-
 	if payload.ErrorMsg != "" {
 		updates["error_msg"] = payload.ErrorMsg
 	}
-
 	if payload.Progress != "" {
 		updates["progress"] = payload.Progress
 	}
-
 	if payload.MainImageUrl != "" {
 		updates["main_image_url"] = payload.MainImageUrl
 	}
-
 	if payload.MainImageAssetId != "" {
 		updates["main_image_asset_id"] = payload.MainImageAssetId
 	}
-
 	if payload.GeneratedResult != "" {
 		updates["generated_result"] = payload.GeneratedResult
 	}
-
 	if payload.FirstVideoUrl != "" {
 		updates["first_video_url"] = payload.FirstVideoUrl
 	}
@@ -280,22 +311,11 @@ func (s *VideoGenerationService) HandleWebhook(ctx context.Context, signature st
 		return fmt.Errorf("failed to update project: %w", err)
 	}
 
-	// 5. 触发后续逻辑（计费、通知等）
 	if payload.Status == model.VideoProjectStatusOneClickGenerated {
-		// TODO: 计费逻辑
-		// TODO: 用户通知
-		common.SysLog(fmt.Sprintf("video project %d completed successfully", project.Id))
+		common.SysLog(fmt.Sprintf("video project %d completed", project.Id))
 	} else if payload.Status == model.VideoProjectStatusFailed {
 		common.SysLog(fmt.Sprintf("video project %d failed: %s", project.Id, payload.ErrorMsg))
 	}
 
 	return nil
-}
-
-// GetDefaultChannelType 获取默认渠道类型
-func GetDefaultChannelType() string {
-	if common.VideoGenerationChannel != "" {
-		return common.VideoGenerationChannel
-	}
-	return "platform"
 }
