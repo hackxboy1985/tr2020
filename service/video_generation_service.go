@@ -69,6 +69,14 @@ func CreateProject(ctx context.Context, userId int, isAdmin bool, req *dto.Creat
 	// 生成项目名称
 	projectName := fmt.Sprintf("%s_%s_%d", username, time.Now().Format("20060102"), time.Now().Unix())
 
+	// 序列化 MediaList（如果有）
+	mediaListJSON := ""
+	if len(req.MediaList) > 0 {
+		if b, err := common.Marshal(req.MediaList); err == nil {
+			mediaListJSON = string(b)
+		}
+	}
+
 	// 创建本地记录
 	project := &model.VideoProject{
 		UserId:        userId,
@@ -89,6 +97,7 @@ func CreateProject(ctx context.Context, userId int, isAdmin bool, req *dto.Creat
 		Region:        req.Region,
 		Roles:         req.Roles,
 		SelectAudios:  req.SelectAudios,
+		MediaList:     mediaListJSON,
 		Duration:      req.Duration,
 		Resolution:    req.Resolution,
 		VideoModel:    req.VideoModel,

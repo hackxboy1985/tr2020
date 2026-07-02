@@ -1,35 +1,47 @@
 package dto
 
+// VideoMediaItem mediaList 元素
+type VideoMediaItem struct {
+	MediaType string `json:"mediaType"` // PRODUCT / ROLE / OTHER
+	MediaUrl  string `json:"mediaUrl"`
+	AssetId   int64  `json:"assetId,omitempty"`
+	RoleName  string `json:"roleName,omitempty"`
+	SortOrder int    `json:"sortOrder,omitempty"`
+}
+
 // CreateVideoProjectRequest 创建视频项目请求
 type CreateVideoProjectRequest struct {
 	// 广告基础信息（必填）
-	ProductImgUrl string `json:"product_img_url" binding:"required"`
+	// ProductImgUrl: 旧格式兼容，优先使用 MediaList
+	ProductImgUrl string `json:"product_img_url"`
 	Brand         string `json:"brand" binding:"required"`
 	ProductName   string `json:"product_name" binding:"required"`
 	Tagline       string `json:"tagline"`
 	SellingPoints string `json:"selling_points"`
 
 	// 创意方向（必填）
-	Prompt   string `json:"prompt" binding:"required"` // 用户创意描述，核心输入
-	Vtype    string `json:"vtype" binding:"required"`  // 视频类型
-	VtypeAdd string `json:"vtype_add"`                 // 剧情子类型
-	Language string `json:"language"`                  // 广告语言
-	Platform string `json:"platform"`                  // 投放平台
-	Region   string `json:"region"`                    // 投放地区
+	Prompt   string `json:"prompt" binding:"required"`
+	Vtype    string `json:"vtype" binding:"required"`
+	VtypeAdd string `json:"vtype_add"`
+	Language string `json:"language"`
+	Platform string `json:"platform"`
+	Region   string `json:"region"`
 
-	// 角色与参考（可选）
+	// 媒体列表（OpenAPI 格式，优先于旧字段）
+	// 至少 1 张 PRODUCT 图；为空时从 ProductImgUrl + Roles 自动转换
+	MediaList []VideoMediaItem `json:"mediaList"`
+
+	// 角色与参考（旧格式兼容）
 	Roles        string `json:"roles"`         // JSON字符串: [{name, url}]
 	SelectAudios string `json:"select_audios"` // JSON字符串: [{url, remark}]
 
 	// 输出配置（必填）
-	Duration   int    `json:"duration" binding:"required"`   // 视频时长（秒）
-	Resolution string `json:"resolution" binding:"required"` // 分辨率: 2K, 4K
-	VideoModel string `json:"video_model"`                   // 视频模型: seedance
-	Whstr      string `json:"whstr" binding:"required"`      // 宽高比: 16:9, 9:16
+	Duration   int    `json:"duration" binding:"required"`
+	Resolution string `json:"resolution" binding:"required"`
+	VideoModel string `json:"video_model"`
+	Whstr      string `json:"whstr" binding:"required"`
 
 	// 渠道选择（可选）
-	// - channel_id: 管理员可指定，普通用户传了静默忽略
-	// - channel_type: 过滤渠道类型；channel_id 有效时忽略此字段
 	ChannelId   int    `json:"channel_id"`
 	ChannelType string `json:"channel_type"`
 }

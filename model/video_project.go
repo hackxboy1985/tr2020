@@ -34,8 +34,9 @@ type VideoProject struct {
 	Region   string `gorm:"type:varchar(50)" json:"region,omitempty"`    // 投放地区
 
 	// 角色与参考
-	Roles        string `gorm:"type:text" json:"roles,omitempty"`         // 出镜角色列表 JSON
-	SelectAudios string `gorm:"type:text" json:"select_audios,omitempty"` // 可选音色列表 JSON
+	Roles        string `gorm:"type:text" json:"roles,omitempty"`         // 出镜角色列表 JSON（旧格式）
+	SelectAudios string `gorm:"type:text" json:"select_audios,omitempty"` // 可选音色列表 JSON（旧格式）
+	MediaList    string `gorm:"type:text" json:"media_list,omitempty"`    // OpenAPI 媒体列表 JSON
 
 	// 输出配置
 	Duration   int    `gorm:"type:int" json:"duration"`            // 目标视频时长（秒）

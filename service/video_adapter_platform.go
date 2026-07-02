@@ -38,11 +38,38 @@ func (a *PlatformAdapter) CreateProject(ctx context.Context, req *dto.CreateVide
 		return nil, errors.New("platform base url or api key not configured")
 	}
 
+	// 构建 mediaList：优先使用 req.MediaList，否则从旧字段自动转换
+	mediaList := req.MediaList
+	if len(mediaList) == 0 && req.ProductImgUrl != "" {
+		mediaList = append(mediaList, dto.VideoMediaItem{
+			MediaType: "PRODUCT",
+			MediaUrl:  req.ProductImgUrl,
+		})
+		// 旧格式 roles 字段转换：[{name, url}] → ROLE 类型
+		if req.Roles != "" {
+			var roles []struct {
+				Name string `json:"name"`
+				URL  string `json:"url"`
+			}
+			if err := common.UnmarshalJsonStr(req.Roles, &roles); err == nil {
+				for i, r := range roles {
+					if r.URL != "" {
+						mediaList = append(mediaList, dto.VideoMediaItem{
+							MediaType: "ROLE",
+							MediaUrl:  r.URL,
+							RoleName:  r.Name,
+							SortOrder: i,
+						})
+					}
+				}
+			}
+		}
+	}
+
 	// 构建 camelCase 请求体以兼容 OpenAPI 服务端（Spring Boot Jackson 默认 camelCase）
 	platformReq := map[string]interface{}{
-		"productImgUrl": req.ProductImgUrl,
-		"brand":         req.Brand,
 		"productName":   req.ProductName,
+		"brand":         req.Brand,
 		"tagline":       req.Tagline,
 		"sellingPoints": req.SellingPoints,
 		"prompt":        req.Prompt,
@@ -51,12 +78,11 @@ func (a *PlatformAdapter) CreateProject(ctx context.Context, req *dto.CreateVide
 		"language":      req.Language,
 		"platform":      req.Platform,
 		"region":        req.Region,
-		"roles":         req.Roles,
-		"selectAudios":  req.SelectAudios,
 		"duration":      req.Duration,
 		"resolution":    req.Resolution,
 		"videoModel":    req.VideoModel,
 		"whstr":         req.Whstr,
+		"mediaList":     mediaList,
 	}
 
 	body, err := common.Marshal(platformReq)
