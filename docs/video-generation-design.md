@@ -125,9 +125,11 @@
 ```
 id=1  name="Coze-A"     type=coze      workflow_id=111  create_path=/v1/workflow/run  status_query_path=/v1/workflow/run/{id}     groups="default,vip"  weight=3
 id=2  name="Coze-B"     type=coze      workflow_id=222  create_path=/v1/workflow/run  status_query_path=/v1/workflow/run/{id}     groups="vip"          weight=1
-id=3  name="Platform-A" type=platform  base_url=http://p1  create_path=/api/video/create  status_query_path=/api/video/projects/{id}  groups=""          weight=2
+id=3  name="Platform-A" type=platform  base_url=http://p1  create_path=/api/video/create  status_query_path=/api/video/projects/{id}  groups="default"   weight=2
 id=4  name="Platform-B" type=platform  base_url=http://p2  create_path=/api/video/create  status_query_path=/api/video/projects/{id}  groups="default"   weight=2
 ```
+
+> **注意**：`groups` 字段不允许空字符串。与现有 AI 渠道 `Group` 字段保持一致——空字符串不会匹配任何组，渠道将不可用。至少需要填写 `default`。
 
 ### video_projects 表（新增字段）
 
@@ -168,37 +170,44 @@ id=4  name="Platform-B" type=platform  base_url=http://p2  create_path=/api/vide
 ```
 GET /api/video-generation/projects/:id
   ↓
-查本地 video_projects 得到 channel_id + remote_project_id
+查本地 video_projects 得到 channel_id + remote_project_id + status
   ↓
-项目是终态（FAILED / ONE_CLICK_GENERATED）？
-  ├─ 是 → 直接返回本地数据
+status 是终态（FAILED / ONE_CLICK_GENERATED）？
+  ├─ 是 → 直接返回本地数据，不查上游
   └─ 否
        ↓
-     根据 channel_id 加载 VideoChannel 配置
-       ↓
-     构造对应 Adapter 调用 GetProjectStatus(remote_project_id)
-       ↓
-     更新本地 DB（状态、进度、结果字段）
-       ↓
-     返回最新数据
+     remote_project_id 为空（CREATED 且上游调用尚未完成）？
+       ├─ 是 → 直接返回本地数据（上游还没分配 ID，无法查询）
+       └─ 否
+            ↓
+          根据 channel_id 加载 VideoChannel 配置
+            ↓
+          构造对应 Adapter 调用 GetProjectStatus(remote_project_id)
+            ↓
+          更新本地 DB（状态、进度、结果字段）
+            ↓
+          返回最新数据
 ```
 
 **终态定义**（不再查询上游）：
 - `FAILED`
 - `ONE_CLICK_GENERATED`
 
-**进行中状态**（每次查询都透传）：
-- `CREATED`（刚创建还没调上游，跳过透传）
+**需要透传的状态**：
 - `COZE_RUNNING`
 - `VIDEO_PROCESSING`
 - `VIDEO_CONCAT`
+- `VIDEO_PREPARING`
+
+**不透传的状态**：
+- `CREATED`：上游调用在创建流程中同步发出，若调用成功则立即更新为 `COZE_RUNNING`，若失败则为 `FAILED`。查询时遇到 `CREATED` 说明上游调用尚未完成或 `remote_project_id` 还未写入，直接返回本地数据即可。
 - `VIDEO_PREPARING`
 
 ---
 
 ## Webhook 路由设计
 
-Webhook 路由改为按 `channel_id` 区分（而非 `channel_type`），这样可以精确找到回调来自哪个渠道实例：
+Webhook 路由按 `channel_id` 区分，精确找到回调来自哪个渠道实例：
 
 ```
 POST /api/video-generation/webhook/{channel_id}
@@ -206,9 +215,10 @@ POST /api/video-generation/webhook/{channel_id}
 
 处理逻辑：
 1. 通过 `channel_id` 加载 `VideoChannel` 配置
-2. 构造对应 Adapter 验证签名 + 解析载荷
-3. 通过 `remote_project_id` 找到本地 `video_projects` 记录
-4. 更新状态字段
+2. 找不到渠道 → 返回 **200**（防止上游无限重试）并记录错误日志
+3. 构造对应 Adapter 验证签名；签名验证失败 → 返回 **401**
+4. 解析载荷，通过 `remote_project_id` 找到本地 `video_projects` 记录
+5. 更新状态字段
 
 ---
 
@@ -227,20 +237,30 @@ DELETE /api/video-generation/projects/:id        删除项目
 
 ```json
 {
-  "channel_id": 3,        // 可选，指定渠道（管理员可见；普通用户一般不传）
-  "channel_type": "coze", // 可选，过滤渠道类型；与 channel_id 互斥
+  "channel_id": 3,        // 可选，仅管理员生效；普通用户传了直接忽略
+  "channel_type": "coze", // 可选，过滤渠道类型；channel_id 存在时忽略此字段
   // ... 其他现有字段不变
 }
 ```
 
+> `channel_id` 对普通用户**静默忽略**（不报错），渠道选择始终走分组过滤 + 权重随机逻辑。管理员可通过 `channel_id` 强制指定渠道。
+
 ### 管理员接口
 
+管理员与普通用户**共用同一套路由**，通过 middleware 注入的 `role` 字段分流，不另开路由前缀（与现有 new-api 日志、用户接口的设计一致）：
+
 ```
-GET    /api/video-generation/projects            所有项目（加 is_admin 标识）
-GET    /api/video-generation/projects/:id        项目详情
-PUT    /api/video-generation/admin/projects/:id/status  手动更新状态
-DELETE /api/video-generation/admin/projects/:id  删除项目
+GET    /api/video-generation/projects            用户：我的项目列表
+                                                 管理员：所有项目列表（role >= RoleAdminUser）
+GET    /api/video-generation/projects/:id        用户：只能查自己的项目
+                                                 管理员：可查任意项目
+DELETE /api/video-generation/projects/:id        用户：只能删自己的项目
+                                                 管理员：可删任意项目
+PUT    /api/video-generation/admin/projects/:id/status  手动更新状态（仅管理员路由）
+DELETE /api/video-generation/admin/projects/:id         删除项目（仅管理员路由）
 ```
+
+Controller 内通过 `c.GetInt("role") >= common.RoleAdminUser` 判断是否管理员，与现有实现一致。
 
 ### 渠道管理接口（管理员）
 

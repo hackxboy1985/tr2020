@@ -31,9 +31,10 @@ func (VideoChannel) TableName() string {
 }
 
 // HasGroup 判断渠道是否对指定用户组开放
+// groups 为空字符串时不匹配任何组（与现有 AI 渠道 Group 字段语义一致）
 func (ch *VideoChannel) HasGroup(group string) bool {
 	if ch.Groups == "" {
-		return true // 空 = 所有组可用
+		return false
 	}
 	for _, g := range strings.Split(ch.Groups, ",") {
 		if strings.TrimSpace(g) == group {
