@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
+import { Loader2, CheckCircle2, XCircle } from 'lucide-react'
 import { createVideoChannel, updateVideoChannel } from '../api'
 import { videoChannelFormSchema, type VideoChannel, type VideoChannelFormValues } from '../types'
 import { useVideoChannels } from './video-channels-provider'
@@ -68,6 +69,23 @@ export function VideoChannelMutateDrawer({
   })
 
   const channelType = form.watch('channel_type')
+
+  type TestStatus = 'idle' | 'testing' | 'ok' | 'fail'
+  const [testStatus, setTestStatus] = useState<TestStatus>('idle')
+
+  const testConnection = async () => {
+    const url = form.getValues('base_url')
+    if (!url) return
+    setTestStatus('testing')
+    try {
+      const resp = await fetch(url, { method: 'HEAD', mode: 'no-cors' })
+      // no-cors 下 type=opaque，无法读取状态码，但不抛错即认为可达
+      void resp
+      setTestStatus('ok')
+    } catch {
+      setTestStatus('fail')
+    }
+  }
 
   useEffect(() => {
     if (open) {
@@ -165,16 +183,41 @@ export function VideoChannelMutateDrawer({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t('Base URL')}</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder={
-                        channelType === 'coze'
-                          ? 'https://api.coze.cn'
-                          : 'https://your-platform.example.com'
-                      }
-                      {...field}
-                    />
-                  </FormControl>
+                  <div className='flex gap-2'>
+                    <FormControl>
+                      <Input
+                        placeholder={
+                          channelType === 'coze'
+                            ? 'https://api.coze.cn'
+                            : 'https://your-platform.example.com'
+                        }
+                        {...field}
+                        onChange={(e) => {
+                          field.onChange(e)
+                          setTestStatus('idle')
+                        }}
+                      />
+                    </FormControl>
+                    <Button
+                      type='button'
+                      variant='outline'
+                      size='sm'
+                      className='shrink-0'
+                      disabled={!form.watch('base_url') || testStatus === 'testing'}
+                      onClick={testConnection}
+                    >
+                      {testStatus === 'testing' && <Loader2 className='h-4 w-4 animate-spin' />}
+                      {testStatus === 'ok' && <CheckCircle2 className='h-4 w-4 text-green-500' />}
+                      {testStatus === 'fail' && <XCircle className='h-4 w-4 text-destructive' />}
+                      {testStatus === 'idle' && t('Test')}
+                    </Button>
+                  </div>
+                  {testStatus === 'ok' && (
+                    <p className='text-xs text-green-600'>{t('Connection successful')}</p>
+                  )}
+                  {testStatus === 'fail' && (
+                    <p className='text-xs text-destructive'>{t('Connection failed or unreachable')}</p>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
