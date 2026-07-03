@@ -32,7 +32,13 @@ func GetAllLogs(c *gin.Context) {
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	username := c.Query("username")
 	tokenName := c.Query("token_name")
+	if tokenName == "" {
+		tokenName = c.Query("token")
+	}
 	modelName := c.Query("model_name")
+	if modelName == "" {
+		modelName = c.Query("model")
+	}
 	channel, _ := strconv.Atoi(c.Query("channel"))
 	group := c.Query("group")
 	requestId := c.Query("request_id")
@@ -74,7 +80,13 @@ func GetUserLogs(c *gin.Context) {
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	tokenName := c.Query("token_name")
+	if tokenName == "" {
+		tokenName = c.Query("token")
+	}
 	modelName := c.Query("model_name")
+	if modelName == "" {
+		modelName = c.Query("model")
+	}
 	group := c.Query("group")
 	requestId := c.Query("request_id")
 	upstreamRequestId := c.Query("upstream_request_id")
@@ -162,7 +174,13 @@ func GetLogsSelfStat(c *gin.Context) {
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	tokenName := c.Query("token_name")
+	if tokenName == "" {
+		tokenName = c.Query("token")
+	}
 	modelName := c.Query("model_name")
+	if modelName == "" {
+		modelName = c.Query("model")
+	}
 	channel, _ := strconv.Atoi(c.Query("channel"))
 	group := c.Query("group")
 	quotaNum, err := model.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, username, tokenName, channel, group)

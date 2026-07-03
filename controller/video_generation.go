@@ -43,9 +43,24 @@ func CreateVideoProject(c *gin.Context) {
 
 	project, err := service.CreateProject(c.Request.Context(), userId, isAdmin, &req)
 	if err != nil {
+		model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
+			ModelName: req.VideoModel,
+			TokenName: c.GetString("token_name"),
+			TokenId:   c.GetInt("token_id"),
+			Content:   "视频生成失败: " + err.Error(),
+			Quota:     0,
+		})
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": err.Error(), "data": nil})
 		return
 	}
+
+	model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
+		ModelName: req.VideoModel,
+		TokenName: c.GetString("token_name"),
+		TokenId:   c.GetInt("token_id"),
+		Content:   "视频生成成功: id=" + strconv.FormatInt(project.Id, 10),
+		Quota:     0,
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"code": 200,
@@ -69,30 +84,45 @@ func GetVideoProject(c *gin.Context) {
 	userId := c.GetInt("id")
 	isAdmin := isAdminUser(c)
 
-	project, err := service.GetProject(c.Request.Context(), projectId, userId, isAdmin)
+	detail, err := service.GetProject(c.Request.Context(), projectId, userId, isAdmin)
 	if err != nil {
+		model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
+			ModelName: "",
+			TokenName: c.GetString("token_name"),
+			TokenId:   c.GetInt("token_id"),
+			Content:   "视频查询失败: project=" + c.Param("id"),
+			Quota:     0,
+		})
 		c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "project not found", "data": nil})
 		return
 	}
+
+	model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
+		ModelName: "",
+		TokenName: c.GetString("token_name"),
+		TokenId:   c.GetInt("token_id"),
+		Content:   "视频查询成功: id=" + strconv.FormatInt(detail.Id, 10),
+		Quota:     0,
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"code": 200,
 		"msg":  "success",
 		"data": dto.VideoProjectDetailResponse{
-			ProjectId:        project.Id,
-			ProjectName:      project.ProjectName,
-			Status:           project.Status,
-			ErrorMsg:         project.ErrorMsg,
-			Progress:         project.Progress,
-			ProductImgUrl:    project.ProductImgUrl,
-			Brand:            project.Brand,
-			ProductName:      project.ProductName,
-			MainImageUrl:     project.MainImageUrl,
-			MainImageAssetId: project.MainImageAssetId,
-			GeneratedResult:  project.GeneratedResult,
-			FirstVideoUrl:    project.FirstVideoUrl,
-			CreatedAt:        project.CreatedAt.Unix(),
-			UpdatedAt:        project.UpdatedAt.Unix(),
+			ProjectId:        detail.Id,
+			ProjectName:      detail.ProjectName,
+			Status:           detail.Status,
+			ErrorMsg:         detail.ErrorMsg,
+			Progress:         detail.Progress,
+			ProductImgUrl:    detail.ProductImgUrl,
+			Brand:            detail.Brand,
+			ProductName:      detail.ProductName,
+			MainImageUrl:     detail.MainImageUrl,
+			MainImageAssetId: detail.MainImageAssetId,
+			GeneratedResult:  detail.GeneratedResult,
+			FirstVideoUrl:    detail.FirstVideoUrl,
+			CreatedAt:        detail.CreatedAt.Unix(),
+			UpdatedAt:        detail.UpdatedAt.Unix(),
 		},
 	})
 }
