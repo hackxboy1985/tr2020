@@ -161,9 +161,24 @@ func DeleteVideoProject(c *gin.Context) {
 	isAdmin := isAdminUser(c)
 
 	if err := service.DeleteProject(c.Request.Context(), projectId, userId, isAdmin); err != nil {
+		model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
+			ModelName: "",
+			TokenName: c.GetString("token_name"),
+			TokenId:   c.GetInt("token_id"),
+			Content:   "视频删除失败: project=" + c.Param("id") + " " + err.Error(),
+			Quota:     0,
+		})
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": err.Error(), "data": nil})
 		return
 	}
+
+	model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
+		ModelName: "",
+		TokenName: c.GetString("token_name"),
+		TokenId:   c.GetInt("token_id"),
+		Content:   "视频删除成功: id=" + c.Param("id"),
+		Quota:     0,
+	})
 
 	c.JSON(http.StatusOK, gin.H{"code": 200, "msg": "project deleted successfully", "data": nil})
 }
