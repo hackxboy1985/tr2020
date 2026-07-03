@@ -60,7 +60,7 @@ type VideoProject struct {
 // VideoProjectStatus 视频项目状态常量
 const (
 	VideoProjectStatusCreated           = "CREATED"              // 已创建，等待 Coze 处理
-	VideoProjectStatusCozeRunning       = "COZE_RUNNING"         // Coze 工作流执行中
+	VideoProjectStatusRunning       = "RUNNING"         // 上游工作流执行中
 	VideoProjectStatusVideoProcessing   = "VIDEO_PROCESSING"     // 视频已生成，等待拼接
 	VideoProjectStatusVideoConcat       = "VIDEO_CONCAT"         // 拼接完成，等待 OSS 上传
 	VideoProjectStatusOneClickGenerated = "ONE_CLICK_GENERATED"  // OSS 上传完成，全流程结束

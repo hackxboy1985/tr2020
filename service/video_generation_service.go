@@ -14,7 +14,7 @@ import (
 // VIDEO_PREPARING 是本地拼接失败状态，上游此时已是 succeeded，透传无意义，不包含
 func needsStatusPullthrough(status string) bool {
 	switch status {
-	case model.VideoProjectStatusCozeRunning,
+	case model.VideoProjectStatusRunning,
 		model.VideoProjectStatusVideoProcessing,
 		model.VideoProjectStatusVideoConcat:
 		return true

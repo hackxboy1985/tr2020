@@ -156,7 +156,7 @@ func (a *CozeAdapter) CreateProject(ctx context.Context, req *dto.CreateVideoPro
 
 	return &dto.AdapterCreateResponse{
 		RemoteProjectId: cozeResp.Data.ExecuteID,
-		Status:          model.VideoProjectStatusCozeRunning,
+		Status:          model.VideoProjectStatusRunning,
 		Message:         "coze workflow started",
 	}, nil
 }
@@ -258,12 +258,12 @@ func (a *CozeAdapter) ParseWebhookPayload(body []byte) (*dto.WebhookPayload, err
 func mapCozeStatus(cozeStatus string) string {
 	switch cozeStatus {
 	case "running":
-		return model.VideoProjectStatusCozeRunning
+		return model.VideoProjectStatusRunning
 	case "succeeded":
 		return model.VideoProjectStatusVideoProcessing
 	case "failed":
 		return model.VideoProjectStatusFailed
 	default:
-		return model.VideoProjectStatusCozeRunning
+		return model.VideoProjectStatusRunning
 	}
 }
