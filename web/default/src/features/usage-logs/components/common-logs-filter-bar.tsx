@@ -24,6 +24,8 @@ import { Eye, EyeOff } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useIsAdmin } from '@/hooks/use-admin'
 import { Button } from '@/components/ui/button'
+import type { ComboboxInputOption } from '@/components/ui/combobox-input'
+import { SearchableFilterInput } from './searchable-filter-input'
 import {
   Select,
   SelectContent,
@@ -166,6 +168,36 @@ export function CommonLogsFilterBar<TData>(
     [handleApply]
   )
 
+  const fetchTokenOptions = useCallback(
+    async (keyword: string): Promise<ComboboxInputOption[]> => {
+      const params = new URLSearchParams({ keyword, p: '1', size: '10' })
+      const res = await fetch(`/api/token/search?${params}`)
+      if (!res.ok) return []
+      const data = await res.json()
+      if (!data.success || !data.data?.items) return []
+      return (data.data.items as Array<{ name: string }>).map((item) => ({
+        value: item.name,
+        label: item.name,
+      }))
+    },
+    []
+  )
+
+  const fetchUserOptions = useCallback(
+    async (keyword: string): Promise<ComboboxInputOption[]> => {
+      const params = new URLSearchParams({ keyword })
+      const res = await fetch(`/api/user/search?${params}`)
+      if (!res.ok) return []
+      const data = await res.json()
+      if (!data.success || !data.data?.items) return []
+      return (data.data.items as Array<{ username: string }>).map((item) => ({
+        value: item.username,
+        label: item.username,
+      }))
+    },
+    []
+  )
+
   const hasExpandedFilters =
     !!filters.token ||
     !!filters.username ||
@@ -282,22 +314,20 @@ export function CommonLogsFilterBar<TData>(
   const advancedFilters = (
     <>
       <LogsFilterField>
-        <LogsFilterInput
+        <SearchableFilterInput
           placeholder={t('Token Name')}
-          type={sensitiveType}
           value={filters.token || ''}
-          onChange={(e) => handleChange('token', e.target.value)}
-          onKeyDown={handleKeyDown}
+          onChange={(value) => handleChange('token', value)}
+          fetchOptions={fetchTokenOptions}
         />
       </LogsFilterField>
       {isAdmin && (
         <LogsFilterField>
-          <LogsFilterInput
+          <SearchableFilterInput
             placeholder={t('Username')}
-            type={sensitiveType}
             value={filters.username || ''}
-            onChange={(e) => handleChange('username', e.target.value)}
-            onKeyDown={handleKeyDown}
+            onChange={(value) => handleChange('username', value)}
+            fetchOptions={fetchUserOptions}
           />
         </LogsFilterField>
       )}

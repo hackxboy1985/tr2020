@@ -100,13 +100,6 @@ export function SearchableFilterInput({
     }
   }, [])
 
-  const handleSelect = useCallback(
-    (selectedValue: string) => {
-      onChange(selectedValue)
-    },
-    [onChange]
-  )
-
   const emptyText = useMemo(
     () => (isLoading ? t('Searching...') : t('No matching results')),
     [isLoading, t]
@@ -116,7 +109,7 @@ export function SearchableFilterInput({
     <ComboboxInput
       options={options}
       value={value}
-      onValueChange={handleSelect}
+      onValueChange={handleSearchChange}
       placeholder={placeholder}
       emptyText={emptyText}
       className={className}
