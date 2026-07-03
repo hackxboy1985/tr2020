@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
@@ -37,8 +38,8 @@ func CreateVideoProject(c *gin.Context) {
 	userId := c.GetInt("id")
 	isAdmin := isAdminUser(c)
 
-	// 统一从 context 获取分组（Session/Token 鉴权均由中间件设置）
-	req.TokenGroup = c.GetString("group")
+	// 与 relay 统一：使用 TokenAuth 解析后的分组
+	req.TokenGroup = common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
 
 	project, err := service.CreateProject(c.Request.Context(), userId, isAdmin, &req)
 	if err != nil {
