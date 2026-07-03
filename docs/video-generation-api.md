@@ -89,7 +89,7 @@
   "data": {
     "project_id": 123456,
     "project_name": "username_20260701_1719820800",
-    "status": "COZE_RUNNING",
+    "status": "RUNNING",
     "error_msg": "",
     "progress": "",
     "product_img_url": "https://...",
@@ -219,7 +219,7 @@
 | 状态 | 说明 |
 |------|------|
 | `CREATED` | 已创建，等待 Coze 处理 |
-| `COZE_RUNNING` | Coze 工作流执行中 |
+| `RUNNING` | 上游工作流执行中 |
 | `VIDEO_PROCESSING` | 视频已生成，等待拼接 |
 | `VIDEO_CONCAT` | 拼接完成，等待 OSS 上传 |
 | `ONE_CLICK_GENERATED` | OSS 上传完成，全流程结束 |

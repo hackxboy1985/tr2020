@@ -237,7 +237,7 @@ LIMIT 10;
 -- 查看特定状态的项目
 SELECT COUNT(*) 
 FROM video_projects 
-WHERE status = 'COZE_RUNNING' AND deleted = 0;
+WHERE status = 'RUNNING' AND deleted = 0;
 
 -- 查看用户的项目
 SELECT * 

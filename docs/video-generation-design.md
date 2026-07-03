@@ -196,12 +196,12 @@ status 是终态（FAILED / ONE_CLICK_GENERATED）？
 - `ONE_CLICK_GENERATED`
 
 **需要透传的状态**（每次查询都调上游同步）：
-- `COZE_RUNNING`
+- `RUNNING`
 - `VIDEO_PROCESSING`
 - `VIDEO_CONCAT`
 
 **不透传的状态**：
-- `CREATED`：上游调用在创建流程中同步发出，若调用成功则立即更新为 `COZE_RUNNING`，若失败则为 `FAILED`。查询时遇到 `CREATED` 说明 `remote_project_id` 还未写入，直接返回本地数据。
+- `CREATED`：上游调用在创建流程中同步发出，若调用成功则立即更新为 `RUNNING`，若失败则为 `FAILED`。查询时遇到 `CREATED` 说明 `remote_project_id` 还未写入，直接返回本地数据。
 - `VIDEO_PREPARING`：本地拼接失败状态，由 new-api 内部流程产生，上游 API 此时已是 `succeeded`。再查上游只会得到成功响应，无法反映拼接失败原因。该状态需管理员手动介入重试，不透传上游。
 
 ---

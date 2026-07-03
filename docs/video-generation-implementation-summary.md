@@ -92,7 +92,7 @@ Client → Controller → Service → Adapter
 
 ### 3. 异步工作流
 ```
-CREATED → COZE_RUNNING → VIDEO_PROCESSING → VIDEO_CONCAT → ONE_CLICK_GENERATED
+CREATED → RUNNING → VIDEO_PROCESSING → VIDEO_CONCAT → ONE_CLICK_GENERATED
 ```
 - Webhook回调更新状态
 - 主动查询作为兜底
