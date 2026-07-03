@@ -1,4 +1,4 @@
-# 视频生成 OpenAPI 接口文档
+# 归一【三方供应商接口文档】 视频生成 OpenAPI 文档 v2
 
 > Base Path: `/openapi/video`
 > 认证：所有接口通过 HTTP Header `Authorization: Bearer <token>` 传递 Token。
