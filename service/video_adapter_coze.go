@@ -101,7 +101,7 @@ func (a *CozeAdapter) CreateProject(ctx context.Context, req *dto.CreateVideoPro
 			"region":     req.Region,
 			"time":       req.Duration, // Coze 工作流里叫 time，对应视频时长
 			"resolution": req.Resolution,
-			"model":      req.VideoModel,
+			"model":      ApplyModelMapping(a.ch.ModelMapping, req.VideoModel),
 			"whstr":      req.Whstr,
 			"system":     "",
 		},

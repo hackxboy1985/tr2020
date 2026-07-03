@@ -406,6 +406,33 @@ export function VideoChannelMutateDrawer({
               )}
             />
 
+
+            {/* Model Mapping */}
+            <FormField
+              control={form.control}
+              name='model_mapping'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    {t('Model Mapping')}
+                    <span className='text-muted-foreground ml-2 text-xs'>
+                      ({t('optional')})
+                    </span>
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder={'{"seedance2.0":"42","seedance2.0fast":"44"}'}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t('JSON mapping of user-facing model names to upstream model IDs')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             {/* Webhook URL hint */}
             <div className='bg-muted rounded-lg p-3 text-xs space-y-1'>
               <p className='font-medium'>{t('Webhook Callback URL')}</p>

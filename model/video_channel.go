@@ -21,7 +21,8 @@ type VideoChannel struct {
 	Groups          string `json:"groups" gorm:"type:varchar(255);default:''"` // 逗号分隔，空=所有组可用
 	Weight          int    `json:"weight" gorm:"default:1"`
 	Enabled         int    `json:"enabled" gorm:"type:tinyint;default:1;index"`
-	Remark          string `json:"remark" gorm:"type:varchar(255)"`
+	ModelMapping    string `json:"model_mapping" gorm:"type:text"` // JSON映射: {"seedance2.0":"42","seedance2.0fast":"44"}
+		Remark          string `json:"remark" gorm:"type:varchar(255)"`
 	CreatedAt       int64  `json:"created_at" gorm:"bigint;autoCreateTime"`
 	UpdatedAt       int64  `json:"updated_at" gorm:"bigint;autoUpdateTime"`
 }

@@ -11,7 +11,7 @@ DEFAULT_BASE_URL="http://book2:3000"
 DEFAULT_API_KEY="sk-dHMnUa1chWQMaKyvJZUdfK5oxgf2bFYYWEQDYWgnzID2LoOa"
 
 # 请求参数默认值
-PRODUCT_NAME="智能音箱Pro"
+PRODUCT_NAME="仿生物形象智能音箱Pro"
 BRAND="SoundMax"
 TAGLINE="听见好声音"
 SELLING_POINTS="高保真音质、24h续航"
@@ -24,7 +24,7 @@ VTYPE_ADD="温情"
 PLATFORM="抖音"
 REGION="国内电商"
 LANGUAGE="中文简体"
-VIDEO_MODEL="seedance"
+VIDEO_MODEL="seedance2.0fast"
 MEDIA_URL="https://static.horse-world.mints-id.com//general/1/image/2026-06-17/ecom/1_1781692735099.png"
 
 # 运行时变量

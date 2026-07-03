@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 )
 
@@ -27,4 +28,20 @@ func NewAdapterFromChannel(ch *model.VideoChannel) (VideoGenerationAdapter, erro
 	default:
 		return nil, fmt.Errorf("unsupported channel type: %s", ch.ChannelType)
 	}
+}
+
+
+// ApplyModelMapping 应用模型映射。如果 mapping 中配置了 userVideoModel 对应的上游值，则返回映射值；否则返回原值。
+func ApplyModelMapping(mappingJSON string, userVideoModel string) string {
+	if mappingJSON == "" {
+		return userVideoModel
+	}
+	var mapping map[string]string
+	if err := common.Unmarshal([]byte(mappingJSON), &mapping); err != nil {
+		return userVideoModel
+	}
+	if mapped, ok := mapping[userVideoModel]; ok && mapped != "" {
+		return mapped
+	}
+	return userVideoModel
 }
