@@ -11,7 +11,7 @@ func SetVideoRouter(router *gin.Engine) {
 	// Video proxy: accepts either session auth (dashboard) or token auth (API clients)
 	videoProxyRouter := router.Group("/v1")
 	videoProxyRouter.Use(middleware.RouteTag("relay"))
-	videoProxyRouter.Use(middleware.TokenOrUserAuth())
+	videoProxyRouter.Use(middleware.TokenAuth())
 	{
 		videoProxyRouter.GET("/videos/:task_id/content", controller.VideoProxy)
 	}
@@ -51,7 +51,7 @@ func SetVideoRouter(router *gin.Engine) {
 	// 视频生成项目管理（用户 + 管理员共用路由，内部按 role 分流）
 	videoGenRouter := router.Group("/api/video-generation")
 	videoGenRouter.Use(middleware.RouteTag("api"))
-	videoGenRouter.Use(middleware.TokenOrUserAuth())
+	videoGenRouter.Use(middleware.TokenAuth())
 	{
 		videoGenRouter.POST("/create", controller.CreateVideoProject)
 		videoGenRouter.GET("/projects", controller.ListVideoProjects)
