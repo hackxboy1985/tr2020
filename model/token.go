@@ -152,7 +152,10 @@ func SearchUserTokens(userId int, keyword string, token string, offset int, limi
 		}
 	}
 
-	baseQuery := DB.Model(&Token{}).Where("user_id = ?", userId)
+	baseQuery := DB.Model(&Token{})
+		if userId > 0 {
+			baseQuery = baseQuery.Where("user_id = ?", userId)
+		}
 
 	// 非空才加 LIKE 条件，空则跳过（不过滤该字段）
 	if keyword != "" {

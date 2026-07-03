@@ -50,6 +50,17 @@ func SearchTokens(c *gin.Context) {
 	keyword := c.Query("keyword")
 	token := c.Query("token")
 
+	// 管理员可搜索所有用户令牌
+	role := c.GetInt("role")
+	if role < common.RoleAdminUser {
+		if u, err := model.GetUserById(userId, false); err == nil && u.Role >= common.RoleAdminUser {
+			role = u.Role
+		}
+	}
+	if role >= common.RoleAdminUser {
+		userId = 0 // 管理员搜索所有令牌
+	}
+
 	pageInfo := common.GetPageQuery(c)
 
 	tokens, total, err := model.SearchUserTokens(userId, keyword, token, pageInfo.GetStartIdx(), pageInfo.GetPageSize())

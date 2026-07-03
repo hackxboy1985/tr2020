@@ -319,6 +319,7 @@ export function CommonLogsFilterBar<TData>(
           value={filters.token || ''}
           onChange={(value) => handleChange('token', value)}
           fetchOptions={fetchTokenOptions}
+          onEnter={handleApply}
         />
       </LogsFilterField>
       {isAdmin && (
@@ -328,6 +329,7 @@ export function CommonLogsFilterBar<TData>(
             value={filters.username || ''}
             onChange={(value) => handleChange('username', value)}
             fetchOptions={fetchUserOptions}
+            onEnter={handleApply}
           />
         </LogsFilterField>
       )}

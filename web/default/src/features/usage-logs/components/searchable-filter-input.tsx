@@ -35,6 +35,8 @@ interface SearchableFilterInputProps {
   minSearchLength?: number
   /** Debounce delay in ms (default 300) */
   debounceMs?: number
+  /** Fires when Enter is pressed */
+  onEnter?: () => void
 }
 
 export function SearchableFilterInput({
@@ -45,6 +47,7 @@ export function SearchableFilterInput({
   className,
   minSearchLength = 1,
   debounceMs = 300,
+  onEnter,
 }: SearchableFilterInputProps) {
   const { t } = useTranslation()
   const [options, setOptions] = useState<ComboboxInputOption[]>([])
@@ -114,6 +117,7 @@ export function SearchableFilterInput({
       emptyText={emptyText}
       className={className}
       allowCustomValue
+      onEnter={onEnter}
     />
   )
 }

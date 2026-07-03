@@ -37,6 +37,8 @@ interface ComboboxInputProps {
   className?: string
   id?: string
   allowCustomValue?: boolean
+  /** Fires when Enter is pressed without selecting an option */
+  onEnter?: () => void
 }
 
 export function ComboboxInput({
@@ -48,6 +50,7 @@ export function ComboboxInput({
   className,
   id,
   allowCustomValue = false,
+  onEnter,
 }: ComboboxInputProps) {
   const { t } = useTranslation()
   const [open, setOpen] = React.useState(false)
@@ -130,9 +133,10 @@ export function ComboboxInput({
         } else if (allowCustomValue && searchValue.trim()) {
           handleSelect(searchValue.trim())
         } else {
-          // No highlighted option, just close the dropdown and keep current value
+          // No highlighted option: close dropdown, trigger search
           setOpen(false)
           setSearchValue('')
+          onEnter?.()
         }
         break
       case 'Escape':
