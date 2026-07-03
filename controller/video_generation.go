@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
@@ -38,10 +37,8 @@ func CreateVideoProject(c *gin.Context) {
 	userId := c.GetInt("id")
 	isAdmin := isAdminUser(c)
 
-	// API Key 鉴权时，优先用 token 的分组（而非 users.group）
-	if tg := common.GetContextKeyString(c, constant.ContextKeyTokenGroup); tg != "" {
-		req.TokenGroup = tg
-	}
+	// 统一从 context 获取分组（Session/Token 鉴权均由中间件设置）
+	req.TokenGroup = c.GetString("group")
 
 	project, err := service.CreateProject(c.Request.Context(), userId, isAdmin, &req)
 	if err != nil {
