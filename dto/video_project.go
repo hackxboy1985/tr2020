@@ -11,6 +11,8 @@ type VideoMediaItem struct {
 
 // CreateVideoProjectRequest 创建视频项目请求
 type CreateVideoProjectRequest struct {
+	// TokenGroup Token 鉴权时的分组（优先于 users.group），controller 自动注入
+	TokenGroup string `json:"-"`
 	// 广告基础信息（必填）
 	// ProductImgUrl: 旧格式兼容，优先使用 MediaList
 	ProductImgUrl string `json:"product_img_url"`

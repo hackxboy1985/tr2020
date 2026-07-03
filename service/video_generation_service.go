@@ -36,7 +36,11 @@ func CreateProject(ctx context.Context, userId int, isAdmin bool, req *dto.Creat
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
-	userGroup := user.Group
+	// Token 鉴权时优先用 token 的分组
+	userGroup := req.TokenGroup
+	if userGroup == "" {
+		userGroup = user.Group
+	}
 	if userGroup == "" {
 		userGroup = "default"
 	}

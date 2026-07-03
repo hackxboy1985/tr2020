@@ -6,10 +6,27 @@ import (
 	"strconv"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 )
+
+// resolveRole 获取用户角色，Token 鉴权时不设置 role 需从 DB 查
+func resolveRole(c *gin.Context) int {
+	if role := c.GetInt("role"); role > 0 {
+		return role
+	}
+	if u, err := model.GetUserById(c.GetInt("id"), false); err == nil {
+		return u.Role
+	}
+	return 0
+}
+
+func isAdminUser(c *gin.Context) bool {
+	return resolveRole(c) >= common.RoleAdminUser
+}
 
 func CreateVideoProject(c *gin.Context) {
 	var req dto.CreateVideoProjectRequest
@@ -19,7 +36,12 @@ func CreateVideoProject(c *gin.Context) {
 	}
 
 	userId := c.GetInt("id")
-	isAdmin := c.GetInt("role") >= common.RoleAdminUser
+	isAdmin := isAdminUser(c)
+
+	// API Key 鉴权时，优先用 token 的分组（而非 users.group）
+	if tg := common.GetContextKeyString(c, constant.ContextKeyTokenGroup); tg != "" {
+		req.TokenGroup = tg
+	}
 
 	project, err := service.CreateProject(c.Request.Context(), userId, isAdmin, &req)
 	if err != nil {
@@ -47,7 +69,7 @@ func GetVideoProject(c *gin.Context) {
 	}
 
 	userId := c.GetInt("id")
-	isAdmin := c.GetInt("role") >= common.RoleAdminUser
+	isAdmin := isAdminUser(c)
 
 	project, err := service.GetProject(c.Request.Context(), projectId, userId, isAdmin)
 	if err != nil {
@@ -88,7 +110,7 @@ func ListVideoProjects(c *gin.Context) {
 	}
 
 	userId := c.GetInt("id")
-	isAdmin := c.GetInt("role") >= common.RoleAdminUser
+	isAdmin := isAdminUser(c)
 	statusFilter := c.Query("status")
 
 	resp, err := service.ListProjects(c.Request.Context(), userId, page, pageSize, isAdmin, statusFilter)
@@ -108,7 +130,7 @@ func DeleteVideoProject(c *gin.Context) {
 	}
 
 	userId := c.GetInt("id")
-	isAdmin := c.GetInt("role") >= common.RoleAdminUser
+	isAdmin := isAdminUser(c)
 
 	if err := service.DeleteProject(c.Request.Context(), projectId, userId, isAdmin); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": err.Error(), "data": nil})
