@@ -51,7 +51,7 @@ func SetVideoRouter(router *gin.Engine) {
 	// 视频生成项目管理（用户 + 管理员共用路由，内部按 role 分流）
 	videoGenRouter := router.Group("/api/video-generation")
 	videoGenRouter.Use(middleware.RouteTag("api"))
-	videoGenRouter.Use(middleware.UserAuth())
+	videoGenRouter.Use(middleware.TokenOrUserAuth())
 	{
 		videoGenRouter.POST("/create", controller.CreateVideoProject)
 		videoGenRouter.GET("/projects", controller.ListVideoProjects)
