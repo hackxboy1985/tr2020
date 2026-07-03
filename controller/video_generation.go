@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/QuantumNous/new-api/common"
+	"fmt"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
@@ -28,6 +29,7 @@ func isAdminUser(c *gin.Context) bool {
 	return resolveRole(c) >= common.RoleAdminUser
 }
 
+
 func CreateVideoProject(c *gin.Context) {
 	var req dto.CreateVideoProjectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -47,7 +49,7 @@ func CreateVideoProject(c *gin.Context) {
 			ModelName: req.VideoModel,
 			TokenName: c.GetString("token_name"),
 			TokenId:   c.GetInt("token_id"),
-			Content:   "视频生成失败: " + err.Error(),
+			Content:   fmt.Sprintf("视频生成失败 [%s/%s/%s]: %s", req.ProductName, req.Brand, req.Vtype, err.Error()),
 			Quota:     0,
 		})
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": err.Error(), "data": nil})
@@ -58,7 +60,7 @@ func CreateVideoProject(c *gin.Context) {
 		ModelName: req.VideoModel,
 		TokenName: c.GetString("token_name"),
 		TokenId:   c.GetInt("token_id"),
-		Content:   "视频生成成功: id=" + strconv.FormatInt(project.Id, 10),
+		Content:   fmt.Sprintf("视频生成成功 [%s/%s/%s] id=%d", req.ProductName, req.Brand, req.Vtype, project.Id),
 		Quota:     0,
 	})
 
