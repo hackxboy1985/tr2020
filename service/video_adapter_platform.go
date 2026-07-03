@@ -90,7 +90,9 @@ func (a *PlatformAdapter) CreateProject(ctx context.Context, req *dto.CreateVide
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", a.ch.GetCreateURL(), bytes.NewReader(body))
+	requestURL := a.ch.GetCreateURL()
+	common.SysLog("video adapter calling upstream: POST " + requestURL)
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", requestURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
