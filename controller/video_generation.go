@@ -51,6 +51,16 @@ func CreateVideoProject(c *gin.Context) {
 			TokenId:   c.GetInt("token_id"),
 			Content:   fmt.Sprintf("视频生成失败 [%s/%s/%s]: %s", req.ProductName, req.Brand, req.Vtype, err.Error()),
 			Quota:     0,
+			Other: map[string]interface{}{
+				"product_name": req.ProductName,
+				"brand":      req.Brand,
+				"prompt":     req.Prompt,
+				"vtype":      req.Vtype,
+				"video_model": req.VideoModel,
+				"resolution": req.Resolution,
+				"duration":   req.Duration,
+				"whstr":      req.Whstr,
+			},
 		})
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": err.Error(), "data": nil})
 		return
@@ -62,7 +72,19 @@ func CreateVideoProject(c *gin.Context) {
 		TokenId:   c.GetInt("token_id"),
 		Content:   fmt.Sprintf("视频生成成功 [%s/%s/%s] id=%d", req.ProductName, req.Brand, req.Vtype, project.Id),
 		Quota:     0,
-	})
+			Other: map[string]interface{}{
+				"product_name": req.ProductName,
+				"brand":      req.Brand,
+				"prompt":     req.Prompt,
+				"vtype":      req.Vtype,
+				"video_model": req.VideoModel,
+				"resolution": req.Resolution,
+				"duration":   req.Duration,
+				"whstr":      req.Whstr,
+				"project_id": project.Id,
+				"status":     project.Status,
+			},
+		})
 
 	c.JSON(http.StatusOK, gin.H{
 		"code": 200,
@@ -105,7 +127,16 @@ func GetVideoProject(c *gin.Context) {
 		TokenId:   c.GetInt("token_id"),
 		Content:   "视频查询成功: id=" + strconv.FormatInt(detail.Id, 10),
 		Quota:     0,
-	})
+			Other: map[string]interface{}{
+				"project_id": detail.Id,
+				"project_name": detail.ProjectName,
+				"status":    detail.Status,
+				"error_msg": detail.ErrorMsg,
+				"progress":  detail.Progress,
+				"first_video_url": detail.FirstVideoUrl,
+				"main_image_url":  detail.MainImageUrl,
+			},
+		})
 
 	c.JSON(http.StatusOK, gin.H{
 		"code": 200,
@@ -169,6 +200,9 @@ func DeleteVideoProject(c *gin.Context) {
 			TokenId:   c.GetInt("token_id"),
 			Content:   "视频删除失败: project=" + c.Param("id") + " " + err.Error(),
 			Quota:     0,
+			Other: map[string]interface{}{
+				"project_id": strconv.FormatInt(projectId, 10),
+			},
 		})
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": err.Error(), "data": nil})
 		return
