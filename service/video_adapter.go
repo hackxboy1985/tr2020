@@ -32,16 +32,21 @@ func NewAdapterFromChannel(ch *model.VideoChannel) (VideoGenerationAdapter, erro
 
 
 // ApplyModelMapping 应用模型映射。如果 mapping 中配置了 userVideoModel 对应的上游值，则返回映射值；否则返回原值。
-func ApplyModelMapping(mappingJSON string, userVideoModel string) string {
+// ApplyModelMapping 应用模型映射。返回映射后的值。
+// 第二个返回值表示是否配置了映射，false 表示未配置或配置为空。
+func ApplyModelMapping(mappingJSON string, userVideoModel string) (string, bool) {
 	if mappingJSON == "" {
-		return userVideoModel
+		return userVideoModel, false
 	}
 	var mapping map[string]string
 	if err := common.Unmarshal([]byte(mappingJSON), &mapping); err != nil {
-		return userVideoModel
+		return userVideoModel, false
+	}
+	if len(mapping) == 0 {
+		return userVideoModel, false
 	}
 	if mapped, ok := mapping[userVideoModel]; ok && mapped != "" {
-		return mapped
+		return mapped, true
 	}
-	return userVideoModel
+	return userVideoModel, true // 有映射配置但未匹配到
 }

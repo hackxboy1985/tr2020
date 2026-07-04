@@ -82,6 +82,15 @@ func (a *CozeAdapter) CreateProject(ctx context.Context, req *dto.CreateVideoPro
 		}
 	}
 
+	// 模型映射验证：有映射配置但未匹配到则拒绝
+	effectiveModel := req.VideoModel
+	if mapped, hasMapping := ApplyModelMapping(a.ch.ModelMapping, req.VideoModel); hasMapping {
+		if mapped == req.VideoModel {
+			return nil, fmt.Errorf("video model %q not in channel model mapping", req.VideoModel)
+		}
+		effectiveModel = mapped
+	}
+
 	cozeReq := map[string]interface{}{
 		"workflow_id": a.ch.WorkflowId,
 		"parameters": map[string]interface{}{
@@ -101,7 +110,7 @@ func (a *CozeAdapter) CreateProject(ctx context.Context, req *dto.CreateVideoPro
 			"region":     req.Region,
 			"time":       req.Duration, // Coze 工作流里叫 time，对应视频时长
 			"resolution": req.Resolution,
-			"model":      ApplyModelMapping(a.ch.ModelMapping, req.VideoModel),
+			"model":      effectiveModel,
 			"whstr":      req.Whstr,
 			"system":     "",
 		},
