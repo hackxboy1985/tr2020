@@ -15,6 +15,7 @@ import (
 func needsStatusPullthrough(status string) bool {
 	switch status {
 	case model.VideoProjectStatusRunning,
+		"COZE_RUNNING", // 兼容旧数据
 		model.VideoProjectStatusVideoProcessing,
 		model.VideoProjectStatusVideoConcat:
 		return true
