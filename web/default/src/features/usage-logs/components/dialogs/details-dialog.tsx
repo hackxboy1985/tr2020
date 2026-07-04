@@ -1039,6 +1039,33 @@ export function DetailsDialog(props: DetailsDialogProps) {
                 </div>
               </div>
             )}
+            
+            {/* Raw Other data (video generation params, etc.) */}
+            {props.log.other && (
+              <DetailSection label="Raw Data">
+                <div
+                  className='max-h-[300px] overflow-auto cursor-pointer group'
+                  onClick={(e) => {
+                    const target = e.currentTarget
+                    const pre = target.querySelector('pre')
+                    if (pre) {
+                      pre.classList.toggle('line-clamp-6')
+                      pre.classList.toggle('max-h-[300px]')
+                    }
+                  }}
+                >
+                  <pre className='text-muted-foreground whitespace-pre-wrap break-all text-xs leading-relaxed font-mono max-h-[300px]'>
+                    {(() => {
+                      try {
+                        return JSON.stringify(JSON.parse(props.log.other), null, 2)
+                      } catch {
+                        return props.log.other
+                      }
+                    })()}
+                  </pre>
+                </div>
+              </DetailSection>
+            )}
           </div>
         </ScrollArea>
       </DialogContent>
