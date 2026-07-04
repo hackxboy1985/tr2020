@@ -61,9 +61,15 @@ func SearchTokens(c *gin.Context) {
 		userId = 0 // 管理员搜索所有令牌
 	}
 
+	// keyword 不含 % 时自动加前后通配符实现模糊搜索
+	searchKeyword := keyword
+	if keyword != "" && !strings.Contains(keyword, "%") {
+		searchKeyword = "%" + keyword + "%"
+	}
+
 	pageInfo := common.GetPageQuery(c)
 
-	tokens, total, err := model.SearchUserTokens(userId, keyword, token, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	tokens, total, err := model.SearchUserTokens(userId, searchKeyword, token, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 	if err != nil {
 		common.ApiError(c, err)
 		return
