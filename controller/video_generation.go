@@ -40,6 +40,16 @@ func CreateVideoProject(c *gin.Context) {
 	userId := c.GetInt("id")
 	isAdmin := isAdminUser(c)
 
+	// 检查余额是否足够（至少 10 元 ≈ 94000 积分）
+	if quota, _ := model.GetUserQuota(userId, false); quota < 94000 {
+		c.JSON(http.StatusOK, gin.H{
+			"code": 400,
+			"msg":  fmt.Sprintf("余额不足，至少需要 10 元（约 94000 积分），当前余额 %d 积分", quota),
+			"data": nil,
+		})
+		return
+	}
+
 	// 与 relay 统一：使用 TokenAuth 解析后的分组
 	req.TokenGroup = common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
 
