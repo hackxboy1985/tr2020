@@ -66,23 +66,44 @@ func CreateVideoProject(c *gin.Context) {
 		return
 	}
 
+	// 从上游响应中解析扣费金额
+	creditAmount := 0
+	if len(rawResp) > 0 {
+		var respData map[string]interface{}
+		if err := common.Unmarshal(rawResp, &respData); err == nil {
+			if data, ok := respData["data"].(map[string]interface{}); ok {
+				if ca, ok := data["creditAmount"].(float64); ok {
+					creditAmount = int(ca)
+				}
+			}
+		}
+	}
+
+	// 扣除用户积分
+	if creditAmount > 0 {
+		if err := model.DecreaseUserQuota(userId, creditAmount, false); err != nil {
+			common.SysLog(fmt.Sprintf("failed to deduct quota for video generation: user=%d, amount=%d: %v", userId, creditAmount, err))
+		}
+	}
+
 	model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
 		ModelName: req.VideoModel,
 		TokenName: c.GetString("token_name"),
 		TokenId:   c.GetInt("token_id"),
 		Content:   fmt.Sprintf("视频生成成功 [%s/%s/%s] id=%d", req.ProductName, req.Brand, req.Vtype, project.Id),
-		Quota:     0,
+		Quota:     creditAmount,
 			Other: map[string]interface{}{
-				"product_name": req.ProductName,
-				"brand":      req.Brand,
-				"prompt":     req.Prompt,
-				"vtype":      req.Vtype,
-				"video_model": req.VideoModel,
-				"resolution": req.Resolution,
-				"duration":   req.Duration,
-				"whstr":      req.Whstr,
-				"project_id": project.Id,
-				"status":     project.Status,
+				"product_name":  req.ProductName,
+				"brand":         req.Brand,
+				"prompt":        req.Prompt,
+				"vtype":         req.Vtype,
+				"video_model":   req.VideoModel,
+				"resolution":    req.Resolution,
+				"duration":      req.Duration,
+				"whstr":         req.Whstr,
+				"project_id":    project.Id,
+				"status":        project.Status,
+				"credit_amount": creditAmount,
 				"request_body":  string(rawReq),
 				"response_body": string(rawResp),
 			},
