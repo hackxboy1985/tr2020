@@ -690,7 +690,7 @@ function ModelConfigTable({ mapping, prices, onMappingChange, onPricesChange }: 
             <tr className='bg-muted/50'>
               <th className='px-3 py-2 text-left font-medium'>{t('Model Name')}</th>
               <th className='px-3 py-2 text-left font-medium'>{t('Upstream ID')}</th>
-              <th className='px-3 py-2 text-left font-medium w-20'>{t('Price/s')}</th>
+              <th className='px-3 py-2 text-left font-medium w-20'>{t('Price/s')}<span className='text-muted-foreground ml-1'>({t('预扣计算')})</span></th>
               <th className='w-10'></th>
             </tr>
           </thead>
