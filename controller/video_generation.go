@@ -123,6 +123,16 @@ func GetVideoProject(c *gin.Context) {
 		return
 	}
 
+	respData := gin.H{
+		"project_id":   detail.Id,
+		"project_name": detail.ProjectName,
+		"status":       detail.Status,
+		"error_msg":    detail.ErrorMsg,
+		"progress":     detail.Progress,
+		"first_video_url": detail.FirstVideoUrl,
+		"main_image_url":  detail.MainImageUrl,
+	}
+	respBody, _ := common.Marshal(gin.H{"code": 200, "msg": "success", "data": respData})
 	model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
 		ModelName: "",
 		TokenName: c.GetString("token_name"),
@@ -130,11 +140,13 @@ func GetVideoProject(c *gin.Context) {
 		Content:   "视频查询成功: id=" + strconv.FormatInt(detail.Id, 10),
 		Quota:     0,
 			Other: map[string]interface{}{
-				"project_id": detail.Id,
-				"project_name": detail.ProjectName,
-				"status":    detail.Status,
-				"error_msg": detail.ErrorMsg,
-				"progress":  detail.Progress,
+				"request_path":   c.Request.URL.String(),
+				"response_body":  string(respBody),
+				"project_id":     detail.Id,
+				"project_name":   detail.ProjectName,
+				"status":         detail.Status,
+				"error_msg":      detail.ErrorMsg,
+				"progress":       detail.Progress,
 				"first_video_url": detail.FirstVideoUrl,
 				"main_image_url":  detail.MainImageUrl,
 			},
