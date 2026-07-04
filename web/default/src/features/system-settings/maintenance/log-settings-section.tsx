@@ -124,6 +124,13 @@ export function LogSettingsSection({
 
   const savePromptEnabled = form.watch('SavePromptEnabled')
 
+  // SavePromptEnabled 关闭时同步重置 SavePromptUserVisible
+  useEffect(() => {
+    if (!savePromptEnabled) {
+      form.setValue('SavePromptUserVisible', false)
+    }
+  }, [savePromptEnabled, form])
+
   useEffect(() => {
     form.reset({
       LogConsumeEnabled: defaultEnabled,
