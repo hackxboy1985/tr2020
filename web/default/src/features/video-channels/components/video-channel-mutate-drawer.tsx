@@ -486,10 +486,11 @@ export function VideoChannelMutateDrawer({
               onPricesChange={(v) => form.setValue('model_prices', v)}
             />
 
-            {/* Model Prices Table - auto-generated from model_mapping */}
-            <ModelPricesTable
-              modelMapping={form.watch('model_mapping')}
+            {/* Model Config (3-column: name | upstream | price) */}
+            <ModelConfigTable
+              mapping={form.watch('model_mapping')}
               prices={form.watch('model_prices')}
+              onMappingChange={(v) => form.setValue('model_mapping', v)}
               onPricesChange={(v) => form.setValue('model_prices', v)}
             />
 
