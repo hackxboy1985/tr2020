@@ -428,9 +428,9 @@ export function VideoChannelMutateDrawer({
                     </span>
                   </FormLabel>
                   <FormControl>
-                    <Input type='number' placeholder='9400' {...field} onChange={e => field.onChange(Number(e.target.value))} />
+                    <Input type='number' placeholder='1' {...field} onChange={e => field.onChange(Number(e.target.value))} />
                   </FormControl>
-                  <FormDescription>{t('Pre-deduction = duration × price_per_second')}</FormDescription>
+                  <FormDescription>{t('Default price when model has no specific price in Model Config. Pre-deduction = duration × price')}</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
