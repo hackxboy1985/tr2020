@@ -249,6 +249,17 @@ func GetAllUsers(c *gin.Context) {
 }
 
 func SearchUsers(c *gin.Context) {
+	// 非管理员拒绝访问
+	userRole := c.GetInt("role")
+	if userRole < common.RoleAdminUser {
+		if u, err := model.GetUserById(c.GetInt("id"), false); err == nil && u.Role >= common.RoleAdminUser {
+			userRole = u.Role
+		}
+	}
+	if userRole < common.RoleAdminUser {
+		common.ApiError(c, fmt.Errorf("仅管理员可搜索用户"))
+		return
+	}
 	keyword := c.Query("keyword")
 	group := c.Query("group")
 	var role *int
