@@ -44,6 +44,8 @@ interface PromptData {
   id: number
   log_id: number
   prompt_text: string
+  request_body?: string
+  response_body?: string
   created_at: number
 }
 
@@ -66,6 +68,8 @@ export function LogPromptDialog({
           id: 0,
           log_id: log.id,
           prompt_text: log.prompt_text,
+          request_body: log.request_body,
+          response_body: log.response_body,
           created_at: log.created_at,
         })
         setLoading(false)
@@ -122,25 +126,72 @@ export function LogPromptDialog({
           ) : (
             <div className='space-y-4 h-full flex flex-col'>
               <ScrollArea className='flex-1'>
-                <div className='bg-muted/50 rounded-md border p-4 relative'>
-                  <Button
-                    variant='ghost'
-                    size='sm'
-                    className='absolute top-2 right-2 h-8 w-8 p-0'
-                    onClick={() =>
-                      copyToClipboard(promptData?.prompt_text || '')
-                    }
-                    title={t('Copy to clipboard')}
-                  >
-                    {copiedText === promptData?.prompt_text ? (
-                      <Check className='size-4 text-green-600' />
-                    ) : (
-                      <Copy className='size-4' />
-                    )}
-                  </Button>
-                  <pre className='pr-10 whitespace-pre-wrap break-words text-sm font-mono leading-relaxed'>
-                    {promptData?.prompt_text || t('No prompt content')}
-                  </pre>
+                <div className='space-y-4'>
+                  <div className='bg-muted/50 rounded-md border p-4 relative'>
+                    <div className='text-xs font-semibold text-muted-foreground mb-2'>{t('Prompt')}</div>
+                    <Button
+                      variant='ghost'
+                      size='sm'
+                      className='absolute top-2 right-2 h-8 w-8 p-0'
+                      onClick={() =>
+                        copyToClipboard(promptData?.prompt_text || '')
+                      }
+                      title={t('Copy to clipboard')}
+                    >
+                      {copiedText === promptData?.prompt_text ? (
+                        <Check className='size-4 text-green-600' />
+                      ) : (
+                        <Copy className='size-4' />
+                      )}
+                    </Button>
+                    <pre className='pr-10 whitespace-pre-wrap break-words text-sm font-mono leading-relaxed'>
+                      {promptData?.prompt_text || t('No prompt content')}
+                    </pre>
+                  </div>
+
+                  {promptData?.request_body && (
+                    <div className='bg-muted/50 rounded-md border p-4 relative'>
+                      <div className='text-xs font-semibold text-muted-foreground mb-2'>{t('Request Body')}</div>
+                      <Button
+                        variant='ghost'
+                        size='sm'
+                        className='absolute top-2 right-2 h-8 w-8 p-0'
+                        onClick={() => copyToClipboard(promptData.request_body || '')}
+                        title={t('Copy to clipboard')}
+                      >
+                        {copiedText === promptData.request_body ? (
+                          <Check className='size-4 text-green-600' />
+                        ) : (
+                          <Copy className='size-4' />
+                        )}
+                      </Button>
+                      <pre className='pr-10 whitespace-pre-wrap break-words text-sm font-mono leading-relaxed'>
+                        {promptData.request_body}
+                      </pre>
+                    </div>
+                  )}
+
+                  {promptData?.response_body && (
+                    <div className='bg-muted/50 rounded-md border p-4 relative'>
+                      <div className='text-xs font-semibold text-muted-foreground mb-2'>{t('Response Body')}</div>
+                      <Button
+                        variant='ghost'
+                        size='sm'
+                        className='absolute top-2 right-2 h-8 w-8 p-0'
+                        onClick={() => copyToClipboard(promptData.response_body || '')}
+                        title={t('Copy to clipboard')}
+                      >
+                        {copiedText === promptData.response_body ? (
+                          <Check className='size-4 text-green-600' />
+                        ) : (
+                          <Copy className='size-4' />
+                        )}
+                      </Button>
+                      <pre className='pr-10 whitespace-pre-wrap break-words text-sm font-mono leading-relaxed'>
+                        {promptData.response_body}
+                      </pre>
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
 

@@ -68,4 +68,9 @@ const (
 	ContextKeyLanguage ContextKey = "language"
 	ContextKeyPromptToSave  ContextKey = "prompt_to_save"
 	ContextKeyIsStream ContextKey = "is_stream"
+
+	// video channel request/response body saving
+	ContextKeyVideoSaveRequestResponse ContextKey = "video_save_request_response"
+	ContextKeyVideoRequestBody         ContextKey = "video_request_body"
+	ContextKeyVideoResponseBody        ContextKey = "video_response_body"
 )

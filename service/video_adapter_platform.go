@@ -145,6 +145,8 @@ func (a *PlatformAdapter) CreateProject(ctx context.Context, req *dto.CreateVide
 		RemoteProjectId: remoteId,
 		Status:          platformResp.Data.Status,
 		Message:         platformResp.Msg,
+		RawRequest:      body,
+		RawResponse:     respBody,
 	}, nil
 }
 
@@ -219,6 +221,7 @@ func (a *PlatformAdapter) GetProjectStatus(ctx context.Context, remoteProjectId 
 		MainImageAssetId: platformResp.Data.MainImageAssetId,
 		GeneratedResult:  platformResp.Data.GeneratedResult,
 		FirstVideoUrl:    firstVideoUrl,
+		RawResponse:      respBody,
 	}, nil
 }
 

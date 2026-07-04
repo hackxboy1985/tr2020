@@ -24,7 +24,8 @@ func needsStatusPullthrough(status string) bool {
 
 // CreateProject 创建视频项目
 // isAdmin=true 时 req.ChannelId 生效，否则忽略
-func CreateProject(ctx context.Context, userId int, isAdmin bool, req *dto.CreateVideoProjectRequest) (*model.VideoProject, error) {
+// 返回值额外包含上游原始请求/响应体，以及渠道是否开启了保存开关
+func CreateProject(ctx context.Context, userId int, isAdmin bool, req *dto.CreateVideoProjectRequest) (*model.VideoProject, []byte, []byte, bool, error) {
 	// 获取用户名
 	username, err := model.GetUsernameById(userId, false)
 	if err != nil {
@@ -34,7 +35,7 @@ func CreateProject(ctx context.Context, userId int, isAdmin bool, req *dto.Creat
 	// 获取用户分组
 	user, err := model.GetUserById(userId, false)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user: %w", err)
+		return nil, nil, nil, false, fmt.Errorf("failed to get user: %w", err)
 	}
 	// Token 鉴权时优先用 token 的分组
 	userGroup := req.TokenGroup
@@ -51,23 +52,23 @@ func CreateProject(ctx context.Context, userId int, isAdmin bool, req *dto.Creat
 		// 管理员指定渠道
 		ch, err = model.GetVideoChannelById(req.ChannelId)
 		if err != nil {
-			return nil, fmt.Errorf("channel not found: %w", err)
+			return nil, nil, nil, false, fmt.Errorf("channel not found: %w", err)
 		}
 		if ch.Enabled == 0 {
-			return nil, fmt.Errorf("channel %d is disabled", req.ChannelId)
+			return nil, nil, nil, false, fmt.Errorf("channel %d is disabled", req.ChannelId)
 		}
 	} else {
 		// 按用户组 + 可选渠道类型，按权重随机选
 		ch, err = model.SelectVideoChannel(userGroup, req.ChannelType)
 		if err != nil {
-			return nil, fmt.Errorf("no available video channel for group '%s': %w", userGroup, err)
+			return nil, nil, nil, false, fmt.Errorf("no available video channel for group '%s': %w", userGroup, err)
 		}
 	}
 
 	// 构建适配器
 	adapter, err := NewAdapterFromChannel(ch)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build adapter: %w", err)
+		return nil, nil, nil, false, fmt.Errorf("failed to build adapter: %w", err)
 	}
 
 	// 生成项目名称
@@ -110,14 +111,16 @@ func CreateProject(ctx context.Context, userId int, isAdmin bool, req *dto.Creat
 	}
 
 	if err := model.CreateVideoProject(project); err != nil {
-		return nil, fmt.Errorf("failed to create project: %w", err)
+		return nil, nil, nil, false, fmt.Errorf("failed to create project: %w", err)
 	}
+
+	saveBody := ch.SaveRequestResponse == 1
 
 	// 调用上游
 	resp, err := adapter.CreateProject(ctx, req)
 	if err != nil {
 		_ = model.UpdateVideoProjectStatus(project.Id, model.VideoProjectStatusFailed, err.Error())
-		return nil, fmt.Errorf("upstream channel error: %w", err)
+		return nil, nil, nil, false, fmt.Errorf("upstream channel error: %w", err)
 	}
 
 	// 更新 remote_project_id 和状态
@@ -129,7 +132,7 @@ func CreateProject(ctx context.Context, userId int, isAdmin bool, req *dto.Creat
 	project.RemoteProjectId = resp.RemoteProjectId
 	project.Status = resp.Status
 
-	return project, nil
+	return project, resp.RawRequest, resp.RawResponse, saveBody, nil
 }
 
 // GetProject 获取项目详情，进行中状态会透传查询上游

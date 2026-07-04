@@ -12,6 +12,8 @@ export const videoChannelSchema = z.object({
   weight: z.number().default(1),
   enabled: z.number().default(1),
   remark: z.string().default(''),
+  save_request_response: z.number().default(0),
+  model_mapping: z.string().default(''),
   created_at: z.number(),
   updated_at: z.number(),
 })
@@ -31,6 +33,8 @@ export const videoChannelFormSchema = z.object({
   weight: z.coerce.number().min(1).default(1),
   enabled: z.number().default(1),
   remark: z.string().default(''),
+  save_request_response: z.number().default(0),
+  model_mapping: z.string().default(''),
 })
 
 export type VideoChannelFormValues = z.infer<typeof videoChannelFormSchema>

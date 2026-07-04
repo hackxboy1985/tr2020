@@ -120,6 +120,8 @@ type AdapterCreateResponse struct {
 	RemoteProjectId string `json:"remote_project_id"` // 三方平台返回的项目ID
 	Status          string `json:"status"`
 	Message         string `json:"message"`
+	RawRequest      []byte `json:"-"` // 发送给上游的原始请求体
+	RawResponse     []byte `json:"-"` // 上游返回的原始响应体
 }
 
 // AdapterStatusResponse 渠道适配器查询状态响应
@@ -131,4 +133,6 @@ type AdapterStatusResponse struct {
 	MainImageAssetId string `json:"main_image_asset_id"`
 	GeneratedResult  string `json:"generated_result"`
 	FirstVideoUrl    string `json:"first_video_url"`
+	RawRequest       []byte `json:"-"` // 发送给上游的原始请求体
+	RawResponse      []byte `json:"-"` // 上游返回的原始响应体
 }

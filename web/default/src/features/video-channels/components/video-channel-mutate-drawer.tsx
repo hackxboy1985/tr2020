@@ -20,6 +20,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -52,6 +53,8 @@ const defaultValues: VideoChannelFormValues = {
   weight: 1,
   enabled: 1,
   remark: '',
+  save_request_response: 0,
+  model_mapping: '',
 }
 
 export function VideoChannelMutateDrawer({
@@ -103,6 +106,8 @@ export function VideoChannelMutateDrawer({
           weight: currentRow.weight,
           enabled: currentRow.enabled,
           remark: currentRow.remark,
+          save_request_response: currentRow.save_request_response ?? 0,
+          model_mapping: currentRow.model_mapping ?? '',
         })
       } else {
         form.reset(defaultValues)
@@ -429,6 +434,28 @@ export function VideoChannelMutateDrawer({
                     {t('JSON mapping of user-facing model names to upstream model IDs')}
                   </FormDescription>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Save Request/Response */}
+            <FormField
+              control={form.control}
+              name='save_request_response'
+              render={({ field }) => (
+                <FormItem className='flex flex-row items-center justify-between rounded-lg border p-3'>
+                  <div className='space-y-0.5'>
+                    <FormLabel>{t('Save Request & Response')}</FormLabel>
+                    <FormDescription>
+                      {t('Save upstream request and response body (first 500 chars) alongside prompt logs.')}
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value === 1}
+                      onCheckedChange={(checked) => field.onChange(checked ? 1 : 0)}
+                    />
+                  </FormControl>
                 </FormItem>
               )}
             />

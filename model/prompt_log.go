@@ -11,19 +11,21 @@ import (
 )
 
 type PromptLog struct {
-	Id         int    `json:"id" gorm:"primaryKey;index:idx_prompt_created_id,priority:2"`
-	LogId      int    `json:"log_id" gorm:"uniqueIndex"`
-	PromptText string `json:"prompt_text" gorm:"type:text"`
-	CreatedAt  int64  `json:"created_at" gorm:"bigint;index:idx_prompt_created_id,priority:1"`
+	Id           int    `json:"id" gorm:"primaryKey;index:idx_prompt_created_id,priority:2"`
+	LogId        int    `json:"log_id" gorm:"uniqueIndex"`
+	PromptText   string `json:"prompt_text" gorm:"type:text"`
+	RequestBody  string `json:"request_body,omitempty" gorm:"type:varchar(500)"`
+	ResponseBody string `json:"response_body,omitempty" gorm:"type:varchar(500)"`
+	CreatedAt    int64  `json:"created_at" gorm:"bigint;index:idx_prompt_created_id,priority:1"`
 }
 
 // ── Buffered batch writer ──────────────────────────────────────────────
 
 const (
-	promptLogBatchMaxSize      = 100
-	promptLogBatchInterval     = 5 * time.Second
-	promptLogChannelCapacity   = 2000
-	promptLogMaxTextBytes      = 64000 // safe limit for MySQL TEXT (actual max is 65535)
+	promptLogBatchMaxSize    = 100
+	promptLogBatchInterval   = 5 * time.Second
+	promptLogChannelCapacity = 2000
+	promptLogMaxTextBytes    = 64000 // safe limit for MySQL TEXT (actual max is 65535)
 )
 
 var (
@@ -75,22 +77,28 @@ func promptLogBatchLoop() {
 	}
 }
 
-func truncatePromptText(text string) string {
-	if len(text) <= promptLogMaxTextBytes {
+func truncateText(text string, maxBytes int) string {
+	if len(text) <= maxBytes {
 		return text
 	}
-	// Truncate at byte boundary, preserving valid UTF-8
-	truncated := text[:promptLogMaxTextBytes]
-	// If the last rune is incomplete, remove it
+	truncated := text[:maxBytes]
 	for len(truncated) > 0 && truncated[len(truncated)-1]&0xC0 == 0x80 {
 		truncated = truncated[:len(truncated)-1]
 	}
 	return truncated
 }
 
+func truncatePromptText(text string) string {
+	return truncateText(text, promptLogMaxTextBytes)
+}
+
+func truncateBodyText(text string) string {
+	return truncateText(text, common.SavePromptBodyMaxBytes)
+}
+
 // EnqueuePromptLog queues a prompt log entry for batch insert.
 // Returns immediately without blocking (drops entry if channel is full).
-func EnqueuePromptLog(logId int, promptText string) {
+func EnqueuePromptLog(logId int, promptText string, requestBody string, responseBody string) {
 	if !common.SavePromptEnabled {
 		return
 	}
@@ -99,9 +107,11 @@ func EnqueuePromptLog(logId int, promptText string) {
 	}
 	select {
 	case promptLogChan <- &PromptLog{
-		LogId:      logId,
-		PromptText: truncatePromptText(promptText),
-		CreatedAt:  common.GetTimestamp(),
+		LogId:        logId,
+		PromptText:   truncatePromptText(promptText),
+		RequestBody:  truncateBodyText(requestBody),
+		ResponseBody: truncateBodyText(responseBody),
+		CreatedAt:    common.GetTimestamp(),
 	}:
 	default:
 		// Channel full, drop the entry silently to avoid blocking the request

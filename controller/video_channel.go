@@ -41,18 +41,20 @@ func CreateVideoChannel(c *gin.Context) {
 	}
 
 	ch := &model.VideoChannel{
-		Name:            req.Name,
-		ChannelType:     req.ChannelType,
-		BaseURL:         req.BaseURL,
-		ApiKey:          req.ApiKey,
-		ApiSecret:       req.ApiSecret,
-		WorkflowId:      req.WorkflowId,
-		CreatePath:      req.CreatePath,
-		StatusQueryPath: req.StatusQueryPath,
-		Groups:          req.Groups,
-		Weight:          weight,
-		Enabled:         enabled,
-		Remark:          req.Remark,
+		Name:                req.Name,
+		ChannelType:         req.ChannelType,
+		BaseURL:             req.BaseURL,
+		ApiKey:              req.ApiKey,
+		ApiSecret:           req.ApiSecret,
+		WorkflowId:          req.WorkflowId,
+		CreatePath:          req.CreatePath,
+		StatusQueryPath:     req.StatusQueryPath,
+		Groups:              req.Groups,
+		Weight:              weight,
+		Enabled:             enabled,
+		Remark:              req.Remark,
+		SaveRequestResponse: req.SaveRequestResponse,
+		ModelMapping:        req.ModelMapping,
 	}
 
 	if err := model.CreateVideoChannel(ch); err != nil {
@@ -90,6 +92,8 @@ func UpdateVideoChannel(c *gin.Context) {
 	ch.StatusQueryPath = req.StatusQueryPath
 	ch.Groups = req.Groups
 	ch.Remark = req.Remark
+	ch.SaveRequestResponse = req.SaveRequestResponse
+	ch.ModelMapping = req.ModelMapping
 	if req.Weight > 0 {
 		ch.Weight = req.Weight
 	}
@@ -147,18 +151,20 @@ func UpdateVideoChannelStatus(c *gin.Context) {
 
 func channelToResponse(ch *model.VideoChannel) dto.VideoChannelResponse {
 	return dto.VideoChannelResponse{
-		Id:              ch.Id,
-		Name:            ch.Name,
-		ChannelType:     ch.ChannelType,
-		BaseURL:         ch.BaseURL,
-		WorkflowId:      ch.WorkflowId,
-		CreatePath:      ch.CreatePath,
-		StatusQueryPath: ch.StatusQueryPath,
-		Groups:          ch.Groups,
-		Weight:          ch.Weight,
-		Enabled:         ch.Enabled,
-		Remark:          ch.Remark,
-		CreatedAt:       ch.CreatedAt,
-		UpdatedAt:       ch.UpdatedAt,
+		Id:                  ch.Id,
+		Name:                ch.Name,
+		ChannelType:         ch.ChannelType,
+		BaseURL:             ch.BaseURL,
+		WorkflowId:          ch.WorkflowId,
+		CreatePath:          ch.CreatePath,
+		StatusQueryPath:     ch.StatusQueryPath,
+		Groups:              ch.Groups,
+		Weight:              ch.Weight,
+		Enabled:             ch.Enabled,
+		Remark:              ch.Remark,
+		SaveRequestResponse: ch.SaveRequestResponse,
+		ModelMapping:        ch.ModelMapping,
+		CreatedAt:           ch.CreatedAt,
+		UpdatedAt:           ch.UpdatedAt,
 	}
 }

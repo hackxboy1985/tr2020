@@ -158,6 +158,8 @@ func (a *CozeAdapter) CreateProject(ctx context.Context, req *dto.CreateVideoPro
 		RemoteProjectId: cozeResp.Data.ExecuteID,
 		Status:          model.VideoProjectStatusRunning,
 		Message:         "coze workflow started",
+		RawRequest:      body,
+		RawResponse:     respBody,
 	}, nil
 }
 
@@ -206,8 +208,9 @@ func (a *CozeAdapter) GetProjectStatus(ctx context.Context, remoteProjectId stri
 	}
 
 	return &dto.AdapterStatusResponse{
-		Status:   mapCozeStatus(cozeResp.Data.Status),
-		Progress: cozeResp.Data.Status,
+		Status:      mapCozeStatus(cozeResp.Data.Status),
+		Progress:    cozeResp.Data.Status,
+		RawResponse: respBody,
 	}, nil
 }
 

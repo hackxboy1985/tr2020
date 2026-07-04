@@ -115,6 +115,7 @@ var MemoryCacheEnabled bool
 var LogConsumeEnabled = true
 var SavePromptEnabled = false
 var SavePromptUserVisible = false
+var SavePromptBodyMaxBytes = 500
 
 var TLSInsecureSkipVerify bool
 var InsecureTLSConfig = &tls.Config{InsecureSkipVerify: true}

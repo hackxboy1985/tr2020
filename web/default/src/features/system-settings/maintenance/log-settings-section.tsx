@@ -34,11 +34,13 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   Form,
   FormControl,
   FormDescription,
   FormField,
+  FormItem,
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
@@ -59,6 +61,7 @@ const logSettingsSchema = z.object({
   LogConsumeEnabled: z.boolean(),
   SavePromptEnabled: z.boolean(),
   SavePromptUserVisible: z.boolean(),
+  SavePromptBodyMaxBytes: z.coerce.number().int().min(1).max(65535),
 })
 
 type LogSettingsFormValues = z.infer<typeof logSettingsSchema>
@@ -67,6 +70,7 @@ type LogSettingsSectionProps = {
   defaultEnabled: boolean
   defaultSavePromptEnabled: boolean
   defaultSavePromptUserVisible: boolean
+  defaultSavePromptBodyMaxBytes: number
 }
 
 const HOURS_IN_DAY = 24
@@ -98,6 +102,7 @@ export function LogSettingsSection({
   defaultEnabled,
   defaultSavePromptEnabled,
   defaultSavePromptUserVisible,
+  defaultSavePromptBodyMaxBytes,
 }: LogSettingsSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
@@ -107,6 +112,7 @@ export function LogSettingsSection({
       LogConsumeEnabled: defaultEnabled,
       SavePromptEnabled: defaultSavePromptEnabled,
       SavePromptUserVisible: defaultSavePromptUserVisible,
+      SavePromptBodyMaxBytes: defaultSavePromptBodyMaxBytes,
     },
   })
 
@@ -123,8 +129,9 @@ export function LogSettingsSection({
       LogConsumeEnabled: defaultEnabled,
       SavePromptEnabled: defaultSavePromptEnabled,
       SavePromptUserVisible: defaultSavePromptUserVisible,
+      SavePromptBodyMaxBytes: defaultSavePromptBodyMaxBytes,
     })
-  }, [defaultEnabled, defaultSavePromptEnabled, defaultSavePromptUserVisible, form])
+  }, [defaultEnabled, defaultSavePromptEnabled, defaultSavePromptUserVisible, defaultSavePromptBodyMaxBytes, form])
 
   const purgeTimestamp = useMemo(() => {
     if (!purgeDate) return null
@@ -137,27 +144,19 @@ export function LogSettingsSection({
   }, [purgeDate])
 
   const onSubmit = async (values: LogSettingsFormValues) => {
-    const changes: Array<{ key: string; value: boolean }> = []
+    const changes: Array<{ key: string; value: boolean | number }> = []
 
     if (values.LogConsumeEnabled !== defaultEnabled) {
-      changes.push({
-        key: 'LogConsumeEnabled',
-        value: values.LogConsumeEnabled,
-      })
+      changes.push({ key: 'LogConsumeEnabled', value: values.LogConsumeEnabled })
     }
-
     if (values.SavePromptEnabled !== defaultSavePromptEnabled) {
-      changes.push({
-        key: 'SavePromptEnabled',
-        value: values.SavePromptEnabled,
-      })
+      changes.push({ key: 'SavePromptEnabled', value: values.SavePromptEnabled })
     }
-
     if (values.SavePromptUserVisible !== defaultSavePromptUserVisible) {
-      changes.push({
-        key: 'SavePromptUserVisible',
-        value: values.SavePromptUserVisible,
-      })
+      changes.push({ key: 'SavePromptUserVisible', value: values.SavePromptUserVisible })
+    }
+    if (values.SavePromptBodyMaxBytes !== defaultSavePromptBodyMaxBytes) {
+      changes.push({ key: 'SavePromptBodyMaxBytes', value: values.SavePromptBodyMaxBytes })
     }
 
     if (changes.length === 0) return
@@ -286,6 +285,25 @@ export function LogSettingsSection({
                   </FormControl>
                   <FormMessage />
                 </SettingsSwitchItem>
+              )}
+            />
+          )}
+
+          {savePromptEnabled && (
+            <FormField
+              control={form.control}
+              name='SavePromptBodyMaxBytes'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Video request/response body max bytes')}</FormLabel>
+                  <FormDescription>
+                    {t('Maximum bytes to save for video channel request and response bodies. Default: 500.')}
+                  </FormDescription>
+                  <FormControl>
+                    <Input type='number' min={1} max={65535} {...field} className='w-40' />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
             />
           )}

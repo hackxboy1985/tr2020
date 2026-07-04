@@ -55,6 +55,8 @@ type Log struct {
 	UpstreamRequestId string `json:"upstream_request_id,omitempty" gorm:"type:varchar(128);index:idx_logs_upstream_request_id;default:''"`
 	Other             string `json:"other"`
 	PromptText        string `json:"prompt_text,omitempty" gorm:"-"`
+	RequestBody       string `json:"request_body,omitempty" gorm:"-"`
+	ResponseBody      string `json:"response_body,omitempty" gorm:"-"`
 }
 
 // don't use iota, avoid change log type value
@@ -289,16 +291,25 @@ func savePrompt(c *gin.Context, logId int, userId int) {
 		return
 	}
 
-	// 2. If user visibility is disabled, force save for all users
-	if !common.SavePromptUserVisible {
-		EnqueuePromptLog(logId, promptText)
+	requestBody := c.GetString(string(constant.ContextKeyVideoRequestBody))
+	responseBody := c.GetString(string(constant.ContextKeyVideoResponseBody))
+
+	// 2. Video channel save flag bypasses user visibility (admin-configured per channel)
+	if requestBody != "" || responseBody != "" {
+		EnqueuePromptLog(logId, promptText, requestBody, responseBody)
 		return
 	}
 
-	// 3. User-visible mode: check token and user settings
+	// 3. If user visibility is disabled, force save for all users
+	if !common.SavePromptUserVisible {
+		EnqueuePromptLog(logId, promptText, "", "")
+		return
+	}
+
+	// 4. User-visible mode: check token and user settings
 	// Check token-level override (highest priority)
 	if common.GetContextKeyBool(c, constant.ContextKeyTokenSavePrompt) {
-		EnqueuePromptLog(logId, promptText)
+		EnqueuePromptLog(logId, promptText, "", "")
 		return
 	}
 
@@ -308,7 +319,7 @@ func savePrompt(c *gin.Context, logId int, userId int) {
 		return
 	}
 
-	EnqueuePromptLog(logId, promptText)
+	EnqueuePromptLog(logId, promptText, "", "")
 }
 
 type RecordTaskBillingLogParams struct {

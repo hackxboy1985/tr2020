@@ -62,6 +62,8 @@ func GetAllLogs(c *gin.Context) {
 				for _, l := range logs {
 					if pl, ok := promptMap[l.Id]; ok {
 						l.PromptText = pl.PromptText
+						l.RequestBody = pl.RequestBody
+						l.ResponseBody = pl.ResponseBody
 					}
 				}
 			}
