@@ -487,14 +487,6 @@ export function VideoChannelMutateDrawer({
               onPricesChange={(v) => form.setValue('model_prices', v)}
             />
 
-            {/* Model Config (3-column: name | upstream | price) */}
-            <ModelConfigTable
-              mapping={form.watch('model_mapping')}
-              prices={form.watch('model_prices')}
-              onMappingChange={(v) => form.setValue('model_mapping', v)}
-              onPricesChange={(v) => form.setValue('model_prices', v)}
-            />
-
             {/* Save Request/Response */}
             <FormField
               control={form.control}
@@ -604,32 +596,60 @@ function ModelConfigTable({ mapping, prices, onMappingChange, onPricesChange }: 
 
   return (
     <div className='space-y-2'>
-      <Label className='flex items-center gap-1.5 text-xs font-semibold'>{t('Model Config')}</Label>
-      <div className='overflow-hidden rounded-md border'>
-        <table className='w-full text-xs'>
-          <thead>
-            <tr className='bg-muted/50'>
-              <th className='px-3 py-2 text-left font-medium'>{t('Model Name')}</th>
-              <th className='px-3 py-2 text-left font-medium'>{t('Upstream ID')}</th>
-              <th className='px-3 py-2 text-left font-medium w-20'>{t('Price/s')}<span className='text-muted-foreground ml-1'>({t('预扣计算')})</span></th>
-              <th className='w-10'></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, i) => (
-              <tr key={i} className='border-t'>
-                <td className='px-3 py-2'><input className='flex h-7 w-full rounded-md border border-input bg-transparent px-2 text-xs' value={row.model} onChange={e => updateRow(i, 'model', e.target.value)} /></td>
-                <td className='px-3 py-2'><input className='flex h-7 w-full rounded-md border border-input bg-transparent px-2 text-xs' value={row.upstream} onChange={e => updateRow(i, 'upstream', e.target.value)} /></td>
-                <td className='px-3 py-2'><input type='number' min={0} step={0.001} className='flex h-7 w-full rounded-md border border-input bg-transparent px-2 text-xs' value={row.price} onChange={e => updateRow(i, 'price', parseFloat(e.target.value) || 0)} /></td>
-                <td className='px-3 py-2'><button type='button' className='text-destructive hover:text-destructive/80 text-xs' onClick={() => removeRow(i)}>&times;</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className='flex gap-2'>
-        <input className='flex h-7 flex-1 rounded-md border border-input bg-transparent px-2 text-xs' placeholder={t('Add model...')} value={newModel} onChange={e => setNewModel(e.target.value)} onKeyDown={e => e.key === 'Enter' && addRow()} />
-        <button type='button' className='bg-primary text-primary-foreground hover:bg-primary/80 rounded-md px-3 text-xs h-7' onClick={addRow}>{t('Add')}</button>
+      <Label className='text-sm font-medium'>{t('Model Config')}</Label>
+      <div className='border-border/60 rounded-lg border'>
+        {/* 表头 */}
+        <div className='bg-muted/40 grid grid-cols-[1fr_1fr_5rem_2rem] gap-2 rounded-t-lg px-4 py-2 text-xs font-medium'>
+          <span>{t('Model Name')}</span>
+          <span>{t('Upstream ID')}</span>
+          <span>{t('Price/s')}<span className='text-muted-foreground ml-1'>({t('Pre-deduct calculation')})</span></span>
+          <span />
+        </div>
+        {/* 行 */}
+        <div className='divide-border/60 divide-y'>
+          {rows.map((row, i) => (
+            <div key={i} className='grid grid-cols-[1fr_1fr_5rem_2rem] items-center gap-2 px-4 py-2'>
+              <input
+                className='border-input bg-background h-8 w-full rounded-md border px-2 text-xs'
+                value={row.model}
+                onChange={e => updateRow(i, 'model', e.target.value)}
+              />
+              <input
+                className='border-input bg-background h-8 w-full rounded-md border px-2 text-xs'
+                value={row.upstream}
+                onChange={e => updateRow(i, 'upstream', e.target.value)}
+              />
+              <input
+                type='number'
+                min={0}
+                step={0.001}
+                className='border-input bg-background h-8 w-full rounded-md border px-2 text-xs'
+                value={row.price}
+                onChange={e => updateRow(i, 'price', parseFloat(e.target.value) || 0)}
+              />
+              <button
+                type='button'
+                className='text-muted-foreground hover:text-destructive flex items-center justify-center text-base leading-none'
+                onClick={() => removeRow(i)}
+              >
+                &times;
+              </button>
+            </div>
+          ))}
+        </div>
+        {/* 添加行 */}
+        <div className='border-border/60 flex items-center gap-2 border-t px-4 py-2'>
+          <input
+            className='border-input bg-background text-foreground placeholder:text-muted-foreground h-8 flex-1 rounded-md border px-2 text-xs'
+            placeholder={t('Add model...')}
+            value={newModel}
+            onChange={e => setNewModel(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addRow()}
+          />
+          <Button type='button' size='sm' variant='outline' onClick={addRow}>
+            {t('Add')}
+          </Button>
+        </div>
       </div>
       <p className='text-muted-foreground text-xs'>{t('Each row: model name → upstream ID mapping + per-second price.')}</p>
     </div>
