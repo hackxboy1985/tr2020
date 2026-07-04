@@ -106,6 +106,9 @@ export function VideoChannelMutateDrawer({
           weight: currentRow.weight,
           enabled: currentRow.enabled,
           remark: currentRow.remark,
+    rate_limit: currentRow.rate_limit ?? 1,
+    pre_deduct_quota: currentRow.pre_deduct_quota ?? 0,
+    price_per_second: currentRow.price_per_second ?? 1,
           save_request_response: currentRow.save_request_response ?? 0,
           model_mapping: currentRow.model_mapping ?? '',
         })
@@ -411,6 +414,69 @@ export function VideoChannelMutateDrawer({
               )}
             />
 
+
+            {/* Price Per Second */}
+            <FormField
+              control={form.control}
+              name='price_per_second'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    {t('Price Per Second (quota)')}
+                    <span className='text-muted-foreground ml-2 text-xs'>
+                      ({t('default 1 ≈ 1 yuan')})
+                    </span>
+                  </FormLabel>
+                  <FormControl>
+                    <Input type='number' placeholder='9400' {...field} onChange={e => field.onChange(Number(e.target.value))} />
+                  </FormControl>
+                  <FormDescription>{t('Pre-deduction = duration × price_per_second')}</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Rate Limit */}
+            <FormField
+              control={form.control}
+              name='rate_limit'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    {t('QPS Limit')}
+                    <span className='text-muted-foreground ml-2 text-xs'>
+                      ({t('0 = unlimited')})
+                    </span>
+                  </FormLabel>
+                  <FormControl>
+                    <Input type='number' placeholder='1' {...field} onChange={e => field.onChange(Number(e.target.value))} />
+                  </FormControl>
+                  <FormDescription>{t('Max requests per second per API key')}</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Pre-deduct Quota */}
+            <FormField
+              control={form.control}
+              name='pre_deduct_quota'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    {t('Pre-deduct Quota')}
+                    <span className='text-muted-foreground ml-2 text-xs'>
+                      ({t('0 = auto from price × duration')})
+                    </span>
+                  </FormLabel>
+                  <FormControl>
+                    <Input type='number' placeholder='0' {...field} onChange={e => field.onChange(Number(e.target.value))} />
+                  </FormControl>
+                  <FormDescription>{t('Fixed pre-deduction amount, overrides price calculation')}</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             {/* Model Mapping */}
             <FormField

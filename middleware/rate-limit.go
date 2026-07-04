@@ -204,8 +204,4 @@ func SearchRateLimit() func(c *gin.Context) {
 	return userRateLimitFactory(common.SearchRateLimitNum, common.SearchRateLimitDuration, "SR")
 }
 
-// VideoCreateRateLimit returns a per-user rate limiter for video creation.
-// Default: 1 request per second per user.
-func VideoCreateRateLimit() func(c *gin.Context) {
-	return userRateLimitFactory(1, 1, "VC")
-}
+

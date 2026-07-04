@@ -22,6 +22,9 @@ type VideoChannel struct {
 	Weight          int    `json:"weight" gorm:"default:1"`
 	Enabled         int    `json:"enabled" gorm:"type:tinyint;default:1;index"`
 	ModelMapping    string `json:"model_mapping" gorm:"type:text"` // JSON映射: {"seedance2.0":"42","seedance2.0fast":"44"}
+	PricePerSecond  int    `json:"price_per_second" gorm:"type:int;default:1"`      // 每秒价格（积分），1≈1元
+	PreDeductQuota  int    `json:"pre_deduct_quota" gorm:"type:int;default:0"`      // 预扣积分，0则用duration*price_per_second
+	RateLimit       int    `json:"rate_limit" gorm:"type:int;default:1"`            // QPS限制，0不限制
 	Remark          string `json:"remark" gorm:"type:varchar(255)"`
 	SaveRequestResponse int `json:"save_request_response" gorm:"type:tinyint;default:0"` // 1=保存请求和响应体
 	CreatedAt       int64  `json:"created_at" gorm:"bigint;autoCreateTime"`

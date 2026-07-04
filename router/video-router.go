@@ -53,7 +53,7 @@ func SetVideoRouter(router *gin.Engine) {
 	videoGenRouter.Use(middleware.RouteTag("api"))
 	videoGenRouter.Use(middleware.TokenAuth())
 	{
-		videoGenRouter.POST("/create", middleware.VideoCreateRateLimit(), controller.CreateVideoProject)
+		videoGenRouter.POST("/create", controller.CreateVideoProject)
 		videoGenRouter.GET("/projects", controller.ListVideoProjects)
 		videoGenRouter.GET("/projects/:id", controller.GetVideoProject)
 		videoGenRouter.DELETE("/projects/:id", controller.DeleteVideoProject)

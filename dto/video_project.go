@@ -38,7 +38,7 @@ type CreateVideoProjectRequest struct {
 	SelectAudios string `json:"select_audios"` // JSON字符串: [{url, remark}]
 
 	// 输出配置（必填）
-	Duration   int    `json:"duration" binding:"required"`
+	Duration   int    `json:"duration" binding:"required,oneof=15 30 45 60"`
 	Resolution string `json:"resolution" binding:"required"`
 	VideoModel string `json:"video_model"`
 	Whstr      string `json:"whstr" binding:"required"`

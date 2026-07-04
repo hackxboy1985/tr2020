@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"fmt"
@@ -13,6 +14,13 @@ import (
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 )
+
+// videoQPSLimiter 视频创建 QPS 限流器（单机内存模式）
+var videoQPSLimiter common.InMemoryRateLimiter
+
+func init() {
+	videoQPSLimiter.Init(30 * time.Second)
+}
 
 // resolveRole 获取用户角色，Token 鉴权时不设置 role 需从 DB 查
 func resolveRole(c *gin.Context) int {
@@ -40,13 +48,46 @@ func CreateVideoProject(c *gin.Context) {
 	userId := c.GetInt("id")
 	isAdmin := isAdminUser(c)
 
-	// 检查余额是否足够（至少 10 元 ≈ 94000 积分）
-	if quota, _ := model.GetUserQuota(userId, false); quota < 94000 {
+	// 获取用户分组对应的渠道预扣配置
+	userGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+	if userGroup == "" {
+		userGroup = "default"
+	}
+	// 根据渠道配置计算预扣金额
+	preDeductQuota := 0
+	if chs, err := model.GetEnabledVideoChannelsForGroup(userGroup, ""); err == nil && len(chs) > 0 {
+		ch := chs[0]
+		// 预扣 = duration * price_per_second
+		if ch.PricePerSecond > 0 {
+			preDeductQuota = req.Duration * ch.PricePerSecond
+		} else if ch.PreDeductQuota > 0 {
+			preDeductQuota = ch.PreDeductQuota
+		}
+		// 应用 QPS 限制
+		if ch.RateLimit > 0 {
+			qpsKey := fmt.Sprintf("vc_qps_%d", userId)
+			if !videoQPSLimiter.Request(qpsKey, ch.RateLimit, 1) {
+				c.JSON(http.StatusTooManyRequests, gin.H{
+					"code": 429, "msg": "请求频率超过限制，请稍后再试", "data": nil,
+				})
+				return
+			}
+		}
+	}
+
+	// 检查余额是否足够
+	if quota, _ := model.GetUserQuota(userId, false); quota < preDeductQuota {
 		c.JSON(http.StatusOK, gin.H{
 			"code": 400,
-			"msg":  fmt.Sprintf("余额不足，至少需要 10 元（约 94000 积分），当前余额 %d 积分", quota),
+			"msg":  fmt.Sprintf("余额不足，至少需要 %d 积分，当前余额 %d 积分", preDeductQuota, quota),
 			"data": nil,
 		})
+		return
+	}
+
+	// 预扣积分
+	if err := model.DecreaseUserQuota(userId, preDeductQuota, false); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "预扣积分失败: " + err.Error(), "data": nil})
 		return
 	}
 
@@ -54,6 +95,18 @@ func CreateVideoProject(c *gin.Context) {
 	req.TokenGroup = common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
 
 	project, rawReq, rawResp, _, err := service.CreateProject(c.Request.Context(), userId, isAdmin, &req)
+	if err != nil {
+		// 创建失败退还预扣积分
+		if refundErr := model.DecreaseUserQuota(userId, -preDeductQuota, false); refundErr != nil {
+			common.SysLog(fmt.Sprintf("video pre-deduct refund failed: user=%d, amount=%d: %v", userId, preDeductQuota, refundErr))
+		}
+		return
+	}
+
+	// 保存预扣金额到项目
+	_ = model.UpdateVideoProjectFields(project.Id, map[string]interface{}{
+		"pre_deducted_quota": preDeductQuota,
+	})
 	if err != nil {
 		model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
 			ModelName: req.VideoModel,
