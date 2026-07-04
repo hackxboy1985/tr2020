@@ -58,8 +58,8 @@ func CreateVideoProject(c *gin.Context) {
 	if chs, err := model.GetEnabledVideoChannelsForGroup(userGroup, ""); err == nil && len(chs) > 0 {
 		ch := chs[0]
 		// 预扣 = duration * price_per_second
-		if ch.PricePerSecond > 0 {
-			preDeductQuota = req.Duration * ch.PricePerSecond
+		if ch.GetPricePerSecond(req.VideoModel) > 0 {
+			preDeductQuota = req.Duration * ch.GetPricePerSecond(req.VideoModel)
 		} else if ch.PreDeductQuota > 0 {
 			preDeductQuota = ch.PreDeductQuota
 		}

@@ -2,6 +2,7 @@ package model
 
 import (
 	"math/rand"
+	"github.com/QuantumNous/new-api/common"
 	"strings"
 
 	"gorm.io/gorm"
@@ -22,7 +23,8 @@ type VideoChannel struct {
 	Weight          int    `json:"weight" gorm:"default:1"`
 	Enabled         int    `json:"enabled" gorm:"type:tinyint;default:1;index"`
 	ModelMapping    string `json:"model_mapping" gorm:"type:text"` // JSON映射: {"seedance2.0":"42","seedance2.0fast":"44"}
-	PricePerSecond  int    `json:"price_per_second" gorm:"type:int;default:1"`      // 每秒价格（积分），1≈1元
+	ModelPrices     string `json:"model_prices" gorm:"type:text"`  // 模型单价JSON: {"seedance2.0":2,"seedance2.0fast":1}，覆盖price_per_second
+	PricePerSecond  int    `json:"price_per_second" gorm:"type:int;default:1"`      // 每秒默认价格（积分），1≈1元
 	PreDeductQuota  int    `json:"pre_deduct_quota" gorm:"type:int;default:0"`      // 预扣积分，0则用duration*price_per_second
 	RateLimit       int    `json:"rate_limit" gorm:"type:int;default:1"`            // QPS限制，0不限制
 	Remark          string `json:"remark" gorm:"type:varchar(255)"`
@@ -73,6 +75,19 @@ func (ch *VideoChannel) GetStatusQueryURL(remoteId string) string {
 		}
 	}
 	return ch.BaseURL + strings.ReplaceAll(path, "{id}", remoteId)
+}
+
+// GetPricePerSecond 获取指定模型的每秒价格，没有模型特定价格时返回默认值
+func (ch *VideoChannel) GetPricePerSecond(modelName string) int {
+	if ch.ModelPrices != "" {
+		var prices map[string]int
+		if err := common.Unmarshal([]byte(ch.ModelPrices), &prices); err == nil {
+			if p, ok := prices[modelName]; ok && p > 0 {
+				return p
+			}
+		}
+	}
+	return ch.PricePerSecond
 }
 
 func CreateVideoChannel(ch *VideoChannel) error {
