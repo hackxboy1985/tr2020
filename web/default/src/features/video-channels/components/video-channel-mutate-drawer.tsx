@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
@@ -478,30 +478,19 @@ export function VideoChannelMutateDrawer({
               )}
             />
 
-            {/* Model Mapping */}
-            <FormField
-              control={form.control}
-              name='model_mapping'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>
-                    {t('Model Mapping')}
-                    <span className='text-muted-foreground ml-2 text-xs'>
-                      ({t('optional')})
-                    </span>
-                  </FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder={'{"seedance2.0":"42","seedance2.0fast":"44"}'}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    {t('JSON mapping of user-facing model names to upstream model IDs')}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
+            {/* Model Config */}
+            <ModelConfigTable
+              mapping={form.watch('model_mapping')}
+              prices={form.watch('model_prices')}
+              onMappingChange={(v) => form.setValue('model_mapping', v)}
+              onPricesChange={(v) => form.setValue('model_prices', v)}
+            />
+
+            {/* Model Prices Table - auto-generated from model_mapping */}
+            <ModelPricesTable
+              modelMapping={form.watch('model_mapping')}
+              prices={form.watch('model_prices')}
+              onPricesChange={(v) => form.setValue('model_prices', v)}
             />
 
             {/* Save Request/Response */}
@@ -554,5 +543,174 @@ export function VideoChannelMutateDrawer({
         </Form>
       </SheetContent>
     </Sheet>
+  )
+}
+
+
+: {
+  modelMapping: string
+  prices: string
+  onPricesChange: (v: string) => void
+}) {
+  const { t } = useTranslation()
+  const [rows, setRows] = useState<Array<{ model: string; price: number }>>([])
+
+  // Parse model names from mapping JSON
+  const modelNames = useMemo(() => {
+    try {
+      const m = JSON.parse(modelMapping || '{}')
+      return Object.keys(m).filter(k => k.trim())
+    } catch { return [] }
+  }, [modelMapping])
+
+  // Parse existing prices JSON
+  const priceMap = useMemo(() => {
+    try {
+      return JSON.parse(prices || '{}') as Record<string, number>
+    } catch { return {} as Record<string, number> }
+  }, [prices])
+
+  // Sync rows with model names
+  useEffect(() => {
+    const nextRows = modelNames.map(name => ({
+      model: name,
+      price: priceMap[name] ?? 1,
+    }))
+    setRows(nextRows)
+  }, [modelNames, priceMap])
+
+  // Update price for a model
+  const updatePrice = (model: string, price: number) => {
+    const next = { ...priceMap, [model]: price }
+    onPricesChange(JSON.stringify(next))
+  }
+
+  if (modelNames.length === 0) return null
+
+  return (
+    <div className='space-y-2'>
+      <Label className='flex items-center gap-1.5 text-xs font-semibold'>
+        {t('Model Prices')}
+      </Label>
+      <div className='overflow-hidden rounded-md border'>
+        <table className='w-full text-xs'>
+          <thead>
+            <tr className='bg-muted/50'>
+              <th className='px-3 py-2 text-left font-medium'>{t('Model')}</th>
+              <th className='px-3 py-2 text-left font-medium'>{t('Price/second')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(row => (
+              <tr key={row.model} className='border-t'>
+                <td className='px-3 py-2 font-mono text-foreground'>{row.model}</td>
+                <td className='px-3 py-2'>
+                  <input
+                    type='number'
+                    min={0}
+                    step={0.001}
+                    className='flex h-7 w-24 rounded-md border border-input bg-transparent px-2 text-xs shadow-sm'
+                    value={priceMap[row.model] ?? 1}
+                    onChange={e => updatePrice(row.model, parseFloat(e.target.value) || 0)}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className='text-muted-foreground text-xs'>
+        {t('Prices are per second. Pre-deduction = duration x price.')}
+      </p>
+    </div>
+  )
+}
+
+function ModelConfigTable({ mapping, prices, onMappingChange, onPricesChange }: {
+  mapping: string
+  prices: string
+  onMappingChange: (v: string) => void
+  onPricesChange: (v: string) => void
+}) {
+  const { t } = useTranslation()
+  const [rows, setRows] = useState<Array<{ model: string; upstream: string; price: number }>>([])
+  const [newModel, setNewModel] = useState('')
+
+  useEffect(() => {
+    try {
+      const m = JSON.parse(mapping || '{}')
+      const p = JSON.parse(prices || '{}')
+      const keys = Object.keys(m)
+      if (keys.length === 0 && rows.length > 0) return
+      setRows(keys.map(k => ({ model: k, upstream: m[k] || '', price: p[k] ?? 1 })))
+    } catch {}
+  }, [mapping, prices])
+
+  const emitChanges = (nextRows: typeof rows) => {
+    const m: Record<string, string> = {}
+    const p: Record<string, number> = {}
+    nextRows.forEach(r => {
+      if (r.model.trim()) {
+        m[r.model.trim()] = r.upstream
+        p[r.model.trim()] = r.price
+      }
+    })
+    onMappingChange(JSON.stringify(m, null, 2))
+    onPricesChange(JSON.stringify(p, null, 2))
+  }
+
+  const addRow = () => {
+    const name = newModel.trim()
+    if (!name) return
+    const next = [...rows, { model: name, upstream: '', price: 1 }]
+    setRows(next)
+    emitChanges(next)
+    setNewModel('')
+  }
+
+  const removeRow = (idx: number) => {
+    const next = rows.filter((_, i) => i !== idx)
+    setRows(next)
+    emitChanges(next)
+  }
+
+  const updateRow = (idx: number, field: string, value: string | number) => {
+    const next = [...rows]
+    next[idx] = { ...next[idx], [field]: value }
+    setRows(next)
+    emitChanges(next)
+  }
+
+  return (
+    <div className='space-y-2'>
+      <Label className='flex items-center gap-1.5 text-xs font-semibold'>{t('Model Config')}</Label>
+      <div className='overflow-hidden rounded-md border'>
+        <table className='w-full text-xs'>
+          <thead>
+            <tr className='bg-muted/50'>
+              <th className='px-3 py-2 text-left font-medium'>{t('Model Name')}</th>
+              <th className='px-3 py-2 text-left font-medium'>{t('Upstream ID')}</th>
+              <th className='px-3 py-2 text-left font-medium w-20'>{t('Price/s')}</th>
+              <th className='w-10'></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={i} className='border-t'>
+                <td className='px-3 py-2'><input className='flex h-7 w-full rounded-md border border-input bg-transparent px-2 text-xs' value={row.model} onChange={e => updateRow(i, 'model', e.target.value)} /></td>
+                <td className='px-3 py-2'><input className='flex h-7 w-full rounded-md border border-input bg-transparent px-2 text-xs' value={row.upstream} onChange={e => updateRow(i, 'upstream', e.target.value)} /></td>
+                <td className='px-3 py-2'><input type='number' min={0} step={0.001} className='flex h-7 w-full rounded-md border border-input bg-transparent px-2 text-xs' value={row.price} onChange={e => updateRow(i, 'price', parseFloat(e.target.value) || 0)} /></td>
+                <td className='px-3 py-2'><button type='button' className='text-destructive hover:text-destructive/80 text-xs' onClick={() => removeRow(i)}>&times;</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className='flex gap-2'>
+        <input className='flex h-7 flex-1 rounded-md border border-input bg-transparent px-2 text-xs' placeholder={t('Add model...')} value={newModel} onChange={e => setNewModel(e.target.value)} onKeyDown={e => e.key === 'Enter' && addRow()} />
+        <button type='button' className='bg-primary text-primary-foreground hover:bg-primary/80 rounded-md px-3 text-xs h-7' onClick={addRow}>{t('Add')}</button>
+      </div>
+      <p className='text-muted-foreground text-xs'>{t('Each row: model name → upstream ID mapping + per-second price.')}</p>
+    </div>
   )
 }
