@@ -43,7 +43,7 @@ func CreateVideoProject(c *gin.Context) {
 	// 与 relay 统一：使用 TokenAuth 解析后的分组
 	req.TokenGroup = common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
 
-	project, _, _, _, err := service.CreateProject(c.Request.Context(), userId, isAdmin, &req)
+	project, rawReq, rawResp, _, err := service.CreateProject(c.Request.Context(), userId, isAdmin, &req)
 	if err != nil {
 		model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
 			ModelName: req.VideoModel,
@@ -83,6 +83,8 @@ func CreateVideoProject(c *gin.Context) {
 				"whstr":      req.Whstr,
 				"project_id": project.Id,
 				"status":     project.Status,
+				"request_body":  string(rawReq),
+				"response_body": string(rawResp),
 			},
 		})
 
