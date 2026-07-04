@@ -61,9 +61,9 @@ func SearchTokens(c *gin.Context) {
 		userId = 0 // 管理员搜索所有令牌
 	}
 
-	// keyword 不含 % 时自动加前后通配符实现模糊搜索
+	// keyword 不含 % 时自动加前后通配符实现模糊搜索（至少 2 字符）
 	searchKeyword := keyword
-	if keyword != "" && !strings.Contains(keyword, "%") {
+	if keyword != "" && !strings.Contains(keyword, "%") && len([]rune(keyword)) >= 2 {
 		searchKeyword = "%" + keyword + "%"
 	}
 
