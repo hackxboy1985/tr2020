@@ -53,15 +53,26 @@ func CreateVideoProject(c *gin.Context) {
 	if userGroup == "" {
 		userGroup = "default"
 	}
+	// 分辨率倍数：720p=1x，1080p=2x，2k=4x，4k=8x
+	resolutionMultiplier := 1
+	switch req.Resolution {
+	case "1080p":
+		resolutionMultiplier = 2
+	case "2k":
+		resolutionMultiplier = 4
+	case "4k":
+		resolutionMultiplier = 8
+	}
+
 	// 根据渠道配置计算预扣金额
 	preDeductQuota := 0
 	if chs, err := model.GetEnabledVideoChannelsForGroup(userGroup, ""); err == nil && len(chs) > 0 {
 		ch := chs[0]
-		// 预扣 = duration(秒) × price_per_second(元/秒) → 积分
+		// 预扣 = duration(秒) × price_per_second(元/秒) × 分辨率倍数 → 积分
 		if ch.GetPricePerSecond(req.VideoModel) > 0 {
-			preDeductQuota = common.YuanToQuota(float64(req.Duration) * ch.GetPricePerSecond(req.VideoModel))
+			preDeductQuota = common.YuanToQuota(float64(req.Duration) * ch.GetPricePerSecond(req.VideoModel) * float64(resolutionMultiplier))
 		} else if ch.PreDeductQuota > 0 {
-			preDeductQuota = ch.PreDeductQuota
+			preDeductQuota = ch.PreDeductQuota * resolutionMultiplier
 		}
 		// 应用 QPS 限制
 		if ch.RateLimit > 0 {
