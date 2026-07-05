@@ -70,9 +70,12 @@ type VideoProjectDetailResponse struct {
 	MainImageAssetId string `json:"main_image_asset_id,omitempty"`
 	GeneratedResult  string `json:"generated_result,omitempty"`
 	FirstVideoUrl    string `json:"first_video_url,omitempty"`
-	PreDeductedQuota int    `json:"pre_deducted_quota"`
-	RealQuota        int    `json:"real_quota"`
-	Settled          int    `json:"settled"`
+	PreDeductedQuota     int `json:"pre_deducted_quota"`
+	RealQuota            int `json:"real_quota"`
+	Settled              int `json:"settled"`
+	UpstreamCreditAmount int `json:"upstream_credit_amount"`
+	UpstreamCreditRefund int `json:"upstream_credit_refund"`
+	UpstreamCreditNet    int `json:"upstream_credit_net"`
 	CreatedAt        int64  `json:"created_at"`
 	UpdatedAt        int64  `json:"updated_at"`
 }
@@ -136,6 +139,10 @@ type AdapterStatusResponse struct {
 	MainImageAssetId string `json:"main_image_asset_id"`
 	GeneratedResult  string `json:"generated_result"`
 	FirstVideoUrl    string `json:"first_video_url"`
-	RawRequest       []byte `json:"-"` // 发送给上游的原始请求体
-	RawResponse      []byte `json:"-"` // 上游返回的原始响应体
+	// 上游积分字段（终态时有效）
+	CreditAmount int `json:"credit_amount"` // 上游扣除积分
+	CreditRefund int `json:"credit_refund"` // 上游退回积分
+	CreditNet    int `json:"credit_net"`    // 上游净消耗积分
+	RawRequest   []byte `json:"-"`
+	RawResponse  []byte `json:"-"`
 }

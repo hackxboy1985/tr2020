@@ -194,6 +194,13 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 	if statusResp.FirstVideoUrl != "" {
 		updates["first_video_url"] = statusResp.FirstVideoUrl
 	}
+	// 更新上游积分字段
+	if statusResp.CreditAmount > 0 || statusResp.CreditRefund > 0 || statusResp.CreditNet > 0 {
+		updates["upstream_credit_amount"] = statusResp.CreditAmount
+		updates["upstream_credit_refund"] = statusResp.CreditRefund
+		updates["upstream_credit_net"] = statusResp.CreditNet
+	}
+
 	_ = model.UpdateVideoProjectFields(project.Id, updates)
 
 	project.Status = statusResp.Status
@@ -201,38 +208,46 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 	if statusResp.ErrorMsg != "" {
 		project.ErrorMsg = statusResp.ErrorMsg
 	}
+	project.UpstreamCreditAmount = statusResp.CreditAmount
+	project.UpstreamCreditRefund = statusResp.CreditRefund
+	project.UpstreamCreditNet = statusResp.CreditNet
 
 	// 首次到终态时结算（Settled=0 防止重复结算）
 	if project.Settled == 0 {
 		switch statusResp.Status {
-		case model.VideoProjectStatusOneClickGenerated:
-			// 成功：预扣即决算，标记已结算
+		case model.VideoProjectStatusOneClickGenerated, model.VideoProjectStatusFailed:
+			// 按上游退款比例计算实际退还金额
+			// refundQuota = preDeductedQuota * (creditRefund / creditAmount)
+			refundQuota := 0
+			if statusResp.CreditAmount > 0 && statusResp.CreditRefund > 0 {
+				refundQuota = int(float64(project.PreDeductedQuota) * float64(statusResp.CreditRefund) / float64(statusResp.CreditAmount))
+			} else if statusResp.Status == model.VideoProjectStatusFailed {
+				// 上游没返回积分字段但失败了，全退
+				refundQuota = project.PreDeductedQuota
+			}
+
+			realQuota := project.PreDeductedQuota - refundQuota
+
+			if refundQuota > 0 {
+				if err := model.IncreaseUserQuota(project.UserId, refundQuota, false); err != nil {
+					common.SysLog(fmt.Sprintf("video project %d refund failed: %v", project.Id, err))
+				} else {
+					model.RecordLog(project.UserId, model.LogTypeSystem,
+						fmt.Sprintf("视频项目 %d 结算退还积分 %d（预扣 %d，实扣 %d，上游 creditRefund=%d/creditAmount=%d）",
+							project.Id, refundQuota, project.PreDeductedQuota, realQuota,
+							statusResp.CreditRefund, statusResp.CreditAmount))
+				}
+			}
+
 			settleUpdates := map[string]interface{}{
 				"settled":    1,
-				"real_quota": project.PreDeductedQuota,
+				"real_quota": realQuota,
 			}
 			_ = model.UpdateVideoProjectFields(project.Id, settleUpdates)
 			project.Settled = 1
-			project.RealQuota = project.PreDeductedQuota
-			common.SysLog(fmt.Sprintf("video project %d settled: quota=%d", project.Id, project.PreDeductedQuota))
-		case model.VideoProjectStatusFailed:
-			// 失败：退还预扣
-			if project.PreDeductedQuota > 0 {
-				if err := model.IncreaseUserQuota(project.UserId, project.PreDeductedQuota, false); err != nil {
-					common.SysLog(fmt.Sprintf("video project %d refund failed: %v", project.Id, err))
-				} else {
-					settleUpdates := map[string]interface{}{
-						"settled":    1,
-						"real_quota": 0,
-					}
-					_ = model.UpdateVideoProjectFields(project.Id, settleUpdates)
-					project.Settled = 1
-					project.RealQuota = 0
-					model.RecordLog(project.UserId, model.LogTypeSystem,
-						fmt.Sprintf("视频项目 %d 生成失败，退还预扣积分 %d", project.Id, project.PreDeductedQuota))
-					common.SysLog(fmt.Sprintf("video project %d refunded: quota=%d", project.Id, project.PreDeductedQuota))
-				}
-			}
+			project.RealQuota = realQuota
+			common.SysLog(fmt.Sprintf("video project %d settled: pre=%d refund=%d real=%d upstream_credit_net=%d",
+				project.Id, project.PreDeductedQuota, refundQuota, realQuota, statusResp.CreditNet))
 		}
 	}
 

@@ -192,6 +192,10 @@ func (a *PlatformAdapter) GetProjectStatus(ctx context.Context, remoteProjectId 
 			MainImageAssetId string `json:"main_image_asset_id"`
 			GeneratedResult  string `json:"generated_result"`
 			FirstVideoUrl    string `json:"first_video_url"`
+			// 积分结算字段
+			CreditAmount int `json:"creditAmount"`
+			CreditRefund int `json:"creditRefund"`
+			CreditNet    int `json:"creditNet"`
 		} `json:"data"`
 	}
 
@@ -221,6 +225,9 @@ func (a *PlatformAdapter) GetProjectStatus(ctx context.Context, remoteProjectId 
 		MainImageAssetId: platformResp.Data.MainImageAssetId,
 		GeneratedResult:  platformResp.Data.GeneratedResult,
 		FirstVideoUrl:    firstVideoUrl,
+		CreditAmount:     platformResp.Data.CreditAmount,
+		CreditRefund:     platformResp.Data.CreditRefund,
+		CreditNet:        platformResp.Data.CreditNet,
 		RawResponse:      respBody,
 	}, nil
 }
