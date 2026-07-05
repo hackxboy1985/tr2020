@@ -23,9 +23,21 @@ func SysLog(s string) {
 
 func SysError(s string) {
 	t := time.Now()
+	line := fmt.Sprintf("[SYS] %v | %s \n", t.Format("2006/01/02 - 15:04:05"), s)
 	LogWriterMu.RLock()
-	_, _ = fmt.Fprintf(gin.DefaultErrorWriter, "[SYS] %v | %s \n", t.Format("2006/01/02 - 15:04:05"), s)
+	_, _ = fmt.Fprint(gin.DefaultErrorWriter, line)
 	LogWriterMu.RUnlock()
+	// 额外写 error 专用文件，由 logger 包负责
+	writeSysErrorToFile(line)
+}
+
+// WriteSysErrorToFile 由 logger 包在初始化时注入，避免循环依赖
+var WriteSysErrorToFile func(line string)
+
+func writeSysErrorToFile(line string) {
+	if WriteSysErrorToFile != nil {
+		WriteSysErrorToFile(line)
+	}
 }
 
 func FatalLog(v ...any) {

@@ -33,13 +33,60 @@ var currentLogPath string
 var currentLogPathMu sync.RWMutex
 var currentLogFile *os.File
 
+// error 专用日志（按天存储）
+var errorLogMu sync.RWMutex
+var errorLogFile *os.File
+var errorLogDay string // 当前 error 日志对应的日期 "20060102"
+
 func GetCurrentLogPath() string {
 	currentLogPathMu.RLock()
 	defer currentLogPathMu.RUnlock()
 	return currentLogPath
 }
 
+// getErrorLogWriter 返回 error 专用文件 writer，按天自动轮转
+func getErrorLogWriter() io.Writer {
+	if *common.LogDir == "" {
+		return nil
+	}
+	today := time.Now().Format("20060102")
+	errorLogMu.RLock()
+	if errorLogDay == today && errorLogFile != nil {
+		w := errorLogFile
+		errorLogMu.RUnlock()
+		return w
+	}
+	errorLogMu.RUnlock()
+
+	// 需要新建/轮转
+	errorLogMu.Lock()
+	defer errorLogMu.Unlock()
+	// double-check
+	if errorLogDay == today && errorLogFile != nil {
+		return errorLogFile
+	}
+	errPath := filepath.Join(*common.LogDir, fmt.Sprintf("oneapi-error-%s.log", today))
+	fd, err := os.OpenFile(errPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Printf("failed to open error log file: %v", err)
+		return nil
+	}
+	if errorLogFile != nil {
+		_ = errorLogFile.Close()
+	}
+	errorLogFile = fd
+	errorLogDay = today
+	return fd
+}
+
 func SetupLogger() {
+	// 注入 SysError 的 error 文件写入函数
+	common.WriteSysErrorToFile = func(line string) {
+		if w := getErrorLogWriter(); w != nil {
+			_, _ = fmt.Fprint(w, line)
+		}
+	}
+
 	defer func() {
 		setupLogWorking = false
 	}()
@@ -107,9 +154,18 @@ func logHelper(ctx context.Context, level string, msg string) {
 	if level == loggerINFO {
 		writer = gin.DefaultWriter
 	}
-	_, _ = fmt.Fprintf(writer, "[%s] %v | %s | %s \n", level, now.Format("2006/01/02 - 15:04:05"), id, msg)
+	line := fmt.Sprintf("[%s] %v | %s | %s \n", level, now.Format("2006/01/02 - 15:04:05"), id, msg)
+	_, _ = fmt.Fprint(writer, line)
 	common.LogWriterMu.RUnlock()
-	logCount++ // we don't need accurate count, so no lock here
+
+	// ERR 级别额外写 error 专用文件（按天存储）
+	if level == loggerError {
+		if w := getErrorLogWriter(); w != nil {
+			_, _ = fmt.Fprint(w, line)
+		}
+	}
+
+	logCount++
 	if logCount > maxLogCount && !setupLogWorking {
 		logCount = 0
 		setupLogWorking = true
