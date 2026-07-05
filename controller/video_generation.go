@@ -103,33 +103,7 @@ func CreateVideoProject(c *gin.Context) {
 		return
 	}
 
-	// 保存预扣金额到项目
-	_ = model.UpdateVideoProjectFields(project.Id, map[string]interface{}{
-		"pre_deducted_quota": preDeductQuota,
-	})
-	if err != nil {
-		model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
-			ModelName: req.VideoModel,
-			TokenName: c.GetString("token_name"),
-			TokenId:   c.GetInt("token_id"),
-			Content:   fmt.Sprintf("视频生成失败 [%s/%s/%s]: %s", req.ProductName, req.Brand, req.Vtype, err.Error()),
-			Quota:     0,
-			Other: map[string]interface{}{
-				"product_name": req.ProductName,
-				"brand":      req.Brand,
-				"prompt":     req.Prompt,
-				"vtype":      req.Vtype,
-				"video_model": req.VideoModel,
-				"resolution": req.Resolution,
-				"duration":   req.Duration,
-				"whstr":      req.Whstr,
-			},
-		})
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": err.Error(), "data": nil})
-		return
-	}
-
-	// 从上游响应中解析扣费金额
+	// 从上游响应中解析扣费金额（仅用于日志记录和退款比例计算，不直接扣本系统积分）
 	creditAmount := 0
 	if len(rawResp) > 0 {
 		var respData map[string]interface{}
@@ -142,35 +116,35 @@ func CreateVideoProject(c *gin.Context) {
 		}
 	}
 
-	// 扣除用户积分
-	if creditAmount > 0 {
-		if err := model.DecreaseUserQuota(userId, creditAmount, false); err != nil {
-			common.SysLog(fmt.Sprintf("failed to deduct quota for video generation: user=%d, amount=%d: %v", userId, creditAmount, err))
-		}
-	}
+	// 保存预扣金额和上游积分到项目
+	_ = model.UpdateVideoProjectFields(project.Id, map[string]interface{}{
+		"pre_deducted_quota":     preDeductQuota,
+		"upstream_credit_amount": creditAmount,
+	})
 
 	model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
 		ModelName: req.VideoModel,
 		TokenName: c.GetString("token_name"),
 		TokenId:   c.GetInt("token_id"),
 		Content:   fmt.Sprintf("视频生成成功 [%s/%s/%s] id=%d", req.ProductName, req.Brand, req.Vtype, project.Id),
-		Quota:     creditAmount,
-			Other: map[string]interface{}{
-				"product_name":  req.ProductName,
-				"brand":         req.Brand,
-				"prompt":        req.Prompt,
-				"vtype":         req.Vtype,
-				"video_model":   req.VideoModel,
-				"resolution":    req.Resolution,
-				"duration":      req.Duration,
-				"whstr":         req.Whstr,
-				"project_id":    project.Id,
-				"status":        project.Status,
-				"credit_amount": creditAmount,
-				"request_body":  string(rawReq),
-				"response_body": string(rawResp),
-			},
-		})
+		Quota:     preDeductQuota,
+		Other: map[string]interface{}{
+			"product_name":           req.ProductName,
+			"brand":                  req.Brand,
+			"prompt":                 req.Prompt,
+			"vtype":                  req.Vtype,
+			"video_model":            req.VideoModel,
+			"resolution":             req.Resolution,
+			"duration":               req.Duration,
+			"whstr":                  req.Whstr,
+			"project_id":             project.Id,
+			"status":                 project.Status,
+			"pre_deducted_quota":     preDeductQuota,
+			"upstream_credit_amount": creditAmount,
+			"request_body":           string(rawReq),
+			"response_body":          string(rawResp),
+		},
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"code": 200,

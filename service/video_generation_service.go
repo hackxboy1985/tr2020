@@ -222,8 +222,13 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 			// 按上游退款比例计算实际退还金额
 			// refundQuota = preDeductedQuota * (creditRefund / creditAmount)
 			refundQuota := 0
-			if statusResp.CreditAmount > 0 && statusResp.CreditRefund > 0 {
-				refundQuota = int(float64(project.PreDeductedQuota) * float64(statusResp.CreditRefund) / float64(statusResp.CreditAmount))
+			creditAmount := statusResp.CreditAmount
+			if creditAmount == 0 {
+				// 查询时上游未返回，用创建时存的值
+				creditAmount = project.UpstreamCreditAmount
+			}
+			if creditAmount > 0 && statusResp.CreditRefund > 0 {
+				refundQuota = int(float64(project.PreDeductedQuota) * float64(statusResp.CreditRefund) / float64(creditAmount))
 			} else if statusResp.Status == model.VideoProjectStatusFailed {
 				// 上游没返回积分字段但失败了，全退
 				refundQuota = project.PreDeductedQuota
