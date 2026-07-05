@@ -2995,6 +2995,7 @@
     "Pre-Consume for Free Models": "免费模型预消耗",
     "Pre-consumed": "预扣费",
     "Pre-deduct calculation": "预扣计算",
+    "Price/s is configured for 720p only. 1080p and above are calculated at 2× the 720p price.": "Price/s 仅针对 720p 配置，1080p 及 2K、4K 按 720p 的 2 倍同比计算。",
     "Pre-Consumed Quota": "预消耗配额",
     "Preference saved as {{pref}}, but no active subscription. Wallet will be used automatically.": "已保存偏好为{{pref}}，当前无生效订阅，将自动使用钱包",
     "Preferences": "偏好设置",

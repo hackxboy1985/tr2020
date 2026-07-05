@@ -657,6 +657,7 @@ function ModelConfigTable({ mapping, prices, onMappingChange, onPricesChange }: 
         </div>
       </div>
       <p className='text-muted-foreground text-xs'>{t('Each row: model name → upstream ID mapping + per-second price.')}</p>
+      <p className='text-muted-foreground text-xs'>{t('Price/s is configured for 720p only. 1080p and above are calculated at 2× the 720p price.')}</p>
     </div>
   )
 }
