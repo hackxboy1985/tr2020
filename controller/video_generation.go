@@ -195,44 +195,37 @@ func GetVideoProject(c *gin.Context) {
 		return
 	}
 
+	content := fmt.Sprintf("视频查询成功: id=%d", detail.Id)
 	if upstreamErr != nil {
-		// 上游查询失败，只记失败日志，不记成功日志
-		model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
-			ModelName: detail.VideoModel,
-			TokenName: c.GetString("token_name"),
-			TokenId:   c.GetInt("token_id"),
-			Content:   fmt.Sprintf("视频查询上游失败: id=%d, err=%s", detail.Id, upstreamErr.Error()),
-			Quota:     0,
-		})
-	} else {
-		model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
-			ModelName: "",
-			TokenName: c.GetString("token_name"),
-			TokenId:   c.GetInt("token_id"),
-			Content:   "视频查询成功: id=" + strconv.FormatInt(detail.Id, 10),
-			Quota:     0,
-			Other: map[string]interface{}{
-				"request_path":           c.Request.URL.String(),
-				"response_body":          string(rawResponse),
-				"project_id":             detail.Id,
-				"project_name":           detail.ProjectName,
-				"status":                 detail.Status,
-				"error_msg":              detail.ErrorMsg,
-				"progress":               detail.Progress,
-				"first_video_url":        detail.FirstVideoUrl,
-				"main_image_url":         detail.MainImageUrl,
-				"pre_deducted_quota":     detail.PreDeductedQuota,
-				"real_quota":             detail.RealQuota,
-				"settled":                detail.Settled,
-				"upstream_credit_amount": detail.UpstreamCreditAmount,
-				"upstream_credit_refund": detail.UpstreamCreditRefund,
-				"upstream_credit_net":    detail.UpstreamCreditNet,
-				"upstream_money_amount":  detail.UpstreamMoneyAmount,
-				"upstream_money_refund":  detail.UpstreamMoneyRefund,
-				"upstream_money_net":     detail.UpstreamMoneyNet,
-			},
-		})
+		content = fmt.Sprintf("视频查询上游失败: id=%d, err=%s", detail.Id, upstreamErr.Error())
 	}
+	model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
+		ModelName: detail.VideoModel,
+		TokenName: c.GetString("token_name"),
+		TokenId:   c.GetInt("token_id"),
+		Content:   content,
+		Quota:     0,
+		Other: map[string]interface{}{
+			"request_path":           c.Request.URL.String(),
+			"response_body":          string(rawResponse),
+			"project_id":             detail.Id,
+			"project_name":           detail.ProjectName,
+			"status":                 detail.Status,
+			"error_msg":              detail.ErrorMsg,
+			"progress":               detail.Progress,
+			"first_video_url":        detail.FirstVideoUrl,
+			"main_image_url":         detail.MainImageUrl,
+			"pre_deducted_quota":     detail.PreDeductedQuota,
+			"real_quota":             detail.RealQuota,
+			"settled":                detail.Settled,
+			"upstream_credit_amount": detail.UpstreamCreditAmount,
+			"upstream_credit_refund": detail.UpstreamCreditRefund,
+			"upstream_credit_net":    detail.UpstreamCreditNet,
+			"upstream_money_amount":  detail.UpstreamMoneyAmount,
+			"upstream_money_refund":  detail.UpstreamMoneyRefund,
+			"upstream_money_net":     detail.UpstreamMoneyNet,
+		},
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"code": 200,
