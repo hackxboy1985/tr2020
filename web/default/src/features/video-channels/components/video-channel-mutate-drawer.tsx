@@ -622,10 +622,10 @@ function ModelConfigTable({ mapping, prices, onMappingChange, onPricesChange }: 
               <input
                 type='number'
                 min={0}
-                step={0.001}
+                step={0.1}
                 className='border-input bg-background h-8 w-full rounded-md border px-2 text-xs'
                 value={row.price}
-                onChange={e => updateRow(i, 'price', parseFloat(e.target.value) || 0)}
+                onChange={e => updateRow(i, 'price', parseFloat(parseFloat(e.target.value).toFixed(1)) || 0)}
               />
               <button
                 type='button'
