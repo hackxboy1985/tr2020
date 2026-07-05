@@ -61,7 +61,7 @@ const TOKEN_CHARTS: {
   },
 ]
 
-const TOP_TOKEN_LIMIT_OPTIONS = [5, 10, 20]
+const TOP_TOKEN_LIMIT_OPTIONS = [5, 10, 20, 50]
 
 export function TokenCharts() {
   const { t } = useTranslation()
