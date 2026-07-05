@@ -57,12 +57,15 @@ type VideoProject struct {
 	Deleted  int    `gorm:"type:tinyint;default:0;index" json:"deleted"` // 0=未删 1=软删
 
 	// 计费字段
-	PreDeductedQuota     int `gorm:"type:int;default:0" json:"pre_deducted_quota"`      // 预扣积分
-	RealQuota            int `gorm:"type:int;default:0" json:"real_quota"`              // 真实扣费积分
-	Settled              int `gorm:"type:tinyint;default:0;index" json:"settled"`       // 0=未结算 1=已结算
-	UpstreamCreditAmount int `gorm:"type:int;default:0" json:"upstream_credit_amount"`  // 上游扣除积分
-	UpstreamCreditRefund int `gorm:"type:int;default:0" json:"upstream_credit_refund"`  // 上游退回积分
-	UpstreamCreditNet    int `gorm:"type:int;default:0" json:"upstream_credit_net"`     // 上游净消耗积分
+	PreDeductedQuota     int     `gorm:"type:int;default:0" json:"pre_deducted_quota"`      // 预扣积分
+	RealQuota            int     `gorm:"type:int;default:0" json:"real_quota"`              // 真实扣费积分
+	Settled              int     `gorm:"type:tinyint;default:0;index" json:"settled"`       // 0=未结算 1=已结算
+	UpstreamCreditAmount int     `gorm:"type:int;default:0" json:"upstream_credit_amount"`  // 上游扣除积分
+	UpstreamCreditRefund int     `gorm:"type:int;default:0" json:"upstream_credit_refund"`  // 上游退回积分
+	UpstreamCreditNet    int     `gorm:"type:int;default:0" json:"upstream_credit_net"`     // 上游净消耗积分
+	UpstreamMoneyAmount  float64 `gorm:"type:decimal(10,2);default:0" json:"upstream_money_amount"` // 上游扣除金额（元）
+	UpstreamMoneyRefund  float64 `gorm:"type:decimal(10,2);default:0" json:"upstream_money_refund"` // 上游退回金额（元）
+	UpstreamMoneyNet     float64 `gorm:"type:decimal(10,2);default:0" json:"upstream_money_net"`    // 上游净消耗金额（元）
 }
 
 // VideoProjectStatus 视频项目状态常量

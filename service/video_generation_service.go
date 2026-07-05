@@ -197,11 +197,16 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 	if statusResp.FirstVideoUrl != "" {
 		updates["first_video_url"] = statusResp.FirstVideoUrl
 	}
-	// 更新上游积分字段
+	// 更新上游积分和金额字段
 	if statusResp.CreditAmount > 0 || statusResp.CreditRefund > 0 || statusResp.CreditNet > 0 {
 		updates["upstream_credit_amount"] = statusResp.CreditAmount
 		updates["upstream_credit_refund"] = statusResp.CreditRefund
 		updates["upstream_credit_net"] = statusResp.CreditNet
+	}
+	if statusResp.MoneyAmount > 0 || statusResp.MoneyRefund > 0 || statusResp.MoneyNet > 0 {
+		updates["upstream_money_amount"] = statusResp.MoneyAmount
+		updates["upstream_money_refund"] = statusResp.MoneyRefund
+		updates["upstream_money_net"] = statusResp.MoneyNet
 	}
 
 	_ = model.UpdateVideoProjectFields(project.Id, updates)
@@ -214,24 +219,34 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 	project.UpstreamCreditAmount = statusResp.CreditAmount
 	project.UpstreamCreditRefund = statusResp.CreditRefund
 	project.UpstreamCreditNet = statusResp.CreditNet
+	project.UpstreamMoneyAmount = statusResp.MoneyAmount
+	project.UpstreamMoneyRefund = statusResp.MoneyRefund
+	project.UpstreamMoneyNet = statusResp.MoneyNet
 
 	// 首次到终态时结算（Settled=0 防止重复结算）
 	if project.Settled == 0 {
 		switch statusResp.Status {
 		case model.VideoProjectStatusOneClickGenerated, model.VideoProjectStatusFailed:
-			// 按上游退款比例计算实际退还金额
-			// refundQuota = preDeductedQuota * (creditRefund / creditAmount)
+			// 优先用 moneyRefund/moneyAmount 比例，fallback 到 creditRefund/creditAmount
 			refundQuota := 0
-			creditAmount := statusResp.CreditAmount
-			if creditAmount == 0 {
-				// 查询时上游未返回，用创建时存的值
-				creditAmount = project.UpstreamCreditAmount
+			moneyAmount := statusResp.MoneyAmount
+			if moneyAmount == 0 {
+				moneyAmount = project.UpstreamMoneyAmount
 			}
-			if creditAmount > 0 && statusResp.CreditRefund > 0 {
-				refundQuota = int(float64(project.PreDeductedQuota) * float64(statusResp.CreditRefund) / float64(creditAmount))
-			} else if statusResp.Status == model.VideoProjectStatusFailed {
-				// 上游没返回积分字段但失败了，全退
-				refundQuota = project.PreDeductedQuota
+			if moneyAmount > 0 && statusResp.MoneyRefund > 0 {
+				refundQuota = int(float64(project.PreDeductedQuota) * statusResp.MoneyRefund / moneyAmount)
+			} else {
+				// fallback: 用积分比例
+				creditAmount := statusResp.CreditAmount
+				if creditAmount == 0 {
+					creditAmount = project.UpstreamCreditAmount
+				}
+				if creditAmount > 0 && statusResp.CreditRefund > 0 {
+					refundQuota = int(float64(project.PreDeductedQuota) * float64(statusResp.CreditRefund) / float64(creditAmount))
+				} else if statusResp.Status == model.VideoProjectStatusFailed {
+					// 上游没返回任何积分/金额字段但失败了，全退
+					refundQuota = project.PreDeductedQuota
+				}
 			}
 
 			realQuota := project.PreDeductedQuota - refundQuota
@@ -241,9 +256,9 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 					common.SysLog(fmt.Sprintf("video project %d refund failed: %v", project.Id, err))
 				} else {
 					model.RecordLog(project.UserId, model.LogTypeSystem,
-						fmt.Sprintf("视频项目 %d 结算退还积分 %d（预扣 %d，实扣 %d，上游 creditRefund=%d/creditAmount=%d）",
+						fmt.Sprintf("视频项目 %d 结算退还积分 %d（预扣 %d，实扣 %d，上游 moneyRefund=%.2f/moneyAmount=%.2f）",
 							project.Id, refundQuota, project.PreDeductedQuota, realQuota,
-							statusResp.CreditRefund, statusResp.CreditAmount))
+							statusResp.MoneyRefund, moneyAmount))
 				}
 			}
 
@@ -254,8 +269,8 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 			_ = model.UpdateVideoProjectFields(project.Id, settleUpdates)
 			project.Settled = 1
 			project.RealQuota = realQuota
-			common.SysLog(fmt.Sprintf("video project %d settled: pre=%d refund=%d real=%d upstream_credit_net=%d",
-				project.Id, project.PreDeductedQuota, refundQuota, realQuota, statusResp.CreditNet))
+			common.SysLog(fmt.Sprintf("video project %d settled: pre=%d refund=%d real=%d upstream_money_net=%.2f",
+				project.Id, project.PreDeductedQuota, refundQuota, realQuota, statusResp.MoneyNet))
 		}
 	}
 

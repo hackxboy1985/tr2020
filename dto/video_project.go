@@ -73,9 +73,12 @@ type VideoProjectDetailResponse struct {
 	PreDeductedQuota     int `json:"pre_deducted_quota"`
 	RealQuota            int `json:"real_quota"`
 	Settled              int `json:"settled"`
-	UpstreamCreditAmount int `json:"upstream_credit_amount"`
-	UpstreamCreditRefund int `json:"upstream_credit_refund"`
-	UpstreamCreditNet    int `json:"upstream_credit_net"`
+	UpstreamCreditAmount int     `json:"upstream_credit_amount"`
+	UpstreamCreditRefund int     `json:"upstream_credit_refund"`
+	UpstreamCreditNet    int     `json:"upstream_credit_net"`
+	UpstreamMoneyAmount  float64 `json:"upstream_money_amount"`
+	UpstreamMoneyRefund  float64 `json:"upstream_money_refund"`
+	UpstreamMoneyNet     float64 `json:"upstream_money_net"`
 	CreatedAt        int64  `json:"created_at"`
 	UpdatedAt        int64  `json:"updated_at"`
 }
@@ -140,9 +143,13 @@ type AdapterStatusResponse struct {
 	GeneratedResult  string `json:"generated_result"`
 	FirstVideoUrl    string `json:"first_video_url"`
 	// 上游积分字段（终态时有效）
-	CreditAmount int `json:"credit_amount"` // 上游扣除积分
-	CreditRefund int `json:"credit_refund"` // 上游退回积分
-	CreditNet    int `json:"credit_net"`    // 上游净消耗积分
-	RawRequest   []byte `json:"-"`
-	RawResponse  []byte `json:"-"`
+	CreditAmount int     `json:"credit_amount"` // 上游扣除积分
+	CreditRefund int     `json:"credit_refund"` // 上游退回积分
+	CreditNet    int     `json:"credit_net"`    // 上游净消耗积分
+	// 上游金额字段（终态时有效，1积分=0.1元）
+	MoneyAmount  float64 `json:"money_amount"`  // 上游扣除金额（元）
+	MoneyRefund  float64 `json:"money_refund"`  // 上游退回金额（元）
+	MoneyNet     float64 `json:"money_net"`     // 上游净消耗金额（元）
+	RawRequest   []byte  `json:"-"`
+	RawResponse  []byte  `json:"-"`
 }

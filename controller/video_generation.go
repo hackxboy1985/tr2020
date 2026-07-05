@@ -105,12 +105,16 @@ func CreateVideoProject(c *gin.Context) {
 
 	// 从上游响应中解析扣费金额（仅用于日志记录和退款比例计算，不直接扣本系统积分）
 	creditAmount := 0
+	moneyAmount := 0.0
 	if len(rawResp) > 0 {
 		var respData map[string]interface{}
 		if err := common.Unmarshal(rawResp, &respData); err == nil {
 			if data, ok := respData["data"].(map[string]interface{}); ok {
 				if ca, ok := data["creditAmount"].(float64); ok {
 					creditAmount = int(ca)
+				}
+				if ma, ok := data["moneyAmount"].(float64); ok {
+					moneyAmount = ma
 				}
 			}
 		}
@@ -120,6 +124,7 @@ func CreateVideoProject(c *gin.Context) {
 	_ = model.UpdateVideoProjectFields(project.Id, map[string]interface{}{
 		"pre_deducted_quota":     preDeductQuota,
 		"upstream_credit_amount": creditAmount,
+		"upstream_money_amount":  moneyAmount,
 	})
 
 	model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
@@ -141,6 +146,7 @@ func CreateVideoProject(c *gin.Context) {
 			"status":                 project.Status,
 			"pre_deducted_quota":     preDeductQuota,
 			"upstream_credit_amount": creditAmount,
+			"upstream_money_amount":  moneyAmount,
 			"request_body":           string(rawReq),
 			"response_body":          string(rawResp),
 		},
@@ -203,6 +209,9 @@ func GetVideoProject(c *gin.Context) {
 			"upstream_credit_amount": detail.UpstreamCreditAmount,
 			"upstream_credit_refund": detail.UpstreamCreditRefund,
 			"upstream_credit_net":    detail.UpstreamCreditNet,
+			"upstream_money_amount":  detail.UpstreamMoneyAmount,
+			"upstream_money_refund":  detail.UpstreamMoneyRefund,
+			"upstream_money_net":     detail.UpstreamMoneyNet,
 		},
 	})
 
@@ -228,6 +237,9 @@ func GetVideoProject(c *gin.Context) {
 			UpstreamCreditAmount: detail.UpstreamCreditAmount,
 			UpstreamCreditRefund: detail.UpstreamCreditRefund,
 			UpstreamCreditNet:    detail.UpstreamCreditNet,
+			UpstreamMoneyAmount:  detail.UpstreamMoneyAmount,
+			UpstreamMoneyRefund:  detail.UpstreamMoneyRefund,
+			UpstreamMoneyNet:     detail.UpstreamMoneyNet,
 			CreatedAt:            detail.CreatedAt.Unix(),
 			UpdatedAt:            detail.UpdatedAt.Unix(),
 		},
