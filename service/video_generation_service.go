@@ -245,7 +245,7 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 				}
 			} else if math.Abs(moneyNet-moneyCalc) > 0.001 {
 				// 上游返回的 moneyNet 与 moneyAmount - moneyRefund 不一致，取较大值（对用户最保守）
-				common.SysLog(fmt.Sprintf("video project %d moneyNet mismatch: moneyNet=%.2f calc=%.2f, use max",
+				common.SysError(fmt.Sprintf("video project %d moneyNet mismatch: moneyNet=%.2f calc=%.2f, use max",
 					project.Id, moneyNet, moneyCalc))
 				if moneyCalc > moneyNet {
 					moneyNet = moneyCalc
