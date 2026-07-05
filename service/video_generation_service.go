@@ -234,12 +234,20 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 				moneyAmount = project.UpstreamMoneyAmount
 			}
 			moneyNet := statusResp.MoneyNet
+			moneyCalc := moneyAmount - statusResp.MoneyRefund // moneyNet 应等于此值
 			if moneyNet == 0 && statusResp.MoneyRefund == 0 && moneyAmount > 0 {
-				// money 字段均为0，fallback：moneyNet = moneyAmount - moneyRefund
+				// 上游未返回 moneyNet，直接用计算值
 				if statusResp.Status == model.VideoProjectStatusFailed {
-					moneyNet = 0 // 失败全退
+					moneyNet = 0
 				} else {
-					moneyNet = moneyAmount - statusResp.MoneyRefund
+					moneyNet = moneyCalc
+				}
+			} else if moneyNet != moneyCalc {
+				// 上游返回的 moneyNet 与 moneyAmount - moneyRefund 不一致，取较大值（对用户最保守）
+				common.SysLog(fmt.Sprintf("video project %d moneyNet mismatch: moneyNet=%.2f calc=%.2f, use max",
+					project.Id, moneyNet, moneyCalc))
+				if moneyCalc > moneyNet {
+					moneyNet = moneyCalc
 				}
 			}
 
