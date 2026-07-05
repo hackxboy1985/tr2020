@@ -599,16 +599,16 @@ function ModelConfigTable({ mapping, prices, onMappingChange, onPricesChange }: 
       <Label className='text-sm font-medium'>{t('Model Config')}</Label>
       <div className='border-border/60 rounded-lg border'>
         {/* 表头 */}
-        <div className='bg-muted/40 grid grid-cols-[1fr_1fr_5rem_2rem] gap-2 rounded-t-lg px-4 py-2 text-xs font-medium'>
+        <div className='bg-muted/40 grid grid-cols-[1fr_1fr_8rem_2rem] gap-2 rounded-t-lg px-4 py-2 text-xs font-medium'>
           <span>{t('Model Name')}</span>
           <span>{t('Upstream ID')}</span>
-          <span>{t('Price/s')}<span className='text-muted-foreground ml-1'>({t('Pre-deduct calculation')})</span></span>
+          <span className='whitespace-nowrap'>{t('Price/s')}<span className='text-muted-foreground ml-1'>({t('Pre-deduct calculation')})</span></span>
           <span />
         </div>
         {/* 行 */}
         <div className='divide-border/60 divide-y'>
           {rows.map((row, i) => (
-            <div key={i} className='grid grid-cols-[1fr_1fr_5rem_2rem] items-center gap-2 px-4 py-2'>
+            <div key={i} className='grid grid-cols-[1fr_1fr_8rem_2rem] items-center gap-2 px-4 py-2'>
               <input
                 className='border-input bg-background h-8 w-full rounded-md border px-2 text-xs'
                 value={row.model}
