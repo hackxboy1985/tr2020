@@ -277,6 +277,11 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 						fmt.Sprintf("视频项目 %d 结算退还积分 %d（预扣 %d，实扣 %d，上游 moneyNet=%.2f）",
 							project.Id, refundQuota, project.PreDeductedQuota, realQuota, moneyNet))
 				}
+			} else {
+				// 零差额：实际消耗 = 预扣，无需调整积分，仅记录结算日志
+				model.RecordLogWithQuota(project.UserId, model.LogTypeConsume, 0, project.VideoModel, project.ChannelId,
+					fmt.Sprintf("视频项目 %d 结算完成，预扣与实扣一致（预扣 %d，上游 moneyNet=%.2f）",
+						project.Id, project.PreDeductedQuota, moneyNet))
 			}
 
 			settleUpdates := map[string]interface{}{
