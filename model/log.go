@@ -110,8 +110,8 @@ func RecordLog(userId int, logType int, content string) {
 	}
 }
 
-// RecordLogWithQuota 记录带积分变动的系统日志（用于补扣/退款等场景）
-func RecordLogWithQuota(userId int, logType int, quota int, content string) {
+// RecordLogWithQuota 记录带积分变动的日志（用于补扣/退款等场景），同时写入数据看板
+func RecordLogWithQuota(userId int, logType int, quota int, modelName string, channelId int, content string) {
 	username, _ := GetUsernameById(userId, false)
 	log := &Log{
 		UserId:    userId,
@@ -119,11 +119,16 @@ func RecordLogWithQuota(userId int, logType int, quota int, content string) {
 		CreatedAt: common.GetTimestamp(),
 		Type:      logType,
 		Quota:     quota,
+		ModelName: modelName,
+		ChannelId: channelId,
 		Content:   content,
 	}
 	err := LOG_DB.Create(log).Error
 	if err != nil {
 		common.SysLog("failed to record log: " + err.Error())
+	}
+	if common.DataExportEnabled {
+		LogQuotaData(userId, username, modelName, quota, common.GetTimestamp(), 0)
 	}
 }
 
