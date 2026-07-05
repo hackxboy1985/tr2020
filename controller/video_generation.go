@@ -53,7 +53,8 @@ func CreateVideoProject(c *gin.Context) {
 	if userGroup == "" {
 		userGroup = "default"
 	}
-	// 分辨率倍数：720p=1x，1080p=2x，2k=4x，4k=8x
+	// 分辨率倍数：低于720p（如480p）及720p=1x，1080p=2x，2k=4x，4k=8x
+	// 低于720p按720p计费
 	resolutionMultiplier := 1
 	switch req.Resolution {
 	case "1080p":
