@@ -56,6 +56,10 @@ const defaultValues: VideoChannelFormValues = {
   remark: '',
   save_request_response: 0,
   model_mapping: '',
+  model_prices: '',
+  rate_limit: 1,
+  pre_deduct_quota: 0,
+  price_per_second: 1,
 }
 
 export function VideoChannelMutateDrawer({
@@ -112,6 +116,7 @@ export function VideoChannelMutateDrawer({
     price_per_second: currentRow.price_per_second ?? 1,
           save_request_response: currentRow.save_request_response ?? 0,
           model_mapping: currentRow.model_mapping ?? '',
+          model_prices: currentRow.model_prices ?? '',
         })
       } else {
         form.reset(defaultValues)

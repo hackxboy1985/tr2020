@@ -14,6 +14,10 @@ export const videoChannelSchema = z.object({
   remark: z.string().default(''),
   save_request_response: z.number().default(0),
   model_mapping: z.string().default(''),
+  model_prices: z.string().default(''),
+  rate_limit: z.number().default(1),
+  pre_deduct_quota: z.number().default(0),
+  price_per_second: z.number().default(1),
   created_at: z.number(),
   updated_at: z.number(),
 })
@@ -35,6 +39,10 @@ export const videoChannelFormSchema = z.object({
   remark: z.string().default(''),
   save_request_response: z.number().default(0),
   model_mapping: z.string().default(''),
+  model_prices: z.string().default(''),
+  rate_limit: z.coerce.number().default(1),
+  pre_deduct_quota: z.coerce.number().default(0),
+  price_per_second: z.coerce.number().default(1),
 })
 
 export type VideoChannelFormValues = z.infer<typeof videoChannelFormSchema>

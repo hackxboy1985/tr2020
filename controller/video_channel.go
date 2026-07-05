@@ -55,6 +55,10 @@ func CreateVideoChannel(c *gin.Context) {
 		Remark:              req.Remark,
 		SaveRequestResponse: req.SaveRequestResponse,
 		ModelMapping:        req.ModelMapping,
+		ModelPrices:         req.ModelPrices,
+		PricePerSecond:      req.PricePerSecond,
+		PreDeductQuota:      req.PreDeductQuota,
+		RateLimit:           req.RateLimit,
 	}
 
 	if err := model.CreateVideoChannel(ch); err != nil {
@@ -94,6 +98,10 @@ func UpdateVideoChannel(c *gin.Context) {
 	ch.Remark = req.Remark
 	ch.SaveRequestResponse = req.SaveRequestResponse
 	ch.ModelMapping = req.ModelMapping
+	ch.ModelPrices = req.ModelPrices
+	ch.PricePerSecond = req.PricePerSecond
+	ch.PreDeductQuota = req.PreDeductQuota
+	ch.RateLimit = req.RateLimit
 	if req.Weight > 0 {
 		ch.Weight = req.Weight
 	}
@@ -164,6 +172,10 @@ func channelToResponse(ch *model.VideoChannel) dto.VideoChannelResponse {
 		Remark:              ch.Remark,
 		SaveRequestResponse: ch.SaveRequestResponse,
 		ModelMapping:        ch.ModelMapping,
+		ModelPrices:         ch.ModelPrices,
+		PricePerSecond:      ch.PricePerSecond,
+		PreDeductQuota:      ch.PreDeductQuota,
+		RateLimit:           ch.RateLimit,
 		CreatedAt:           ch.CreatedAt,
 		UpdatedAt:           ch.UpdatedAt,
 	}
