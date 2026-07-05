@@ -70,6 +70,9 @@ type VideoProjectDetailResponse struct {
 	MainImageAssetId string `json:"main_image_asset_id,omitempty"`
 	GeneratedResult  string `json:"generated_result,omitempty"`
 	FirstVideoUrl    string `json:"first_video_url,omitempty"`
+	PreDeductedQuota int    `json:"pre_deducted_quota"`
+	RealQuota        int    `json:"real_quota"`
+	Settled          int    `json:"settled"`
 	CreatedAt        int64  `json:"created_at"`
 	UpdatedAt        int64  `json:"updated_at"`
 }
