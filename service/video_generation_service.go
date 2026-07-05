@@ -202,6 +202,40 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 		project.ErrorMsg = statusResp.ErrorMsg
 	}
 
+	// 首次到终态时结算（Settled=0 防止重复结算）
+	if project.Settled == 0 {
+		switch statusResp.Status {
+		case model.VideoProjectStatusOneClickGenerated:
+			// 成功：预扣即决算，标记已结算
+			settleUpdates := map[string]interface{}{
+				"settled":    1,
+				"real_quota": project.PreDeductedQuota,
+			}
+			_ = model.UpdateVideoProjectFields(project.Id, settleUpdates)
+			project.Settled = 1
+			project.RealQuota = project.PreDeductedQuota
+			common.SysLog(fmt.Sprintf("video project %d settled: quota=%d", project.Id, project.PreDeductedQuota))
+		case model.VideoProjectStatusFailed:
+			// 失败：退还预扣
+			if project.PreDeductedQuota > 0 {
+				if err := model.IncreaseUserQuota(project.UserId, project.PreDeductedQuota, false); err != nil {
+					common.SysLog(fmt.Sprintf("video project %d refund failed: %v", project.Id, err))
+				} else {
+					settleUpdates := map[string]interface{}{
+						"settled":    1,
+						"real_quota": 0,
+					}
+					_ = model.UpdateVideoProjectFields(project.Id, settleUpdates)
+					project.Settled = 1
+					project.RealQuota = 0
+					model.RecordLog(project.UserId, model.LogTypeSystem,
+						fmt.Sprintf("视频项目 %d 生成失败，退还预扣积分 %d", project.Id, project.PreDeductedQuota))
+					common.SysLog(fmt.Sprintf("video project %d refunded: quota=%d", project.Id, project.PreDeductedQuota))
+				}
+			}
+		}
+	}
+
 	return project, nil
 }
 
