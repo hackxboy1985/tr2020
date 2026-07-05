@@ -15,11 +15,11 @@ type VideoChannelRequest struct {
 	Enabled             int    `json:"enabled"`
 	Remark              string `json:"remark"`
 	SaveRequestResponse int    `json:"save_request_response"`
-	ModelMapping        string `json:"model_mapping"`
-	ModelPrices         string `json:"model_prices"`
-	PricePerSecond      int    `json:"price_per_second"`
-	PreDeductQuota      int    `json:"pre_deduct_quota"`
-	RateLimit           int    `json:"rate_limit"`
+	ModelMapping        string  `json:"model_mapping"`
+	ModelPrices         string  `json:"model_prices"`
+	PricePerSecond      float64 `json:"price_per_second"`
+	PreDeductQuota      int     `json:"pre_deduct_quota"`
+	RateLimit           int     `json:"rate_limit"`
 }
 
 // VideoChannelResponse 渠道响应（不暴露密钥）
@@ -36,13 +36,13 @@ type VideoChannelResponse struct {
 	Enabled             int    `json:"enabled"`
 	Remark              string `json:"remark"`
 	SaveRequestResponse int    `json:"save_request_response"`
-	ModelMapping        string `json:"model_mapping"`
-	ModelPrices         string `json:"model_prices"`
-	PricePerSecond      int    `json:"price_per_second"`
-	PreDeductQuota      int    `json:"pre_deduct_quota"`
-	RateLimit           int    `json:"rate_limit"`
-	CreatedAt           int64  `json:"created_at"`
-	UpdatedAt           int64  `json:"updated_at"`
+	ModelMapping        string  `json:"model_mapping"`
+	ModelPrices         string  `json:"model_prices"`
+	PricePerSecond      float64 `json:"price_per_second"`
+	PreDeductQuota      int     `json:"pre_deduct_quota"`
+	RateLimit           int     `json:"rate_limit"`
+	CreatedAt           int64   `json:"created_at"`
+	UpdatedAt           int64   `json:"updated_at"`
 }
 
 // VideoChannelStatusRequest 启用/禁用渠道

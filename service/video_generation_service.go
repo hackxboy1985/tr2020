@@ -227,29 +227,36 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 	if project.Settled == 0 {
 		switch statusResp.Status {
 		case model.VideoProjectStatusOneClickGenerated, model.VideoProjectStatusFailed:
-			// 优先用 moneyRefund/moneyAmount 比例，fallback 到 creditRefund/creditAmount
+			// 上游1元=本系统 QuotaPerUnit 积分（1$ = 500,000 quota，1元=1$）
 			refundQuota := 0
+			realQuota := 0
 			moneyAmount := statusResp.MoneyAmount
 			if moneyAmount == 0 {
 				moneyAmount = project.UpstreamMoneyAmount
 			}
-			if moneyAmount > 0 && statusResp.MoneyRefund > 0 {
-				refundQuota = int(float64(project.PreDeductedQuota) * statusResp.MoneyRefund / moneyAmount)
-			} else {
-				// fallback: 用积分比例
+			moneyNet := statusResp.MoneyNet
+			if moneyNet == 0 && statusResp.MoneyRefund == 0 && moneyAmount > 0 {
+				// 查询时 money 字段均为0，fallback 到积分比例
 				creditAmount := statusResp.CreditAmount
 				if creditAmount == 0 {
 					creditAmount = project.UpstreamCreditAmount
 				}
 				if creditAmount > 0 && statusResp.CreditRefund > 0 {
-					refundQuota = int(float64(project.PreDeductedQuota) * float64(statusResp.CreditRefund) / float64(creditAmount))
+					moneyNet = moneyAmount * float64(creditAmount-statusResp.CreditRefund) / float64(creditAmount)
 				} else if statusResp.Status == model.VideoProjectStatusFailed {
-					// 上游没返回任何积分/金额字段但失败了，全退
-					refundQuota = project.PreDeductedQuota
+					moneyNet = 0 // 失败全退
+				} else {
+					moneyNet = moneyAmount // 成功无退款
 				}
 			}
 
-			realQuota := project.PreDeductedQuota - refundQuota
+			if moneyNet > 0 {
+				realQuota = common.YuanToQuota(moneyNet)
+			}
+			if realQuota > project.PreDeductedQuota {
+				realQuota = project.PreDeductedQuota // 不超过预扣
+			}
+			refundQuota = project.PreDeductedQuota - realQuota
 
 			if refundQuota > 0 {
 				if err := model.IncreaseUserQuota(project.UserId, refundQuota, false); err != nil {

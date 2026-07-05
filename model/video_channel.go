@@ -23,9 +23,9 @@ type VideoChannel struct {
 	Weight          int    `json:"weight" gorm:"default:1"`
 	Enabled         int    `json:"enabled" gorm:"type:tinyint;default:1;index"`
 	ModelMapping    string `json:"model_mapping" gorm:"type:text"` // JSON映射: {"seedance2.0":"42","seedance2.0fast":"44"}
-	ModelPrices     string `json:"model_prices" gorm:"type:text"`  // 模型单价JSON: {"seedance2.0":2,"seedance2.0fast":1}，覆盖price_per_second
-	PricePerSecond  int    `json:"price_per_second" gorm:"type:int;default:1"`      // 每秒默认价格（积分），1≈1元
-	PreDeductQuota  int    `json:"pre_deduct_quota" gorm:"type:int;default:0"`      // 预扣积分，0则用duration*price_per_second
+	ModelPrices     string  `json:"model_prices" gorm:"type:text"`  // 模型单价JSON: {"seedance2.0":2.0,"seedance2.0fast":1.0}，单位：元/秒
+	PricePerSecond  float64 `json:"price_per_second" gorm:"type:decimal(10,4);default:1"`   // 每秒默认价格（元），1元/秒
+	PreDeductQuota  int     `json:"pre_deduct_quota" gorm:"type:int;default:0"`              // 预扣积分（固定值，0则用duration*price_per_second换算）
 	RateLimit       int    `json:"rate_limit" gorm:"type:int;default:1"`            // QPS限制，0不限制
 	Remark          string `json:"remark" gorm:"type:varchar(255)"`
 	SaveRequestResponse int `json:"save_request_response" gorm:"type:tinyint;default:0"` // 1=保存请求和响应体
@@ -77,10 +77,10 @@ func (ch *VideoChannel) GetStatusQueryURL(remoteId string) string {
 	return ch.BaseURL + strings.ReplaceAll(path, "{id}", remoteId)
 }
 
-// GetPricePerSecond 获取指定模型的每秒价格，没有模型特定价格时返回默认值
-func (ch *VideoChannel) GetPricePerSecond(modelName string) int {
+// GetPricePerSecond 获取指定模型的每秒价格（元/秒），没有模型特定价格时返回默认值
+func (ch *VideoChannel) GetPricePerSecond(modelName string) float64 {
 	if ch.ModelPrices != "" {
-		var prices map[string]int
+		var prices map[string]float64
 		if err := common.Unmarshal([]byte(ch.ModelPrices), &prices); err == nil {
 			if p, ok := prices[modelName]; ok && p > 0 {
 				return p
