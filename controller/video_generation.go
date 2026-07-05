@@ -188,17 +188,22 @@ func GetVideoProject(c *gin.Context) {
 	userId := c.GetInt("id")
 	isAdmin := isAdminUser(c)
 
-	detail, rawResponse, err := service.GetProject(c.Request.Context(), projectId, userId, isAdmin)
+	detail, rawResponse, err, upstreamErr := service.GetProject(c.Request.Context(), projectId, userId, isAdmin)
 	if err != nil {
-		model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
-			ModelName: "",
-			TokenName: c.GetString("token_name"),
-			TokenId:   c.GetInt("token_id"),
-			Content:   "视频查询失败: project=" + c.Param("id"),
-			Quota:     0,
-		})
+		// 本地找不到或无权限，不记日志
 		c.JSON(http.StatusNotFound, gin.H{"code": 404, "msg": "project not found", "data": nil})
 		return
+	}
+
+	if upstreamErr != nil {
+		// 上游查询失败，记录日志
+		model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
+			ModelName: detail.VideoModel,
+			TokenName: c.GetString("token_name"),
+			TokenId:   c.GetInt("token_id"),
+			Content:   fmt.Sprintf("视频查询上游失败: id=%d, err=%s", detail.Id, upstreamErr.Error()),
+			Quota:     0,
+		})
 	}
 
 	model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
@@ -294,16 +299,6 @@ func DeleteVideoProject(c *gin.Context) {
 	isAdmin := isAdminUser(c)
 
 	if err := service.DeleteProject(c.Request.Context(), projectId, userId, isAdmin); err != nil {
-		model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
-			ModelName: "",
-			TokenName: c.GetString("token_name"),
-			TokenId:   c.GetInt("token_id"),
-			Content:   "视频删除失败: project=" + c.Param("id") + " " + err.Error(),
-			Quota:     0,
-			Other: map[string]interface{}{
-				"project_id": strconv.FormatInt(projectId, 10),
-			},
-		})
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": err.Error(), "data": nil})
 		return
 	}
