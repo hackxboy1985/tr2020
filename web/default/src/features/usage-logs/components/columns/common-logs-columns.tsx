@@ -717,9 +717,27 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
       ),
       cell: ({ row }) => {
         const log = row.original
+        const quota = row.getValue('quota') as number
+
+        // 系统日志（type=4）有积分变动时单独渲染
+        if (log.type === 4) {
+          if (!quota) return null
+          const quotaStr = formatLogQuota(quota)
+          const quotaDisplay = splitQuotaDisplay(quotaStr)
+          return (
+            <div className='flex flex-col gap-0.5'>
+              <span className='border-border/80 bg-muted/60 inline-flex h-6 w-fit items-center rounded-md border px-2 text-sm leading-none [font-family:var(--font-body)] font-semibold tabular-nums'>
+                {quotaDisplay.prefix && (
+                  <span className='mr-1'>{quotaDisplay.prefix}</span>
+                )}
+                <span>{quotaDisplay.amount}</span>
+              </span>
+            </div>
+          )
+        }
+
         if (!isDisplayableLogType(log.type)) return null
 
-        const quota = row.getValue('quota') as number
         const other = parseLogOther(log.other)
         const isSubscription = other?.billing_source === 'subscription'
 
