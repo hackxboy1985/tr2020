@@ -228,7 +228,6 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 		switch statusResp.Status {
 		case model.VideoProjectStatusOneClickGenerated, model.VideoProjectStatusFailed:
 			// 上游1元=本系统 QuotaPerUnit 积分（1$ = 500,000 quota，1元=1$）
-			refundQuota := 0
 			realQuota := 0
 			moneyAmount := statusResp.MoneyAmount
 			if moneyAmount == 0 {
@@ -236,36 +235,38 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 			}
 			moneyNet := statusResp.MoneyNet
 			if moneyNet == 0 && statusResp.MoneyRefund == 0 && moneyAmount > 0 {
-				// 查询时 money 字段均为0，fallback 到积分比例
-				creditAmount := statusResp.CreditAmount
-				if creditAmount == 0 {
-					creditAmount = project.UpstreamCreditAmount
-				}
-				if creditAmount > 0 && statusResp.CreditRefund > 0 {
-					moneyNet = moneyAmount * float64(creditAmount-statusResp.CreditRefund) / float64(creditAmount)
-				} else if statusResp.Status == model.VideoProjectStatusFailed {
+				// money 字段均为0，fallback：moneyNet = moneyAmount - moneyRefund
+				if statusResp.Status == model.VideoProjectStatusFailed {
 					moneyNet = 0 // 失败全退
 				} else {
-					moneyNet = moneyAmount // 成功无退款
+					moneyNet = moneyAmount - statusResp.MoneyRefund
 				}
 			}
 
 			if moneyNet > 0 {
 				realQuota = common.YuanToQuota(moneyNet)
 			}
-			if realQuota > project.PreDeductedQuota {
-				realQuota = project.PreDeductedQuota // 不超过预扣
-			}
-			refundQuota = project.PreDeductedQuota - realQuota
+			delta := realQuota - project.PreDeductedQuota // 正=补扣，负=退款，0=无差
 
-			if refundQuota > 0 {
+			if delta > 0 {
+				// 补扣：上游实际消耗 > 预扣
+				if err := model.DecreaseUserQuota(project.UserId, delta, false); err != nil {
+					common.SysLog(fmt.Sprintf("video project %d extra charge failed: %v", project.Id, err))
+					// 补扣失败：记录但不阻断，realQuota 仍按实际值记录
+				} else {
+					model.RecordLog(project.UserId, model.LogTypeSystem,
+						fmt.Sprintf("视频项目 %d 结算补扣积分 %d（预扣 %d，实扣 %d，上游 moneyNet=%.2f）",
+							project.Id, delta, project.PreDeductedQuota, realQuota, moneyNet))
+				}
+			} else if delta < 0 {
+				// 退款：上游实际消耗 < 预扣
+				refundQuota := -delta
 				if err := model.IncreaseUserQuota(project.UserId, refundQuota, false); err != nil {
 					common.SysLog(fmt.Sprintf("video project %d refund failed: %v", project.Id, err))
 				} else {
 					model.RecordLog(project.UserId, model.LogTypeSystem,
-						fmt.Sprintf("视频项目 %d 结算退还积分 %d（预扣 %d，实扣 %d，上游 moneyRefund=%.2f/moneyAmount=%.2f）",
-							project.Id, refundQuota, project.PreDeductedQuota, realQuota,
-							statusResp.MoneyRefund, moneyAmount))
+						fmt.Sprintf("视频项目 %d 结算退还积分 %d（预扣 %d，实扣 %d，上游 moneyNet=%.2f）",
+							project.Id, refundQuota, project.PreDeductedQuota, realQuota, moneyNet))
 				}
 			}
 
@@ -276,8 +277,8 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 			_ = model.UpdateVideoProjectFields(project.Id, settleUpdates)
 			project.Settled = 1
 			project.RealQuota = realQuota
-			common.SysLog(fmt.Sprintf("video project %d settled: pre=%d refund=%d real=%d upstream_money_net=%.2f",
-				project.Id, project.PreDeductedQuota, refundQuota, realQuota, statusResp.MoneyNet))
+			common.SysLog(fmt.Sprintf("video project %d settled: pre=%d delta=%d real=%d upstream_money_net=%.2f",
+				project.Id, project.PreDeductedQuota, delta, realQuota, statusResp.MoneyNet))
 		}
 	}
 
