@@ -137,6 +137,8 @@ func CreateVideoProject(c *gin.Context) {
 		"pre_deducted_quota":     preDeductQuota,
 		"upstream_credit_amount": creditAmount,
 		"upstream_money_amount":  moneyAmount,
+		"token_id":               c.GetInt("token_id"),
+		"token_name":             c.GetString("token_name"),
 	})
 
 	model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{

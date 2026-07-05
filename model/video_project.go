@@ -57,6 +57,8 @@ type VideoProject struct {
 	Deleted  int    `gorm:"type:tinyint;default:0;index" json:"deleted"` // 0=未删 1=软删
 
 	// 计费字段
+	TokenId              int     `gorm:"type:int;default:0" json:"token_id"`                // 令牌 ID
+	TokenName            string  `gorm:"type:varchar(255);default:''" json:"token_name"`    // 令牌名称快照
 	PreDeductedQuota     int     `gorm:"type:int;default:0" json:"pre_deducted_quota"`      // 预扣积分
 	RealQuota            int     `gorm:"type:int;default:0" json:"real_quota"`              // 真实扣费积分
 	Settled              int     `gorm:"type:tinyint;default:0;index" json:"settled"`       // 0=未结算 1=已结算

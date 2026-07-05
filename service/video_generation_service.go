@@ -263,7 +263,7 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 					common.SysLog(fmt.Sprintf("video project %d extra charge failed: %v", project.Id, err))
 					// 补扣失败：记录但不阻断，realQuota 仍按实际值记录
 				} else {
-					model.RecordLogWithQuota(project.UserId, model.LogTypeConsume, delta, project.VideoModel, project.ChannelId,
+					model.RecordLogWithQuota(project.UserId, model.LogTypeConsume, delta, project.VideoModel, project.ChannelId, project.TokenId, project.TokenName,
 						fmt.Sprintf("视频项目 %d 结算补扣积分 %d（预扣 %d，实扣 %d，上游 moneyNet=%.2f）",
 							project.Id, delta, project.PreDeductedQuota, realQuota, moneyNet))
 				}
@@ -273,13 +273,13 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 				if err := model.IncreaseUserQuota(project.UserId, refundQuota, false); err != nil {
 					common.SysLog(fmt.Sprintf("video project %d refund failed: %v", project.Id, err))
 				} else {
-					model.RecordLogWithQuota(project.UserId, model.LogTypeRefund, -refundQuota, project.VideoModel, project.ChannelId,
+					model.RecordLogWithQuota(project.UserId, model.LogTypeRefund, -refundQuota, project.VideoModel, project.ChannelId, project.TokenId, project.TokenName,
 						fmt.Sprintf("视频项目 %d 结算退还积分 %d（预扣 %d，实扣 %d，上游 moneyNet=%.2f）",
 							project.Id, refundQuota, project.PreDeductedQuota, realQuota, moneyNet))
 				}
 			} else {
 				// 零差额：实际消耗 = 预扣，无需调整积分，仅记录结算日志
-				model.RecordLogWithQuota(project.UserId, model.LogTypeConsume, 0, project.VideoModel, project.ChannelId,
+				model.RecordLogWithQuota(project.UserId, model.LogTypeConsume, 0, project.VideoModel, project.ChannelId, project.TokenId, project.TokenName,
 					fmt.Sprintf("视频项目 %d 结算完成，预扣与实扣一致（预扣 %d，上游 moneyNet=%.2f）",
 						project.Id, project.PreDeductedQuota, moneyNet))
 			}
