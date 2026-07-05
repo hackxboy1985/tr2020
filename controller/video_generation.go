@@ -194,7 +194,7 @@ func GetVideoProject(c *gin.Context) {
 	userId := c.GetInt("id")
 	isAdmin := isAdminUser(c)
 
-	detail, err := service.GetProject(c.Request.Context(), projectId, userId, isAdmin)
+	detail, rawResponse, err := service.GetProject(c.Request.Context(), projectId, userId, isAdmin)
 	if err != nil {
 		model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
 			ModelName: "",
@@ -207,28 +207,6 @@ func GetVideoProject(c *gin.Context) {
 		return
 	}
 
-	respBody, _ := common.Marshal(gin.H{"code": 200, "msg": "success", "data": dto.VideoProjectDetailResponse{
-		ProjectId:            detail.Id,
-		ProjectName:          detail.ProjectName,
-		Status:               detail.Status,
-		ErrorMsg:             detail.ErrorMsg,
-		Progress:             detail.Progress,
-		ProductImgUrl:        detail.ProductImgUrl,
-		Brand:                detail.Brand,
-		ProductName:          detail.ProductName,
-		MainImageUrl:         detail.MainImageUrl,
-		MainImageAssetId:     detail.MainImageAssetId,
-		GeneratedResult:      detail.GeneratedResult,
-		FirstVideoUrl:        detail.FirstVideoUrl,
-		PreDeductedQuota:     detail.PreDeductedQuota,
-		RealQuota:            detail.RealQuota,
-		Settled:              detail.Settled,
-		UpstreamCreditAmount: detail.UpstreamCreditAmount,
-		UpstreamCreditRefund: detail.UpstreamCreditRefund,
-		UpstreamCreditNet:    detail.UpstreamCreditNet,
-		CreatedAt:            detail.CreatedAt.Unix(),
-		UpdatedAt:            detail.UpdatedAt.Unix(),
-	}})
 	model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
 		ModelName: "",
 		TokenName: c.GetString("token_name"),
@@ -237,7 +215,7 @@ func GetVideoProject(c *gin.Context) {
 		Quota:     0,
 		Other: map[string]interface{}{
 			"request_path":           c.Request.URL.String(),
-			"response_body":          string(respBody),
+			"response_body":          string(rawResponse), // 上游原始响应
 			"project_id":             detail.Id,
 			"project_name":           detail.ProjectName,
 			"status":                 detail.Status,

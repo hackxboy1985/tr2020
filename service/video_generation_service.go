@@ -136,7 +136,8 @@ func CreateProject(ctx context.Context, userId int, isAdmin bool, req *dto.Creat
 }
 
 // GetProject 获取项目详情，进行中状态会透传查询上游
-func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) (*model.VideoProject, error) {
+// 第二返回值为上游原始响应体（仅透传时有值，终态直接返回本地数据时为 nil）
+func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) (*model.VideoProject, []byte, error) {
 	var project *model.VideoProject
 	var err error
 
@@ -146,12 +147,12 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 		project, err = model.GetVideoProjectById(projectId, userId)
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// 终态或无 remote_project_id：直接返回本地数据
 	if !needsStatusPullthrough(project.Status) || project.RemoteProjectId == "" {
-		return project, nil
+		return project, nil, nil
 	}
 
 	// 透传查询上游
@@ -159,20 +160,22 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 	if err != nil {
 		// 渠道已删除，返回本地数据
 		common.SysLog(fmt.Sprintf("video project %d channel %d not found: %v", project.Id, project.ChannelId, err))
-		return project, nil
+		return project, nil, nil
 	}
 
 	adapter, err := NewAdapterFromChannel(ch)
 	if err != nil {
-		return project, nil
+		return project, nil, nil
 	}
 
 	statusResp, err := adapter.GetProjectStatus(ctx, project.RemoteProjectId)
 	if err != nil {
 		// 上游查询失败，返回本地数据（不报错）
 		common.SysLog(fmt.Sprintf("video project %d status query failed: %v", project.Id, err))
-		return project, nil
+		return project, nil, nil
 	}
+
+	rawResponse := statusResp.RawResponse
 
 	// 更新本地
 	updates := map[string]interface{}{
@@ -251,7 +254,7 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 		}
 	}
 
-	return project, nil
+	return project, rawResponse, nil
 }
 
 // ListProjects 获取项目列表
