@@ -110,6 +110,23 @@ func RecordLog(userId int, logType int, content string) {
 	}
 }
 
+// RecordLogWithQuota 记录带积分变动的系统日志（用于补扣/退款等场景）
+func RecordLogWithQuota(userId int, logType int, quota int, content string) {
+	username, _ := GetUsernameById(userId, false)
+	log := &Log{
+		UserId:    userId,
+		Username:  username,
+		CreatedAt: common.GetTimestamp(),
+		Type:      logType,
+		Quota:     quota,
+		Content:   content,
+	}
+	err := LOG_DB.Create(log).Error
+	if err != nil {
+		common.SysLog("failed to record log: " + err.Error())
+	}
+}
+
 // RecordLogWithAdminInfo 记录操作日志，并将管理员相关信息存入 Other.admin_info，
 func RecordLogWithAdminInfo(userId int, logType int, content string, adminInfo map[string]interface{}) {
 	if logType == LogTypeConsume && !common.LogConsumeEnabled {

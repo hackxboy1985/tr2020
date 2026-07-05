@@ -263,7 +263,7 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 					common.SysLog(fmt.Sprintf("video project %d extra charge failed: %v", project.Id, err))
 					// 补扣失败：记录但不阻断，realQuota 仍按实际值记录
 				} else {
-					model.RecordLog(project.UserId, model.LogTypeSystem,
+					model.RecordLogWithQuota(project.UserId, model.LogTypeSystem, delta,
 						fmt.Sprintf("视频项目 %d 结算补扣积分 %d（预扣 %d，实扣 %d，上游 moneyNet=%.2f）",
 							project.Id, delta, project.PreDeductedQuota, realQuota, moneyNet))
 				}
@@ -273,7 +273,7 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 				if err := model.IncreaseUserQuota(project.UserId, refundQuota, false); err != nil {
 					common.SysLog(fmt.Sprintf("video project %d refund failed: %v", project.Id, err))
 				} else {
-					model.RecordLog(project.UserId, model.LogTypeSystem,
+					model.RecordLogWithQuota(project.UserId, model.LogTypeSystem, -refundQuota,
 						fmt.Sprintf("视频项目 %d 结算退还积分 %d（预扣 %d，实扣 %d，上游 moneyNet=%.2f）",
 							project.Id, refundQuota, project.PreDeductedQuota, realQuota, moneyNet))
 				}
