@@ -603,6 +603,32 @@ func SumUsedToken(logType int, startTimestamp int64, endTimestamp int64, modelNa
 	return token
 }
 
+// TokenQuotaStat 按令牌汇总的用量统计
+type TokenQuotaStat struct {
+	TokenName string `json:"token_name"`
+	Quota     int    `json:"quota"`
+	Count     int    `json:"count"`
+	TokenUsed int    `json:"token_used"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+// GetQuotaStatByToken 查询某用户在时间范围内各令牌的用量，按小时聚合
+func GetQuotaStatByToken(userId int, startTimestamp int64, endTimestamp int64) ([]TokenQuotaStat, error) {
+	var results []TokenQuotaStat
+	err := LOG_DB.Table("logs").
+		Select("token_name, sum(quota) as quota, count(*) as count, sum(prompt_tokens)+sum(completion_tokens) as token_used, (created_at - (created_at % 3600)) as created_at").
+		Where("user_id = ? AND type IN ? AND created_at >= ? AND created_at <= ?",
+			userId, []int{LogTypeConsume, LogTypeRefund}, startTimestamp, endTimestamp).
+		Where("token_name != ''").
+		Group("token_name, (created_at - (created_at % 3600))").
+		Order("created_at asc").
+		Scan(&results).Error
+	if err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
 func DeleteOldLog(ctx context.Context, targetTimestamp int64, limit int) (int64, error) {
 	var total int64 = 0
 

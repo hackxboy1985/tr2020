@@ -24,6 +24,8 @@ import type {
   QuotaDataItem,
   ProcessedChartData,
   ProcessedUserChartData,
+  ProcessedTokenChartData,
+  TokenQuotaStat,
 } from '@/features/dashboard/types'
 
 type TFunction = (key: string) => string
@@ -987,6 +989,167 @@ export function processUserChartData(
       },
       point: { visible: false },
       color: { specified: userColorMap },
+      background: { fill: 'transparent' },
+      animation: true,
+    },
+  }
+}
+
+export function processTokenChartData(
+  data: TokenQuotaStat[],
+  timeGranularity: TimeGranularity = 'day',
+  t?: TFunction,
+  limit = 10,
+  themeKey?: string
+): ProcessedTokenChartData {
+  const tt: TFunction = t ?? ((x) => x)
+  const { config } = getCurrencyDisplay()
+  const quotaPerUnit = config.quotaPerUnit
+  const themeColors = getThemeChartColors(themeKey)
+  const colorRange =
+    themeColors.length > 0
+      ? Array.from(
+          { length: Math.max(limit, themeColors.length) },
+          (_, i) => themeColors[i % themeColors.length]
+        )
+      : USER_COLOR_FALLBACKS
+
+  const emptyResult: ProcessedTokenChartData = {
+    spec_token_rank: {
+      type: 'bar',
+      data: [{ id: 'tokenRankData', values: [] }],
+      xField: 'rawQuota',
+      yField: 'Token',
+      seriesField: 'Token',
+      direction: 'horizontal',
+      title: {
+        visible: true,
+        text: tt('Token Consumption Ranking'),
+        subtext: tt('No data available'),
+      },
+      legends: { visible: false },
+      color: { type: 'ordinal', range: colorRange },
+      background: { fill: 'transparent' },
+    },
+    spec_token_trend: {
+      type: 'area',
+      data: [{ id: 'tokenTrendData', values: [] }],
+      xField: 'Time',
+      yField: 'rawQuota',
+      seriesField: 'Token',
+      title: {
+        visible: true,
+        text: tt('Token Consumption Trend'),
+        subtext: tt('No data available'),
+      },
+      legends: { visible: true, selectMode: 'single' },
+      color: { type: 'ordinal', range: colorRange },
+      point: { visible: false },
+      background: { fill: 'transparent' },
+    },
+  }
+
+  if (!data || data.length === 0) return emptyResult
+
+  const tokenQuotaTotal = new Map<string, number>()
+  data.forEach((item) => {
+    const name = item.token_name || 'unknown'
+    tokenQuotaTotal.set(name, (tokenQuotaTotal.get(name) || 0) + (Number(item.quota) || 0))
+  })
+
+  const sorted = Array.from(tokenQuotaTotal.entries()).sort((a, b) => b[1] - a[1])
+  const topTokens = sorted.slice(0, limit).map(([n]) => n)
+  const topTokenSet = new Set(topTokens)
+
+  const rankValues = sorted.slice(0, limit).map(([tokenName, quota]) => ({
+    Token: tokenName,
+    rawQuota: quota,
+    Usage: Number((quota / quotaPerUnit).toFixed(4)),
+  }))
+
+  const tokenColorMap = topTokens.reduce<Record<string, string>>(
+    (acc, name, i) => {
+      acc[name] = colorRange[i % colorRange.length]
+      return acc
+    },
+    {}
+  )
+
+  // trend: group by (token_name, time bucket)
+  const trendMap = new Map<string, number>()
+  data.forEach((item) => {
+    const name = item.token_name || 'unknown'
+    if (!topTokenSet.has(name)) return
+    const bucket = formatChartTime(item.created_at, timeGranularity)
+    const key = `${name}||${bucket}`
+    trendMap.set(key, (trendMap.get(key) || 0) + (Number(item.quota) || 0))
+  })
+
+  const trendValues: { Token: string; Time: string; rawQuota: number }[] = []
+  trendMap.forEach((quota, key) => {
+    const [name, time] = key.split('||')
+    trendValues.push({ Token: name, Time: time, rawQuota: quota })
+  })
+  trendValues.sort((a, b) => a.Time.localeCompare(b.Time))
+
+  return {
+    spec_token_rank: {
+      ...emptyResult.spec_token_rank,
+      data: [{ id: 'tokenRankData', values: rankValues }],
+      title: { visible: true, text: tt('Token Consumption Ranking') },
+      axes: [
+        {
+          orient: 'bottom',
+          label: {
+            formatMethod: (val: number) =>
+              `${(val / quotaPerUnit).toFixed(2)}`,
+          },
+        },
+        { orient: 'left' },
+      ],
+      tooltip: {
+        mark: {
+          content: [
+            {
+              key: (d: { Token: string }) => d.Token,
+              value: (d: { rawQuota: number }) =>
+                `${(d.rawQuota / quotaPerUnit).toFixed(4)}`,
+            },
+          ],
+        },
+      },
+      color: { specified: tokenColorMap },
+      background: { fill: 'transparent' },
+      animation: true,
+    },
+    spec_token_trend: {
+      ...emptyResult.spec_token_trend,
+      data: [{ id: 'tokenTrendData', values: trendValues }],
+      title: { visible: true, text: tt('Token Consumption Trend') },
+      axes: [
+        { orient: 'bottom' },
+        {
+          orient: 'left',
+          label: {
+            formatMethod: (val: number) =>
+              `${(val / quotaPerUnit).toFixed(2)}`,
+          },
+        },
+      ],
+      tooltip: {
+        dimension: {
+          content: [
+            {
+              key: (d: { Token: string }) => d.Token,
+              value: (d: { rawQuota: number }) =>
+                `${(d.rawQuota / quotaPerUnit).toFixed(4)}`,
+            },
+          ],
+        },
+      },
+      line: { style: { lineWidth: 2, curveType: 'monotone' } },
+      point: { visible: false },
+      color: { specified: tokenColorMap },
       background: { fill: 'transparent' },
       animation: true,
     },
