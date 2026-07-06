@@ -38,6 +38,14 @@ func isAdminUser(c *gin.Context) bool {
 }
 
 
+// toExternalStatus 将内部状态转换为对外状态
+func toExternalStatus(status string) string {
+	if status == model.VideoProjectStatusOneClickGenerated {
+		return "SUCCESS"
+	}
+	return status
+}
+
 func CreateVideoProject(c *gin.Context) {
 	var req dto.CreateVideoProjectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -233,7 +241,7 @@ func GetVideoProject(c *gin.Context) {
 		"data": dto.VideoProjectDetailResponse{
 			ProjectId:            detail.Id,
 			ProjectName:          detail.ProjectName,
-			Status:               detail.Status,
+			Status:               toExternalStatus(detail.Status),
 			ErrorMsg:             detail.ErrorMsg,
 			Progress:             detail.Progress,
 			ProductImgUrl:        detail.ProductImgUrl,

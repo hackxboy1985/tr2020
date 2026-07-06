@@ -1,311 +1,186 @@
-# 视频生成 API 文档
+# 视频生成 API 接口文档
 
-## 概述
-
-本 API 提供视频生成项目的创建、查询、管理功能。采用方案 A（独立业务 API），保持业务语义清晰。
-
-## 响应格式
-
-所有接口统一返回格式:
-
-```json
-{
-  "code": 200,
-  "msg": "success message",
-  "data": {}
-}
+**鉴权**：所有接口需在 Header 中携带 API Key：
+```
+Authorization: Bearer <your_api_key>
 ```
 
-- `code`: HTTP 状态码（200 成功，400/404/500 失败）
-- `msg`: 消息描述
-- `data`: 响应数据（成功时包含数据，失败时为 null）
 
-## 接口列表
 
-### 1. 创建视频项目
 
-**接口**: `POST /api/video-generation/create`
+---
 
-**认证**: 需要用户 Token（UserAuth）
+## 1. 创建视频项目
 
-**请求参数**:
+**POST** `/api/video-generation/create`
+
+### 请求体（JSON）
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `brand` | string | ✓ | 品牌名 |
+| `product_name` | string | ✓ | 产品名 |
+| `prompt` | string | ✓ | 创意描述 |
+| `vtype` | string | ✓ | 视频类型 |
+| `duration` | int | ✓ | 时长（秒），可选值：`15` `30` `45` `60` |
+| `resolution` | string | ✓ | 分辨率：`720p` `1080p` `2k` `4k` |
+| `whstr` | string | ✓ | 宽高比，如 `16:9` `9:16` |
+| `video_model` | string | | 模型：`alpha-pro`（高质量）/ `alpha-flash`（快速） |
+| `mediaList` | array | | 媒体列表，见下方说明 |
+| `product_img_url` | string | | 产品图 URL（兼容旧格式，优先使用 mediaList） |
+| `tagline` | string | | 广告语 |
+| `selling_points` | string | | 卖点描述 |
+| `language` | string | | 广告语言，如 `zh` `en` |
+| `platform` | string | | 投放平台 |
+| `region` | string | | 投放地区 |
+| `vtype_add` | string | | 剧情子类型 |
+
+### mediaList 元素结构
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `mediaType` | string | `PRODUCT`（产品图）/ `ROLE`（角色）/ `OTHER` |
+| `mediaUrl` | string | 媒体 URL |
+| `roleName` | string | 角色名（mediaType=ROLE 时有效） |
+| `sortOrder` | int | 排序 |
+
+### 计费规则
+
+- 基础费用 = `duration（秒）× 单秒单价（分辨率）`
+- 创建时**预扣**，任务完成后按上游实际消耗**结算**（多退少补）
+
+### 请求示例
 
 ```json
 {
-  // 广告基础信息（必填）
-  "product_img_url": "https://oss.example.com/product.jpg",
-  "brand": "品牌名称",
-  "product_name": "产品名称",
-  "tagline": "宣传语（可选）",
-  "selling_points": "产品卖点（可选）",
-  
-  // 创意方向（必填）
-  "prompt": "用户创意描述，核心输入",
-  "vtype": "产品展示",
-  "vtype_add": "搞笑（可选）",
-  "language": "中文（可选）",
-  "platform": "抖音（可选）",
-  "region": "国内电商（可选）",
-  
-  // 角色与参考（可选）
-  "roles": "[{\"name\":\"角色1\",\"url\":\"...\"}]",
-  "select_audios": "[{\"url\":\"...\",\"remark\":\"...\"}]",
-  
-  // 输出配置（必填）
+  "brand": "示例品牌",
+  "product_name": "示例产品",
+  "prompt": "展示产品在现代厨房中的使用场景",
+  "vtype": "narrative",
   "duration": 30,
-  "resolution": "2K",
-  "video_model": "seedance",
-  "whstr": "16:9"
+  "resolution": "1080p",
+  "whstr": "16:9",
+  "video_model": "alpha-pro",
+  "mediaList": [
+    {
+      "mediaType": "PRODUCT",
+      "mediaUrl": "https://example.com/product.jpg",
+      "sortOrder": 1
+    }
+  ]
 }
 ```
 
-**响应示例**:
+### 响应
 
 ```json
 {
   "code": 200,
   "msg": "video project created successfully",
   "data": {
-    "project_id": 123456,
-    "project_name": "username_20260701_1719820800",
+    "project_id": 15,
+    "project_name": "user_20260705_1751716800",
     "status": "CREATED",
-    "created_at": 1719820800
+    "created_at": 1751716800
   }
 }
 ```
 
-### 2. 获取视频项目详情
+---
 
-**接口**: `GET /api/video-generation/projects/:id`
+## 2. 查询视频项目
 
-**认证**: 需要用户 Token
+**GET** `/api/video-generation/projects/:id`
 
-**响应示例**:
+### 状态枚举
+
+| status | 说明 |
+|---|---|
+| `CREATED` | 已创建，等待处理 |
+| `RUNNING` | 生成中 |
+| `VIDEO_PROCESSING` | 视频后处理中 |
+| `SUCCESS` | 完成 ✓ |
+| `FAILED` | 失败 |
+| `VIDEO_PREPARING` | 拼接失败，需重试 |
+
+**轮询建议**：进行中状态每 10~30 秒查询一次，终态（`SUCCESS` / `FAILED`）停止轮询。
+
+### 响应
 
 ```json
 {
   "code": 200,
-  "msg": "success",
   "data": {
-    "project_id": 123456,
-    "project_name": "username_20260701_1719820800",
-    "status": "RUNNING",
-    "error_msg": "",
-    "progress": "",
-    "product_img_url": "https://...",
-    "brand": "品牌名称",
-    "product_name": "产品名称",
+    "project_id": 15,
+    "project_name": "user_20260705_1751716800",
+    "status": "SUCCESS",
+    "progress": "100%",
+    "first_video_url": "https://...",
     "main_image_url": "https://...",
-    "main_image_asset_id": "asset_xxx",
-    "generated_result": "{...}",
-    "first_video_url": "",
-    "created_at": 1719820800,
-    "updated_at": 1719820900
+    "pre_deducted_quota": 13500000,
+    "real_quota": 13500000,
+    "settled": 1,
+    "upstream_money_net": 27.00,
+    "created_at": 1751716800,
+    "updated_at": 1751720000
   }
 }
 ```
 
-### 3. 获取用户的视频项目列表
+---
 
-**接口**: `GET /api/video-generation/projects`
+## 3. 查询项目列表
 
-**认证**: 需要用户 Token
+**GET** `/api/video-generation/projects?page=1&page_size=20`
 
-**请求参数**:
-
-- `page`: 页码（默认 1）
-- `page_size`: 每页数量（默认 10）
-
-**响应示例**:
+### 响应
 
 ```json
 {
   "code": 200,
-  "msg": "success",
   "data": {
     "items": [
       {
-        "project_id": 123456,
-        "project_name": "username_20260701_1719820800",
-        "status": "ONE_CLICK_GENERATED",
-        "brand": "品牌名称",
-        "product_name": "产品名称",
-        "created_at": 1719820800,
-        "updated_at": 1719820900
+        "project_id": 15,
+        "project_name": "user_20260705_1751716800",
+        "status": "SUCCESS",
+        "brand": "示例品牌",
+        "product_name": "示例产品",
+        "created_at": 1751716800,
+        "updated_at": 1751720000
       }
     ],
-    "total": 1,
+    "total": 100,
     "page": 1,
-    "page_size": 10
+    "page_size": 20
   }
 }
 ```
 
-### 4. 删除视频项目
+---
 
-**接口**: `DELETE /api/video-generation/projects/:id`
+## 4. 删除视频项目
 
-**认证**: 需要用户 Token
+**DELETE** `/api/video-generation/projects/:id`
 
-**响应示例**:
-
-```json
-{
-  "code": 200,
-  "msg": "video project deleted successfully",
-  "data": null
-}
-```
-
-### 5. 管理员获取所有项目列表
-
-**接口**: `GET /api/video-generation/admin/projects`
-
-**认证**: 需要管理员 Token
-
-**请求参数**:
-
-- `page`: 页码
-- `page_size`: 每页数量
-- `status`: 状态筛选（可选）
-
-**响应格式**: 同接口 3
-
-### 6. 管理员更新项目状态
-
-**接口**: `PUT /api/video-generation/admin/projects/:id/status`
-
-**认证**: 需要管理员 Token
-
-**请求参数**:
+### 响应
 
 ```json
-{
-  "status": "VIDEO_PROCESSING",
-  "error_msg": "",
-  "main_image_url": "https://...",
-  "main_image_asset_id": "asset_xxx",
-  "generated_result": "{...}"
-}
+{ "code": 200, "msg": "project deleted successfully" }
 ```
 
-### 7. 管理员删除项目
+---
 
-**接口**: `DELETE /api/video-generation/admin/projects/:id`
-
-**认证**: 需要管理员 Token
-
-### 8. Coze Webhook 回调
-
-**接口**: `POST /api/video-generation/webhook/coze`
-
-**认证**: 无（需实现签名验证）
-
-**请求参数**:
+## 错误响应格式
 
 ```json
-{
-  "project_id": 123456,
-  "status": "VIDEO_PROCESSING",
-  "error_msg": "",
-  "main_image_url": "https://...",
-  "main_image_asset_id": "asset_xxx",
-  "generated_result": "{...}"
-}
+{ "code": 400, "msg": "错误说明", "data": null }
 ```
 
-## 项目状态说明
-
-| 状态 | 说明 |
-|------|------|
-| `CREATED` | 已创建，等待 Coze 处理 |
-| `RUNNING` | 上游工作流执行中 |
-| `VIDEO_PROCESSING` | 视频已生成，等待拼接 |
-| `VIDEO_CONCAT` | 拼接完成，等待 OSS 上传 |
-| `ONE_CLICK_GENERATED` | OSS 上传完成，全流程结束 |
-| `VIDEO_PREPARING` | 拼接失败，需手动重试 |
-| `FAILED` | 生成失败 |
-
-## 待实现功能
-
-1. **Coze 工作流调用**: 在 `CreateVideoProject` 中调用 Coze API 触发视频生成
-2. **Webhook 签名验证**: 在 `CozeWebhook` 中实现签名验证机制
-3. **视频 URL 关联**: 查询和返回生成的视频 URL（需要额外的 `video_media` 表）
-4. **进度查询**: 实现实时进度更新和查询
-
-## 数据库表结构
-
-```sql
-CREATE TABLE `video_projects` (
-  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
-  `created_at` DATETIME,
-  `updated_at` DATETIME,
-  `project_name` VARCHAR(255),
-  `user_id` INT,
-  `product_img_url` TEXT,
-  `brand` VARCHAR(50),
-  `product_name` VARCHAR(50),
-  `tagline` VARCHAR(255),
-  `selling_points` TEXT,
-  `prompt` TEXT,
-  `vtype` VARCHAR(50),
-  `vtype_add` VARCHAR(50),
-  `language` VARCHAR(20),
-  `platform` VARCHAR(50),
-  `region` VARCHAR(50),
-  `roles` TEXT,
-  `select_audios` TEXT,
-  `duration` INT,
-  `resolution` VARCHAR(20),
-  `video_model` VARCHAR(50),
-  `whstr` VARCHAR(20),
-  `main_image_url` TEXT,
-  `main_image_asset_id` VARCHAR(255),
-  `generated_result` TEXT,
-  `status` VARCHAR(50),
-  `error_msg` TEXT,
-  `deleted` TINYINT DEFAULT 0,
-  INDEX `idx_user_id` (`user_id`),
-  INDEX `idx_status` (`status`),
-  INDEX `idx_deleted` (`deleted`),
-  INDEX `idx_created_at` (`created_at`)
-);
-```
-
-## 使用示例
-
-### cURL 示例
-
-```bash
-# 创建视频项目
-curl -X POST https://api.example.com/api/video-generation/create \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "product_img_url": "https://oss.example.com/product.jpg",
-    "brand": "示例品牌",
-    "product_name": "示例产品",
-    "prompt": "创建一个30秒的产品展示视频",
-    "vtype": "产品展示",
-    "duration": 30,
-    "resolution": "2K",
-    "whstr": "16:9"
-  }'
-
-# 查询项目状态
-curl -X GET https://api.example.com/api/video-generation/projects/123456 \
-  -H "Authorization: Bearer YOUR_TOKEN"
-
-# 获取项目列表
-curl -X GET "https://api.example.com/api/video-generation/projects?page=1&page_size=10" \
-  -H "Authorization: Bearer YOUR_TOKEN"
-```
-
-## 集成说明
-
-1. **认证方式**: 使用系统现有的 Token 认证机制
-2. **权限控制**: 
-   - 普通用户只能访问自己的项目
-   - 管理员可以访问所有项目
-3. **错误处理**: 所有错误返回统一的 `{code, msg, data}` 格式
-4. **数据库迁移**: 系统启动时自动创建 `video_projects` 表
+| code | 说明 |
+|---|---|
+| 400 | 参数错误 |
+| 401 | 鉴权失败 |
+| 404 | 项目不存在 |
+| 429 | 超出请求频率限制 |
+| 500 | 服务器内部错误 |

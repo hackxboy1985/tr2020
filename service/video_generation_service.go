@@ -316,10 +316,14 @@ func ListProjects(ctx context.Context, userId int, page, pageSize int, isAdmin b
 
 	items := make([]dto.VideoProjectItemResponse, len(projects))
 	for i, p := range projects {
+		status := p.Status
+		if status == model.VideoProjectStatusOneClickGenerated {
+			status = "SUCCESS"
+		}
 		items[i] = dto.VideoProjectItemResponse{
 			ProjectId:   p.Id,
 			ProjectName: p.ProjectName,
-			Status:      p.Status,
+			Status:      status,
 			Brand:       p.Brand,
 			ProductName: p.ProductName,
 			CreatedAt:   p.CreatedAt.Unix(),
