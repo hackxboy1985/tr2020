@@ -66,6 +66,12 @@ func (a *PlatformAdapter) CreateProject(ctx context.Context, req *dto.CreateVide
 		}
 	}
 
+	// 应用模型映射
+	videoModel := req.VideoModel
+	if mapped, _ := ApplyModelMapping(a.ch.ModelMapping, req.VideoModel); mapped != "" {
+		videoModel = mapped
+	}
+
 	// 构建 camelCase 请求体以兼容 OpenAPI 服务端（Spring Boot Jackson 默认 camelCase）
 	platformReq := map[string]interface{}{
 		"productName":   req.ProductName,
@@ -80,7 +86,7 @@ func (a *PlatformAdapter) CreateProject(ctx context.Context, req *dto.CreateVide
 		"region":        req.Region,
 		"duration":      req.Duration,
 		"resolution":    req.Resolution,
-		"videoModel":    req.VideoModel,
+		"videoModel":    videoModel,
 		"whstr":         req.Whstr,
 		"mediaList":     mediaList,
 	}
@@ -91,10 +97,10 @@ func (a *PlatformAdapter) CreateProject(ctx context.Context, req *dto.CreateVide
 	}
 
 	requestURL := a.ch.GetCreateURL()
-	common.SysLog("video adapter calling upstream: POST " + requestURL)
+	common.SysLog(fmt.Sprintf("video adapter calling upstream: POST %s body=%s", requestURL, string(body)))
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", requestURL, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return &dto.AdapterCreateResponse{RawRequest: body}, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	httpReq.Header.Set("Authorization", "Bearer "+a.ch.ApiKey)
@@ -102,17 +108,17 @@ func (a *PlatformAdapter) CreateProject(ctx context.Context, req *dto.CreateVide
 
 	resp, err := a.client.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return &dto.AdapterCreateResponse{RawRequest: body}, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return &dto.AdapterCreateResponse{RawRequest: body}, fmt.Errorf("failed to read response: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("platform api error: status=%d, body=%s", resp.StatusCode, string(respBody))
+		return &dto.AdapterCreateResponse{RawRequest: body, RawResponse: respBody}, fmt.Errorf("platform api error: status=%d, body=%s", resp.StatusCode, string(respBody))
 	}
 
 	var platformResp struct {
@@ -128,11 +134,11 @@ func (a *PlatformAdapter) CreateProject(ctx context.Context, req *dto.CreateVide
 	}
 
 	if err := common.Unmarshal(respBody, &platformResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+		return &dto.AdapterCreateResponse{RawRequest: body, RawResponse: respBody}, fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	if platformResp.Code != 200 {
-		return nil, fmt.Errorf("platform api error: code=%d, msg=%s", platformResp.Code, platformResp.Msg)
+		return &dto.AdapterCreateResponse{RawRequest: body, RawResponse: respBody}, fmt.Errorf("platform api error: code=%d, msg=%s", platformResp.Code, platformResp.Msg)
 	}
 
 	// taskId 优先（OpenAPI），fallback 到 project_id（旧格式）

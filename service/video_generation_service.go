@@ -121,7 +121,11 @@ func CreateProject(ctx context.Context, userId int, isAdmin bool, req *dto.Creat
 	resp, err := adapter.CreateProject(ctx, req)
 	if err != nil {
 		_ = model.UpdateVideoProjectStatus(project.Id, model.VideoProjectStatusFailed, err.Error())
-		return nil, nil, nil, false, fmt.Errorf("upstream channel error: %w", err)
+		var rawReqOnErr []byte
+		if resp != nil {
+			rawReqOnErr = resp.RawRequest
+		}
+		return nil, rawReqOnErr, nil, false, fmt.Errorf("upstream channel error: %w", err)
 	}
 
 	// 更新 remote_project_id 和状态

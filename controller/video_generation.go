@@ -128,6 +128,18 @@ func CreateVideoProject(c *gin.Context) {
 			TokenId:   c.GetInt("token_id"),
 			Content:   fmt.Sprintf("视频创建失败: %s", err.Error()),
 			Quota:     0,
+			Other: map[string]interface{}{
+				"product_name":   req.ProductName,
+				"brand":          req.Brand,
+				"prompt":         req.Prompt,
+				"vtype":          req.Vtype,
+				"video_model":    req.VideoModel,
+				"resolution":     req.Resolution,
+				"duration":       req.Duration,
+				"whstr":          req.Whstr,
+				"request_body":   string(rawReq),
+				"response_body":  string(rawResp),
+			},
 		})
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "视频生成服务暂时不可用，请稍后重试", "data": nil})
 		return
