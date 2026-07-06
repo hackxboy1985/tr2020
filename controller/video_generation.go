@@ -40,8 +40,11 @@ func isAdminUser(c *gin.Context) bool {
 
 // toExternalStatus 将内部状态转换为对外状态
 func toExternalStatus(status string) string {
-	if status == model.VideoProjectStatusOneClickGenerated {
+	switch status {
+	case model.VideoProjectStatusOneClickGenerated:
 		return "SUCCESS"
+	case "COZE_RUNNING":
+		return "RUNNING"
 	}
 	return status
 }
@@ -206,7 +209,7 @@ func CreateVideoProject(c *gin.Context) {
 		"data": dto.VideoProjectResponse{
 			ProjectId:   project.Id,
 			ProjectName: project.ProjectName,
-			Status:      project.Status,
+			Status:      toExternalStatus(project.Status),
 			CreatedAt:   project.CreatedAt.Unix(),
 		},
 	})
