@@ -8,7 +8,7 @@ set -e
 
 # ---------- 默认配置 ----------
 DEFAULT_BASE_URL="http://book2:3000"
-DEFAULT_API_KEY="sk-dHMnUa1chWQMaKyvJZUdfK5oxgf2bFYYWEQDYWgnzID2LoOa"
+DEFAULT_API_KEY="sk-ttNgtYmXn03HgbOPAwaqV5FFaPgOvMwWo9ijlRCc3C1JYiNq"
 
 # 请求参数默认值
 PRODUCT_NAME="仿生物形象智能音箱Pro"
