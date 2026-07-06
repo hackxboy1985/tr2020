@@ -117,9 +117,19 @@ func CreateVideoProject(c *gin.Context) {
 	project, rawReq, rawResp, _, err := service.CreateProject(c.Request.Context(), userId, isAdmin, &req)
 	if err != nil {
 		// 创建失败退还预扣积分
-		if refundErr := model.DecreaseUserQuota(userId, -preDeductQuota, false); refundErr != nil {
-			common.SysLog(fmt.Sprintf("video pre-deduct refund failed: user=%d, amount=%d: %v", userId, preDeductQuota, refundErr))
+		if preDeductQuota > 0 {
+			if refundErr := model.IncreaseUserQuota(userId, preDeductQuota, false); refundErr != nil {
+				common.SysLog(fmt.Sprintf("video pre-deduct refund failed: user=%d, amount=%d: %v", userId, preDeductQuota, refundErr))
+			}
 		}
+		model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
+			ModelName: req.VideoModel,
+			TokenName: c.GetString("token_name"),
+			TokenId:   c.GetInt("token_id"),
+			Content:   fmt.Sprintf("视频创建失败: %s", err.Error()),
+			Quota:     0,
+		})
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "上游创建失败: " + err.Error(), "data": nil})
 		return
 	}
 
