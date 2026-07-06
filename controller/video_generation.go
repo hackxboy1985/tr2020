@@ -45,6 +45,10 @@ func toExternalStatus(status string) string {
 		return "SUCCESS"
 	case "COZE_RUNNING":
 		return "RUNNING"
+	case model.VideoProjectStatusVideoConcat:
+		return model.VideoProjectStatusVideoProcessing
+	case model.VideoProjectStatusVideoPreparing:
+		return model.VideoProjectStatusVideoProcessing
 	}
 	return status
 }
@@ -276,9 +280,8 @@ func GetVideoProject(c *gin.Context) {
 			ProductImgUrl:    detail.ProductImgUrl,
 			Brand:            detail.Brand,
 			ProductName:      detail.ProductName,
-			MainImageUrl:     detail.MainImageUrl,
-			MainImageAssetId: detail.MainImageAssetId,
-			GeneratedResult:  detail.GeneratedResult,
+			MainImageUrl:    detail.MainImageUrl,
+			GeneratedResult: detail.GeneratedResult,
 			FirstVideoUrl:    detail.FirstVideoUrl,
 			CreatedAt:        detail.CreatedAt.Unix(),
 			UpdatedAt:        detail.UpdatedAt.Unix(),

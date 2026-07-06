@@ -71,7 +71,16 @@ Authorization: Bearer <your_api_key>
 }
 ```
 
-### 响应
+### 响应字段
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `project_id` | int | 项目 ID |
+| `project_name` | string | 项目名称 |
+| `status` | string | 状态，初始为 `CREATED` |
+| `created_at` | int | 创建时间（Unix 时间戳） |
+
+### 响应示例
 
 ```json
 {
@@ -98,75 +107,50 @@ Authorization: Bearer <your_api_key>
 |---|---|
 | `CREATED` | 已创建，等待处理 |
 | `RUNNING` | 生成中 |
-| `VIDEO_PROCESSING` | 视频后处理中 |
+| `VIDEO_PROCESSING` | 视频处理中 |
 | `SUCCESS` | 完成 ✓ |
 | `FAILED` | 失败 |
-| `VIDEO_PREPARING` | 拼接失败，需重试 |
 
 **轮询建议**：进行中状态每 10~30 秒查询一次，终态（`SUCCESS` / `FAILED`）停止轮询。
 
-### 响应
+### 响应字段
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `project_id` | int | 项目 ID |
+| `project_name` | string | 项目名称 |
+| `status` | string | 状态，见上方枚举 |
+| `progress` | string | 进度（生成中时有值，如 `50%`） |
+| `error_msg` | string | 失败原因（失败时有值） |
+| `product_img_url` | string | 产品图 URL |
+| `brand` | string | 品牌名 |
+| `product_name` | string | 产品名 |
+| `main_image_url` | string | 主图 URL（生成后有值） |
+| `generated_result` | string | 生成结果（生成后有值） |
+| `first_video_url` | string | 视频地址（完成后有值） |
+| `created_at` | int | 创建时间（Unix 时间戳） |
+| `updated_at` | int | 更新时间（Unix 时间戳） |
+
+### 响应示例
 
 ```json
 {
   "code": 200,
+  "msg": "success",
   "data": {
     "project_id": 15,
     "project_name": "user_20260705_1751716800",
     "status": "SUCCESS",
     "progress": "100%",
-    "first_video_url": "https://...",
+    "product_img_url": "https://example.com/product.jpg",
+    "brand": "示例品牌",
+    "product_name": "示例产品",
     "main_image_url": "https://...",
-    "pre_deducted_quota": 13500000,
-    "real_quota": 13500000,
-    "settled": 1,
-    "upstream_money_net": 27.00,
+    "first_video_url": "https://...",
     "created_at": 1751716800,
     "updated_at": 1751720000
   }
 }
-```
-
----
-
-## 3. 查询项目列表
-
-**GET** `/api/video-generation/projects?page=1&page_size=20`
-
-### 响应
-
-```json
-{
-  "code": 200,
-  "data": {
-    "items": [
-      {
-        "project_id": 15,
-        "project_name": "user_20260705_1751716800",
-        "status": "SUCCESS",
-        "brand": "示例品牌",
-        "product_name": "示例产品",
-        "created_at": 1751716800,
-        "updated_at": 1751720000
-      }
-    ],
-    "total": 100,
-    "page": 1,
-    "page_size": 20
-  }
-}
-```
-
----
-
-## 4. 删除视频项目
-
-**DELETE** `/api/video-generation/projects/:id`
-
-### 响应
-
-```json
-{ "code": 200, "msg": "project deleted successfully" }
 ```
 
 ---
