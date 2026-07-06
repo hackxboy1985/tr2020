@@ -103,7 +103,10 @@ function buildDetailSegments(
   t: (key: string, opts?: Record<string, unknown>) => string
 ): DetailSegment[] {
   if (log.type === 6) {
-    return [{ text: t('Async task refund') }]
+    const taskId = other?.task_id
+    return taskId
+      ? [{ text: t('Async task refund') }, { text: `id=${taskId}`, muted: true }]
+      : [{ text: t('Async task refund') }]
   }
 
   if (log.type !== 2) return []

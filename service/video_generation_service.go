@@ -221,6 +221,18 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 	if statusResp.ErrorMsg != "" {
 		project.ErrorMsg = statusResp.ErrorMsg
 	}
+	if statusResp.MainImageUrl != "" {
+		project.MainImageUrl = statusResp.MainImageUrl
+	}
+	if statusResp.MainImageAssetId != "" {
+		project.MainImageAssetId = statusResp.MainImageAssetId
+	}
+	if statusResp.GeneratedResult != "" {
+		project.GeneratedResult = statusResp.GeneratedResult
+	}
+	if statusResp.FirstVideoUrl != "" {
+		project.FirstVideoUrl = statusResp.FirstVideoUrl
+	}
 	project.UpstreamCreditAmount = statusResp.CreditAmount
 	project.UpstreamCreditRefund = statusResp.CreditRefund
 	project.UpstreamCreditNet = statusResp.CreditNet
