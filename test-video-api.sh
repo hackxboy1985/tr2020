@@ -49,9 +49,8 @@ CREATE_RESPONSE=$(curl -s -X POST "$API_BASE_URL/api/video-generation/create" \
     "prompt": "创建一个30秒的产品展示视频，展示产品的核心功能",
     "vtype": "产品展示",
     "duration": 30,
-    "resolution": "2K",
-    "whstr": "16:9",
-    "channel_type": "platform"
+    "resolution": "720p",
+    "whstr": "16:9"
   }')
 
 echo "$CREATE_RESPONSE" | python3 -m json.tool 2>/dev/null || echo "$CREATE_RESPONSE"

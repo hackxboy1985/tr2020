@@ -24,7 +24,7 @@ VTYPE_ADD="温情"
 PLATFORM="抖音"
 REGION="国内电商"
 LANGUAGE="中文简体"
-VIDEO_MODEL="seedance2.0fast"
+VIDEO_MODEL="alpha-flash"
 MEDIA_URL="https://static.horse-world.mints-id.com//general/1/image/2026-06-17/ecom/1_1781692735099.png"
 
 # 运行时变量
@@ -44,7 +44,7 @@ check_deps() {
   if command -v jq &>/dev/null; then HAS_JQ=true; else HAS_JQ=false; fi
 }
 
-fmt() { if $HAS_JQ; then jq '.' 2>/dev/null || cat; else cat; fi; }
+fmt() { if $HAS_JQ; then jq '.' 2>/dev/null || cat; else cat; fi; return 0; }
 
 MODE="${1:-run}"
 
@@ -104,20 +104,20 @@ JSON
 # ---------- API 调用 ----------
 call_api() {
   local method="$1" path="$2" data="$3"
-  local resp http_code
 
+  local tmpfile
+  tmpfile=$(mktemp)
   if [ -n "$data" ]; then
-    resp=$(curl -s -w "\n%{http_code}" -X "$method" "${BASE_URL}${path}" \
+    HTTP_CODE=$(curl -s -o "$tmpfile" -w "%{http_code}" -X "$method" "${BASE_URL}${path}" \
       -H "Authorization: Bearer ${API_KEY}" \
       -H 'Content-Type: application/json' \
       -d "$data")
   else
-    resp=$(curl -s -w "\n%{http_code}" -X "$method" "${BASE_URL}${path}" \
+    HTTP_CODE=$(curl -s -o "$tmpfile" -w "%{http_code}" -X "$method" "${BASE_URL}${path}" \
       -H "Authorization: Bearer ${API_KEY}")
   fi
-
-  HTTP_CODE=$(echo "$resp" | tail -1)
-  BODY=$(echo "$resp" | sed '$d')
+  BODY=$(cat "$tmpfile")
+  rm -f "$tmpfile"
   echo "$BODY" | fmt
   echo ""
   log_info "HTTP ${HTTP_CODE}"
