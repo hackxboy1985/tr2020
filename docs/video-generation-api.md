@@ -1,5 +1,7 @@
 # 视频生成 API 接口文档
 
+**url**：`http://open.mints-id.com`
+
 **鉴权**：所有接口需在 Header 中携带 API Key：
 ```
 Authorization: Bearer <your_api_key>
@@ -23,7 +25,7 @@ Authorization: Bearer <your_api_key>
 | `prompt` | string | ✓ | 创意描述 |
 | `vtype` | string | ✓ | 视频类型 |
 | `duration` | int | ✓ | 时长（秒），可选值：`15` `30` `45` `60` |
-| `resolution` | string | ✓ | 分辨率：`720p` `1080p` `2k` `4k` |
+| `resolution` | string | ✓ | 分辨率：`720p` `1080p` `4k` |
 | `whstr` | string | ✓ | 宽高比，如 `16:9` `9:16` |
 | `video_model` | string | | 模型：`alpha-pro`（高质量）/ `alpha-flash`（快速） |
 | `mediaList` | array | | 媒体列表，见下方说明 |
