@@ -177,7 +177,7 @@ func CreateVideoProject(c *gin.Context) {
 		ModelName: req.VideoModel,
 		TokenName: c.GetString("token_name"),
 		TokenId:   c.GetInt("token_id"),
-		Content:   fmt.Sprintf("视频生成成功 [%s/%s/%s] id=%d", req.ProductName, req.Brand, req.Vtype, project.Id),
+		Content:   fmt.Sprintf("广告任务发起成功 [%s/%s/%s] id=%d", req.ProductName, req.Brand, req.Vtype, project.Id),
 		Quota:     preDeductQuota,
 		Other: map[string]interface{}{
 			"user_param": map[string]interface{}{
