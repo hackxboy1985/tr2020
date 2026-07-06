@@ -129,7 +129,7 @@ func CreateVideoProject(c *gin.Context) {
 			Content:   fmt.Sprintf("视频创建失败: %s", err.Error()),
 			Quota:     0,
 		})
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "上游创建失败: " + err.Error(), "data": nil})
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "视频生成服务暂时不可用，请稍后重试", "data": nil})
 		return
 	}
 
