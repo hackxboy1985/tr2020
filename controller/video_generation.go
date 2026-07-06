@@ -129,7 +129,7 @@ func CreateVideoProject(c *gin.Context) {
 			ModelName: req.VideoModel,
 			TokenName: c.GetString("token_name"),
 			TokenId:   c.GetInt("token_id"),
-			Content:   fmt.Sprintf("视频创建失败: %s", err.Error()),
+			Content:   fmt.Sprintf("广告任务创建失败: %s", err.Error()),
 			Quota:     0,
 			Other: map[string]interface{}{
 				"user_param": map[string]interface{}{
@@ -232,9 +232,9 @@ func GetVideoProject(c *gin.Context) {
 		return
 	}
 
-	content := fmt.Sprintf("视频查询成功: id=%d", detail.Id)
+	content := fmt.Sprintf("广告任务查询成功: id=%d", detail.Id)
 	if upstreamErr != nil {
-		content = fmt.Sprintf("视频查询上游失败: id=%d, err=%s", detail.Id, upstreamErr.Error())
+		content = fmt.Sprintf("广告任务查询上游失败: id=%d, err=%s", detail.Id, upstreamErr.Error())
 	}
 	model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
 		ModelName: detail.VideoModel,
@@ -328,7 +328,7 @@ func DeleteVideoProject(c *gin.Context) {
 		ModelName: "",
 		TokenName: c.GetString("token_name"),
 		TokenId:   c.GetInt("token_id"),
-		Content:   "视频删除成功: id=" + c.Param("id"),
+		Content:   "广告任务删除成功: id=" + c.Param("id"),
 		Quota:     0,
 	})
 
