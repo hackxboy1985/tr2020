@@ -1040,8 +1040,8 @@ export function DetailsDialog(props: DetailsDialogProps) {
               </div>
             )}
             
-            {/* Raw Other data (video generation params, etc.) */}
-            {props.log.other && (
+            {/* Raw Other data - admin only */}
+            {props.isAdmin && props.log.other && (
               <DetailSection label="Raw Data">
                 <div
                   className='max-h-[300px] overflow-auto cursor-pointer group'
