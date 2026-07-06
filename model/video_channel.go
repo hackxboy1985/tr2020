@@ -61,7 +61,11 @@ func (ch *VideoChannel) GetCreateURL() string {
 			path = "/api/video/create"
 		}
 	}
-	return ch.BaseURL + path
+	base := ch.BaseURL
+	if base != "" && !strings.HasPrefix(base, "http://") && !strings.HasPrefix(base, "https://") {
+		base = "http://" + base
+	}
+	return base + path
 }
 
 // GetStatusQueryURL 返回完整的状态查询 URL（替换 {id} 占位符）
@@ -74,7 +78,11 @@ func (ch *VideoChannel) GetStatusQueryURL(remoteId string) string {
 			path = "/api/video/projects/{id}"
 		}
 	}
-	return ch.BaseURL + strings.ReplaceAll(path, "{id}", remoteId)
+	base := ch.BaseURL
+	if base != "" && !strings.HasPrefix(base, "http://") && !strings.HasPrefix(base, "https://") {
+		base = "http://" + base
+	}
+	return base + strings.ReplaceAll(path, "{id}", remoteId)
 }
 
 // GetPricePerSecond 获取指定模型的每秒价格（元/秒），没有模型特定价格时返回默认值
