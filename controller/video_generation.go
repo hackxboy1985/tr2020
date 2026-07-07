@@ -268,23 +268,38 @@ func GetVideoProject(c *gin.Context) {
 		},
 	})
 
+	var billing *dto.VideoProjectBilling
+	if detail.Settled == 1 && detail.UpstreamMoneyAmount > 0 {
+		refundRatio := 0.0
+		if detail.UpstreamMoneyAmount > 0 {
+			refundRatio = detail.UpstreamMoneyRefund / detail.UpstreamMoneyAmount
+		}
+		billing = &dto.VideoProjectBilling{
+			UpstreamAmount: fmt.Sprintf("%.2f", detail.UpstreamMoneyAmount),
+			UpstreamRefund: fmt.Sprintf("%.2f", detail.UpstreamMoneyRefund),
+			UpstreamNet:    fmt.Sprintf("%.2f", detail.UpstreamMoneyNet),
+			RefundRatio:    fmt.Sprintf("%.4f", refundRatio),
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"code": 200,
 		"msg":  "success",
 		"data": dto.VideoProjectDetailResponse{
-			ProjectId:        detail.Id,
-			ProjectName:      detail.ProjectName,
-			Status:           toExternalStatus(detail.Status),
-			ErrorMsg:         detail.ErrorMsg,
-			Progress:         detail.Progress,
-			ProductImgUrl:    detail.ProductImgUrl,
-			Brand:            detail.Brand,
-			ProductName:      detail.ProductName,
+			ProjectId:       detail.Id,
+			ProjectName:     detail.ProjectName,
+			Status:          toExternalStatus(detail.Status),
+			ErrorMsg:        detail.ErrorMsg,
+			Progress:        detail.Progress,
+			ProductImgUrl:   detail.ProductImgUrl,
+			Brand:           detail.Brand,
+			ProductName:     detail.ProductName,
 			MainImageUrl:    detail.MainImageUrl,
 			GeneratedResult: detail.GeneratedResult,
-			FirstVideoUrl:    detail.FirstVideoUrl,
-			CreatedAt:        detail.CreatedAt.Unix(),
-			UpdatedAt:        detail.UpdatedAt.Unix(),
+			FirstVideoUrl:   detail.FirstVideoUrl,
+			CreatedAt:       detail.CreatedAt.Unix(),
+			UpdatedAt:       detail.UpdatedAt.Unix(),
+			Billing:         billing,
 		},
 	})
 }

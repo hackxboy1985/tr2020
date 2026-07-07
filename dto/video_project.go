@@ -56,21 +56,30 @@ type VideoProjectResponse struct {
 	CreatedAt   int64  `json:"created_at"`
 }
 
+// VideoProjectBilling 视频项目计费信息（仅成功结算后有值）
+type VideoProjectBilling struct {
+	UpstreamAmount string `json:"upstream_amount"` // 上游预扣金额（元）
+	UpstreamRefund string `json:"upstream_refund"` // 上游退款金额（元）
+	UpstreamNet    string `json:"upstream_net"`    // 上游实际净扣（元）= amount - refund
+	RefundRatio    string `json:"refund_ratio"`    // 退费比例 = refund / amount，用于下游按比例计费
+}
+
 // VideoProjectDetailResponse 视频项目详情响应
 type VideoProjectDetailResponse struct {
-	ProjectId        int64  `json:"project_id"`
-	ProjectName      string `json:"project_name"`
-	Status           string `json:"status"`
-	ErrorMsg         string `json:"error_msg,omitempty"`
-	Progress         string `json:"progress,omitempty"`
-	ProductImgUrl    string `json:"product_img_url"`
-	Brand            string `json:"brand"`
-	ProductName      string `json:"product_name"`
-	MainImageUrl    string `json:"main_image_url,omitempty"`
-	GeneratedResult string `json:"generated_result,omitempty"`
-	FirstVideoUrl    string `json:"first_video_url,omitempty"`
-	CreatedAt        int64  `json:"created_at"`
-	UpdatedAt        int64  `json:"updated_at"`
+	ProjectId        int64                `json:"project_id"`
+	ProjectName      string               `json:"project_name"`
+	Status           string               `json:"status"`
+	ErrorMsg         string               `json:"error_msg,omitempty"`
+	Progress         string               `json:"progress,omitempty"`
+	ProductImgUrl    string               `json:"product_img_url"`
+	Brand            string               `json:"brand"`
+	ProductName      string               `json:"product_name"`
+	MainImageUrl     string               `json:"main_image_url,omitempty"`
+	GeneratedResult  string               `json:"generated_result,omitempty"`
+	FirstVideoUrl    string               `json:"first_video_url,omitempty"`
+	CreatedAt        int64                `json:"created_at"`
+	UpdatedAt        int64                `json:"updated_at"`
+	Billing          *VideoProjectBilling `json:"billing,omitempty"` // 计费信息，仅成功结算后有值
 }
 
 // VideoProjectListResponse 视频项目列表响应
