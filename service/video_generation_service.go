@@ -214,7 +214,10 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 		updates["upstream_money_refund"] = statusResp.MoneyRefund
 		updates["upstream_money_net"] = statusResp.MoneyNet
 	}
-	if statusResp.ActualDuration > 0 {
+	isTerminalStatus := statusResp.Status == model.VideoProjectStatusOneClickGenerated ||
+		statusResp.Status == model.VideoProjectStatusSuccess ||
+		statusResp.Status == model.VideoProjectStatusFailed
+	if isTerminalStatus && statusResp.ActualDuration > 0 {
 		updates["actual_duration"] = statusResp.ActualDuration
 	}
 
@@ -243,7 +246,7 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 	project.UpstreamMoneyAmount = statusResp.MoneyAmount
 	project.UpstreamMoneyRefund = statusResp.MoneyRefund
 	project.UpstreamMoneyNet = statusResp.MoneyNet
-	if statusResp.ActualDuration > 0 {
+	if isTerminalStatus && statusResp.ActualDuration > 0 {
 		project.ActualDuration = statusResp.ActualDuration
 	}
 
