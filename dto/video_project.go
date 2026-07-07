@@ -58,11 +58,8 @@ type VideoProjectResponse struct {
 
 // VideoProjectBilling 视频项目计费信息（仅成功结算后有值）
 type VideoProjectBilling struct {
-	UpstreamAmount string  `json:"upstream_amount"` // 上游预扣金额（元）
-	UpstreamRefund string  `json:"upstream_refund"` // 上游退款金额（元）
-	UpstreamNet    string  `json:"upstream_net"`    // 上游实际净扣（元）= amount - refund
-	RefundRatio    string  `json:"refund_ratio"`    // 退费比例 = refund / amount，用于下游按比例计费
-	ChargedSeconds float64 `json:"charged_seconds"` // 实际计费秒数 = 请求秒数 × (1 - refund_ratio)
+	UpstreamNet    string  `json:"upstream_net"`    // 上游实际扣费金额（元）= 预扣 - 退款
+	ChargedSeconds float64 `json:"charged_seconds"` // 实际计费秒数
 }
 
 // VideoProjectDetailResponse 视频项目详情响应

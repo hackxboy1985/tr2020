@@ -163,19 +163,13 @@ Authorization: Bearer <your_api_key>
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| `upstream_amount` | string | 上游预扣金额（元），对应请求时长 |
-| `upstream_refund` | string | 上游退款金额（元），实际生成时长 < 请求时长时有值 |
-| `upstream_net` | string | 上游实际净扣金额（元）= `upstream_amount - upstream_refund` |
-| `refund_ratio` | string | 退费比例 = `upstream_refund / upstream_amount`，保留 4 位小数 |
-| `charged_seconds` | float | 实际计费秒数。优先使用上游返回的真实秒数；若上游未返回则由 `duration × (1 - refund_ratio)` 估算 |
+| `upstream_net` | string | 上游实际扣费金额（元）= 预扣 - 退款 |
+| `charged_seconds` | float | 实际计费秒数，可直接用于下游计费 |
 
 **下游计费公式：**
 ```
-实际应收 = 用户报价 × (1 - refund_ratio)
-       或 = 用户报价 / 请求秒数 × charged_seconds
+实际应收 = 用户报价 / 请求秒数 × charged_seconds
 ```
-
-> 推荐直接使用 `charged_seconds` 作为计费基准，无需自行计算。
 
 ### 响应示例
 
@@ -192,10 +186,7 @@ Authorization: Bearer <your_api_key>
     "product_name": "仿生物形象智能音箱Pro",
     "first_video_url": "https://static.horse-world.mints-id.com/good/project/4/video-merged/178334159029.mp4",
     "billing": {
-      "upstream_amount": "0.060",
-      "upstream_refund": "0.030",
       "upstream_net": "0.030",
-      "refund_ratio": "0.5000",
       "charged_seconds": 15
     },
     "created_at": 1783341251,
