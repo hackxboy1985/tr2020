@@ -279,6 +279,7 @@ func GetVideoProject(c *gin.Context) {
 			UpstreamRefund: fmt.Sprintf("%.2f", detail.UpstreamMoneyRefund),
 			UpstreamNet:    fmt.Sprintf("%.2f", detail.UpstreamMoneyNet),
 			RefundRatio:    fmt.Sprintf("%.4f", refundRatio),
+			ChargedSeconds: float64(detail.Duration) * (1 - refundRatio),
 		}
 	}
 
