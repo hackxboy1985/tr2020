@@ -7,7 +7,7 @@
 set -e
 
 # ---------- 默认配置 ----------
-DEFAULT_BASE_URL="http://book2:3000"
+DEFAULT_BASE_URL="http://open.mints-id.com"
 DEFAULT_API_KEY="sk-ttNgtYmXn03HgbOPAwaqV5FFaPgOvMwWo9ijlRCc3C1JYiNq"
 
 # 请求参数默认值
@@ -47,6 +47,7 @@ check_deps() {
 fmt() { if $HAS_JQ; then jq '.' 2>/dev/null || cat; else cat; fi; return 0; }
 
 MODE="${1:-run}"
+PROJECT_ID_ARG="${2:-}"
 
 # ---------- 交互 ----------
 prompt_base_url() {
@@ -165,6 +166,40 @@ do_list() {
   echo ""
 }
 
+# ---------- query ----------
+do_query() {
+  check_deps
+  resolve_defaults
+
+  local pid="${PROJECT_ID_ARG:-}"
+  if [ -z "$pid" ]; then
+    echo ""
+    echo -e "${CYAN}请输入 project_id:${NC}"
+    read -r pid
+  fi
+
+  if [ -z "$pid" ]; then
+    log_error "project_id 不能为空"
+    exit 1
+  fi
+
+  log_sep
+  log_info "查询视频项目 project_id=${pid}"
+  log_sep
+
+  call_api "GET" "/api/video-generation/projects/${pid}"
+
+  STATUS=$(echo "$BODY" | jq -r '.data.status // "unknown"' 2>/dev/null)
+  VIDEO_URL=$(echo "$BODY" | jq -r '.data.first_video_url // empty' 2>/dev/null)
+  ERROR_MSG=$(echo "$BODY" | jq -r '.data.error_msg // empty' 2>/dev/null)
+
+  case "$STATUS" in
+    "SUCCESS") log_ok "已完成"; [ -n "$VIDEO_URL" ] && log_ok "视频地址: ${VIDEO_URL}" ;;
+    "FAILED")  log_error "生成失败: ${ERROR_MSG}" ;;
+    *)         log_info "当前状态: ${STATUS}" ;;
+  esac
+}
+
 # ---------- run ----------
 do_run() {
   check_deps
@@ -255,6 +290,7 @@ do_run() {
 
 # ============================================================
 case "$MODE" in
-  list|--list|-l) do_list ;;
-  *)              do_run  ;;
+  list|--list|-l)   do_list  ;;
+  query|--query|-q) do_query ;;
+  *)                do_run   ;;
 esac

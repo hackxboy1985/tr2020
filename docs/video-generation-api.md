@@ -18,33 +18,32 @@ Authorization: Bearer <your_api_key>
 
 ### 请求体（JSON）
 
-| 字段 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `brand` | string | ✓ | 品牌名 |
-| `product_name` | string | ✓ | 产品名 |
-| `prompt` | string | ✓ | 创意描述 |
-| `vtype` | string | ✓ | 视频类型 |
-| `duration` | int | ✓ | 时长（秒），可选值：`15` `30` `45` `60` |
-| `resolution` | string | ✓ | 分辨率：`720p` `1080p` `4k` |
-| `whstr` | string | ✓ | 宽高比，如 `16:9` `9:16` |
-| `video_model` | string | | 模型：`alpha-pro`（高质量）/ `alpha-flash`（快速） |
-| `mediaList` | array | | 媒体列表，见下方说明 |
-| `product_img_url` | string | | 产品图 URL（兼容旧格式，优先使用 mediaList） |
-| `tagline` | string | | 广告语 |
-| `selling_points` | string | | 卖点描述 |
-| `language` | string | | 广告语言，如 `zh` `en` |
-| `platform` | string | | 投放平台 |
-| `region` | string | | 投放地区 |
-| `vtype_add` | string | | 剧情子类型 |
+| 字段 | 类型 | 必填 | 说明 | 可选值 / 示例 |
+|------|------|------|------|--------------|
+| `video_model` | string | 是 | 模型 | 模型：`alpha-pro`（高质量）/ `alpha-flash`（快速） |
+| `productName` | string | 是 | 产品名称，最多 15 字 | `"Air Max 270"` |
+| `prompt` | string | 是 | 补充提示词，最少 1 字。支持 `@产品图N` / `@人物N` / `@参考N` 引用 mediaList 里的图片 | `"夏日清新，@产品图1 突出轻盈透气"` |
+| `resolution` | string | 是 | 清晰度（flash 类模型最高 720p） | `"480p"` / `"720p"` / `"1080p"` / `"4k"`|
+| `duration` | integer | 是 | 视频时长（秒） | `15` / `30` / `45` / `60` |
+| `whstr` | string | 是 | 视频比例 | `"21:9"` / `"16:9"` / `"4:3"` / `"1:1"` / `"3:4"` / `"9:16"` |
+| `vtype` | string | 是 | 视频类型 | `"随机"` / `"产品展示"` / `"剧情短片"` / `"口播"` / `"混剪"` |
+| `vtypeAdd` | string | 是 | 剧情风格。预设值或自定义（最多 20 字） | 预设：`"随机"` / `"搞笑"` / `"温情"` / `"悬疑"` / `"炫酷"` / `"治愈"` / `"现代"` / `"古装"` / `"科幻"` / `"奇幻"` / `"武侠"` / `"都市"` / `"校园"`。自定义如 `"赛博朋克"` / `"复古胶片"` |
+| `platform` | string | 是 | 投放平台名（按 `region` 选择对应集合） | 国内：`"通用"` / `"淘宝"` / `"京东"` / `"拼多多"` / `"1688"` / `"小红书"` / `"抖音"` / `"天猫"` / `"快手"` / `"微信"`<br/>国际：`"Amazon"` / `"Temu"` / `"Shopee"` / `"TikTok"` / `"AliExpress"` / `"阿里巴巴"` / `"OZON"` / `"Lazada"` / `"DHgate"` / `"Coupang"` / `"11Street"` / `"Wayfair"` / `"Etsy"` / `"Noon"` / `"eBay"` |
+| `region` | string | 是 | 电商区域 | `"国内电商"` / `"国际电商"` |
+| `language` | string | 是 | 广告语言 | `"中文简体"` / `"中文繁体"` / `"英文"` / `"美式英语"` / `"英式英语"` / `"日文"` / `"韩文"` / `"西班牙文"` / `"葡萄牙文"` / `"法文"` / `"德文"` / `"意大利文"` / `"俄文"` / `"波兰文"` / `"荷兰文"` / `"土耳其文"` / `"瑞典文"` / `"挪威文"` / `"丹麦文"` / `"阿拉伯文"` / `"希伯来文"` / `"波斯文"` / `"泰文"` / `"越南文"` / `"印尼文"` / `"马来文"` / `"菲律宾文"` / `"印地文"` / `"孟加拉文"` / `"乌尔都文"` / `"斯瓦希里文"` / `"豪萨文"` |
+| `brand` | string | 否 | 品牌名，最多 15 字 | `"Nike"` |
+| `tagline` | string | 否 | 宣传语 Slogan，最多 15 字 | `"Just Do It"` |
+| `sellingPoints` | string | 否 | 产品卖点，最多 15 字 | `"轻盈透气、回弹减震"` |
+| `mediaList` | array | 是 | 媒体列表，至少 1 张产品图（`mediaType=PRODUCT`），总数 ≤ 10 | 见下表 |
 
 ### mediaList 元素结构
 
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `mediaType` | string | `PRODUCT`（产品图）/ `ROLE`（角色）/ `OTHER` |
-| `mediaUrl` | string | 媒体 URL |
-| `roleName` | string | 角色名（mediaType=ROLE 时有效） |
-| `sortOrder` | int | 排序 |
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| mediaType | string | 是 | `"PRODUCT"`（产品图）/ `"ROLE"`（出镜人物，最多 3 张）/ `"OTHER"`（参考素材） |
+| mediaUrl | string | 是 | 图片 URL（不支持视频文件） |
+| roleName | string | 否 | 角色名（仅 ROLE 类型有意义），配合 `prompt` 里 `@人物N` 使用 |
+| sortOrder | number | 否 | 排序 |
 
 ### 计费规则
 
@@ -55,18 +54,24 @@ Authorization: Bearer <your_api_key>
 
 ```json
 {
-  "brand": "示例品牌",
-  "product_name": "示例产品",
-  "prompt": "展示产品在现代厨房中的使用场景",
-  "vtype": "narrative",
-  "duration": 30,
-  "resolution": "1080p",
+  "product_name": "仿生物形象智能音箱Pro",
+  "brand": "SoundMax",
+  "tagline": "听见好声音",
+  "selling_points": "高保真音质、24h续航",
+  "prompt": "现代客厅场景，阳光透过落地窗洒进来。年轻女性坐在沙发上，轻声对@产品图1说'播放音乐'，产品亮起柔和的蓝光。镜头从全景推到产品特写，展现质感。",
+  "resolution": "480p",
+  "duration": 15,
   "whstr": "16:9",
-  "video_model": "alpha-pro",
+  "vtype": "剧情短片",
+  "vtype_add": "温情",
+  "platform": "抖音",
+  "region": "国内电商",
+  "language": "中文简体",
+  "video_model": "alpha-flash",
   "mediaList": [
     {
       "mediaType": "PRODUCT",
-      "mediaUrl": "https://example.com/product.jpg",
+      "mediaUrl": "https://static.horse-world.mints-id.com//general/1/image/2026-06-17/ecom/1_1781692735099.png",
       "sortOrder": 1
     }
   ]
@@ -85,15 +90,17 @@ Authorization: Bearer <your_api_key>
 ### 响应示例
 
 ```json
+
+
 {
   "code": 200,
-  "msg": "video project created successfully",
   "data": {
-    "project_id": 15,
-    "project_name": "user_20260705_1751716800",
-    "status": "CREATED",
-    "created_at": 1751716800
-  }
+    "project_id": 34,
+    "project_name": "176_20260706_1783341251",
+    "status": "RUNNING",
+    "created_at": 1783341251
+  },
+  "msg": "video project created successfully"
 }
 ```
 
@@ -122,13 +129,10 @@ Authorization: Bearer <your_api_key>
 | `project_id` | int | 项目 ID |
 | `project_name` | string | 项目名称 |
 | `status` | string | 状态，见上方枚举 |
-| `progress` | string | 进度（生成中时有值，如 `50%`） |
 | `error_msg` | string | 失败原因（失败时有值） |
 | `product_img_url` | string | 产品图 URL |
 | `brand` | string | 品牌名 |
 | `product_name` | string | 产品名 |
-| `main_image_url` | string | 主图 URL（生成后有值） |
-| `generated_result` | string | 生成结果（生成后有值） |
 | `first_video_url` | string | 视频地址（完成后有值） |
 | `created_at` | int | 创建时间（Unix 时间戳） |
 | `updated_at` | int | 更新时间（Unix 时间戳） |
@@ -140,17 +144,15 @@ Authorization: Bearer <your_api_key>
   "code": 200,
   "msg": "success",
   "data": {
-    "project_id": 15,
-    "project_name": "user_20260705_1751716800",
+    "project_id": 34,
+    "project_name": "176_20260706_1783341251",
     "status": "SUCCESS",
-    "progress": "100%",
-    "product_img_url": "https://example.com/product.jpg",
-    "brand": "示例品牌",
-    "product_name": "示例产品",
-    "main_image_url": "https://...",
-    "first_video_url": "https://...",
-    "created_at": 1751716800,
-    "updated_at": 1751720000
+    "product_img_url": "",
+    "brand": "SoundMax",
+    "product_name": "仿生物形象智能音箱Pro",
+    "first_video_url": "https://static.horse-world.mints-id.com/good/project/4/video-merged/178334159029.mp4",
+    "created_at": 1783341251,
+    "updated_at": 1783341343
   }
 }
 ```

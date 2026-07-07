@@ -181,6 +181,22 @@ func UpdateVideoProject(project *VideoProject) error {
 	return DB.Save(project).Error
 }
 
+// GetActiveVideoProjects 获取需要轮询上游的非终态项目（分批）
+func GetActiveVideoProjects(offset, limit int) ([]*VideoProject, error) {
+	var projects []*VideoProject
+	terminalStatuses := []string{
+		VideoProjectStatusOneClickGenerated,
+		VideoProjectStatusFailed,
+		VideoProjectStatusVideoPreparing,
+	}
+	err := DB.Model(&VideoProject{}).
+		Where("deleted = 0 AND remote_project_id != '' AND status NOT IN ?", terminalStatuses).
+		Order("updated_at ASC").
+		Offset(offset).Limit(limit).
+		Find(&projects).Error
+	return projects, err
+}
+
 // UpdateVideoProjectStatus 更新视频项目状态
 func UpdateVideoProjectStatus(id int64, status string, errorMsg string) error {
 	updates := map[string]interface{}{
