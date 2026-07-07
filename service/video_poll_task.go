@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	videoPollInterval  = 30 * time.Second
+	videoPollInterval  = 1 * time.Minute
 	videoPollBatchSize = 50
 )
 
@@ -74,5 +74,7 @@ func runVideoPollOnce() {
 	}
 	if total > 0 {
 		logger.LogInfo(ctx, fmt.Sprintf("video poll: polled %d projects", total))
+	} else {
+		logger.LogInfo(ctx, "video poll: no active projects")
 	}
 }
