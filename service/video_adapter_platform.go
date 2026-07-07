@@ -203,9 +203,10 @@ func (a *PlatformAdapter) GetProjectStatus(ctx context.Context, remoteProjectId 
 			CreditRefund int     `json:"creditRefund"`
 			CreditNet    int     `json:"creditNet"`
 			// 金额结算字段
-			MoneyAmount  float64 `json:"moneyAmount"`
-			MoneyRefund  float64 `json:"moneyRefund"`
-			MoneyNet     float64 `json:"moneyNet"`
+			MoneyAmount      float64 `json:"moneyAmount"`
+			MoneyRefund      float64 `json:"moneyRefund"`
+			MoneyNet         float64 `json:"moneyNet"`
+			ActualDuration   *int    `json:"actualDuration"` // 可能为 null
 		} `json:"data"`
 	}
 
@@ -241,6 +242,12 @@ func (a *PlatformAdapter) GetProjectStatus(ctx context.Context, remoteProjectId 
 		MoneyAmount:      platformResp.Data.MoneyAmount,
 		MoneyRefund:      platformResp.Data.MoneyRefund,
 		MoneyNet:         platformResp.Data.MoneyNet,
+		ActualDuration:   func() int {
+			if platformResp.Data.ActualDuration != nil {
+				return *platformResp.Data.ActualDuration
+			}
+			return 0
+		}(),
 		RawResponse:      respBody,
 	}, nil
 }
