@@ -150,7 +150,7 @@ func CreateVideoProject(c *gin.Context) {
 				"response_body": string(rawResp),
 			},
 		})
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": "视频生成服务暂时不可用，请稍后重试", "data": nil})
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "msg": err.Error(), "data": nil})
 		return
 	}
 
