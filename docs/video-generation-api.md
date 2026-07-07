@@ -104,6 +104,27 @@ Authorization: Bearer <your_api_key>
 }
 ```
 
+
+**常见失败原因（`code` 非 200）：**
+
+| 提示 | 原因 |
+|------|------|
+| 未授权，请重新登录 | apiKey 无效 |
+| 产品名称不能为空 | 缺 `productName` |
+| 补充提示词不能为空 | 缺 `prompt` |
+| 请至少上传1张产品图片 | `mediaList` 为空 |
+| 请至少上传1张产品图片（mediaType=PRODUCT） | 无 `PRODUCT` 类型媒体 |
+| 产品卖点最多 200 字 | `sellingPoints` 超长 |
+| 请选择视频模型、分辨率和时长 | `videoModel`/`resolution`/`duration` 缺失 |
+| 所选视频模型不存在/已下线，请重新选择 | `videoModel` 无效 |
+| 积分价格未配置，请联系管理员配置 | 该模型+分辨率未配置价格 |
+| 产品图片最多 3 张 | `PRODUCT` 超过 3 张 |
+| 产品图 + 出镜人物 + 参考素材合计不能超过 7 张 | 媒体合计超 7 张 |
+| 积分不足，本次需 X 积分，当前余额 Y，请充值后重试 | 余额不足 |
+
+> **扣费与退款说明：** 发起时按 `模型单价 × 时长` 扣除积分。若提交工作流失败，会自动退回；任务执行阶段失败或部分生成，也会在任务变为终态时退回失败部分。
+
+
 ---
 
 ## 2. 查询视频项目
@@ -136,6 +157,25 @@ Authorization: Bearer <your_api_key>
 | `first_video_url` | string | 视频地址（完成后有值） |
 | `created_at` | int | 创建时间（Unix 时间戳） |
 | `updated_at` | int | 更新时间（Unix 时间戳） |
+| `billing` | object | 计费信息，仅 `SUCCESS` 且结算完成后有值，见下表 |
+
+### billing 字段说明
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `upstream_amount` | string | 上游预扣金额（元），对应请求时长 |
+| `upstream_refund` | string | 上游退款金额（元），实际生成时长 < 请求时长时有值 |
+| `upstream_net` | string | 上游实际净扣金额（元）= `upstream_amount - upstream_refund` |
+| `refund_ratio` | string | 退费比例 = `upstream_refund / upstream_amount`，保留 4 位小数 |
+| `charged_seconds` | float | 实际计费秒数。优先使用上游返回的真实秒数；若上游未返回则由 `duration × (1 - refund_ratio)` 估算 |
+
+**下游计费公式：**
+```
+实际应收 = 用户报价 × (1 - refund_ratio)
+       或 = 用户报价 / 请求秒数 × charged_seconds
+```
+
+> 推荐直接使用 `charged_seconds` 作为计费基准，无需自行计算。
 
 ### 响应示例
 
@@ -151,6 +191,13 @@ Authorization: Bearer <your_api_key>
     "brand": "SoundMax",
     "product_name": "仿生物形象智能音箱Pro",
     "first_video_url": "https://static.horse-world.mints-id.com/good/project/4/video-merged/178334159029.mp4",
+    "billing": {
+      "upstream_amount": "0.060",
+      "upstream_refund": "0.030",
+      "upstream_net": "0.030",
+      "refund_ratio": "0.5000",
+      "charged_seconds": 15
+    },
     "created_at": 1783341251,
     "updated_at": 1783341343
   }
