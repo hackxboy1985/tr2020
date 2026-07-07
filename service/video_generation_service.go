@@ -214,6 +214,9 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 		updates["upstream_money_refund"] = statusResp.MoneyRefund
 		updates["upstream_money_net"] = statusResp.MoneyNet
 	}
+	if statusResp.ActualDuration > 0 {
+		updates["actual_duration"] = statusResp.ActualDuration
+	}
 
 	_ = model.UpdateVideoProjectFields(project.Id, updates)
 
@@ -240,6 +243,9 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 	project.UpstreamMoneyAmount = statusResp.MoneyAmount
 	project.UpstreamMoneyRefund = statusResp.MoneyRefund
 	project.UpstreamMoneyNet = statusResp.MoneyNet
+	if statusResp.ActualDuration > 0 {
+		project.ActualDuration = statusResp.ActualDuration
+	}
 
 	// 首次到终态时结算（Settled=0 防止重复结算）
 	if project.Settled == 0 {

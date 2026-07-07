@@ -39,7 +39,8 @@ type VideoProject struct {
 	MediaList    string `gorm:"type:text" json:"media_list,omitempty"`    // OpenAPI 媒体列表 JSON
 
 	// 输出配置
-	Duration   int    `gorm:"type:int" json:"duration"`            // 目标视频时长（秒）
+	Duration             int     `gorm:"type:int" json:"duration"`                          // 目标视频时长（秒）
+	ActualDuration       int     `gorm:"type:int;default:0" json:"actual_duration"`          // 上游实际生成时长（秒）
 	Resolution string `gorm:"type:varchar(20)" json:"resolution"`  // 输出分辨率
 	VideoModel string `gorm:"type:varchar(50)" json:"video_model,omitempty"` // AI视频模型
 	Whstr      string `gorm:"type:varchar(20)" json:"whstr"`       // 视频宽高比

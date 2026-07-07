@@ -274,12 +274,17 @@ func GetVideoProject(c *gin.Context) {
 		if detail.UpstreamMoneyAmount > 0 {
 			refundRatio = detail.UpstreamMoneyRefund / detail.UpstreamMoneyAmount
 		}
+		// 优先用上游返回的实际秒数，没有则回退到比例计算
+		chargedSeconds := float64(detail.Duration) * (1 - refundRatio)
+		if detail.ActualDuration > 0 {
+			chargedSeconds = float64(detail.ActualDuration)
+		}
 		billing = &dto.VideoProjectBilling{
 			UpstreamAmount: fmt.Sprintf("%.2f", detail.UpstreamMoneyAmount),
 			UpstreamRefund: fmt.Sprintf("%.2f", detail.UpstreamMoneyRefund),
 			UpstreamNet:    fmt.Sprintf("%.2f", detail.UpstreamMoneyNet),
 			RefundRatio:    fmt.Sprintf("%.4f", refundRatio),
-			ChargedSeconds: float64(detail.Duration) * (1 - refundRatio),
+			ChargedSeconds: chargedSeconds,
 		}
 	}
 

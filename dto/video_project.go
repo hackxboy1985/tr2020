@@ -147,9 +147,10 @@ type AdapterStatusResponse struct {
 	CreditRefund int     `json:"credit_refund"` // 上游退回积分
 	CreditNet    int     `json:"credit_net"`    // 上游净消耗积分
 	// 上游金额字段（终态时有效，1积分=0.1元）
-	MoneyAmount  float64 `json:"money_amount"`  // 上游扣除金额（元）
-	MoneyRefund  float64 `json:"money_refund"`  // 上游退回金额（元）
-	MoneyNet     float64 `json:"money_net"`     // 上游净消耗金额（元）
+	MoneyAmount    float64 `json:"money_amount"`    // 上游扣除金额（元）
+	MoneyRefund    float64 `json:"money_refund"`    // 上游退回金额（元）
+	MoneyNet       float64 `json:"money_net"`       // 上游净消耗金额（元）
+	ActualDuration int     `json:"actualDuration"`  // 上游实际生成时长（秒）
 	RawRequest   []byte  `json:"-"`
 	RawResponse  []byte  `json:"-"`
 }
