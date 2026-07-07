@@ -77,6 +77,7 @@ const (
 	VideoProjectStatusVideoProcessing   = "VIDEO_PROCESSING"     // 视频已生成，等待拼接
 	VideoProjectStatusVideoConcat       = "VIDEO_CONCAT"         // 拼接完成，等待 OSS 上传
 	VideoProjectStatusOneClickGenerated = "ONE_CLICK_GENERATED"  // OSS 上传完成，全流程结束
+	VideoProjectStatusSuccess           = "SUCCESS"              // 上游成功终态（同 ONE_CLICK_GENERATED）
 	VideoProjectStatusVideoPreparing    = "VIDEO_PREPARING"      // 拼接失败，需手动重试
 	VideoProjectStatusFailed            = "FAILED"               // 生成失败
 )
@@ -186,6 +187,7 @@ func GetActiveVideoProjects(offset, limit int) ([]*VideoProject, error) {
 	var projects []*VideoProject
 	terminalStatuses := []string{
 		VideoProjectStatusOneClickGenerated,
+		VideoProjectStatusSuccess,
 		VideoProjectStatusFailed,
 		VideoProjectStatusVideoPreparing,
 	}

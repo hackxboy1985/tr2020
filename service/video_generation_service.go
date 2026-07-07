@@ -16,7 +16,8 @@ import (
 func needsStatusPullthrough(status string) bool {
 	switch status {
 	case model.VideoProjectStatusOneClickGenerated, // 终态
-		model.VideoProjectStatusFailed,            // 终态
+		model.VideoProjectStatusSuccess,            // 终态（上游新名称）
+		model.VideoProjectStatusFailed,             // 终态
 		model.VideoProjectStatusVideoPreparing:     // 本地拼接失败，无需查上游
 		return false
 	}
@@ -243,7 +244,7 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 	// 首次到终态时结算（Settled=0 防止重复结算）
 	if project.Settled == 0 {
 		switch statusResp.Status {
-		case model.VideoProjectStatusOneClickGenerated, model.VideoProjectStatusFailed:
+		case model.VideoProjectStatusOneClickGenerated, model.VideoProjectStatusSuccess, model.VideoProjectStatusFailed:
 			// 上游1元=本系统 QuotaPerUnit 积分（1$ = 500,000 quota，1元=1$）
 			realQuota := 0
 			moneyAmount := statusResp.MoneyAmount
@@ -333,7 +334,7 @@ func ListProjects(ctx context.Context, userId int, page, pageSize int, isAdmin b
 	items := make([]dto.VideoProjectItemResponse, len(projects))
 	for i, p := range projects {
 		status := p.Status
-		if status == model.VideoProjectStatusOneClickGenerated {
+		if status == model.VideoProjectStatusOneClickGenerated || status == model.VideoProjectStatusSuccess {
 			status = "SUCCESS"
 		}
 		items[i] = dto.VideoProjectItemResponse{
@@ -441,7 +442,7 @@ func HandleWebhook(ctx context.Context, channelId int, signature string, body []
 		return fmt.Errorf("failed to update project: %w", err)
 	}
 
-	if payload.Status == model.VideoProjectStatusOneClickGenerated {
+	if payload.Status == model.VideoProjectStatusOneClickGenerated || payload.Status == model.VideoProjectStatusSuccess {
 		common.SysLog(fmt.Sprintf("video project %d completed", project.Id))
 	} else if payload.Status == model.VideoProjectStatusFailed {
 		common.SysLog(fmt.Sprintf("video project %d failed: %s", project.Id, payload.ErrorMsg))
