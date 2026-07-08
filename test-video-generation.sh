@@ -11,21 +11,22 @@ DEFAULT_BASE_URL="http://open.mints-id.com"
 DEFAULT_API_KEY="sk-ttNgtYmXn03HgbOPAwaqV5FFaPgOvMwWo9ijlRCc3C1JYiNq"
 
 # 请求参数默认值
-PRODUCT_NAME="仿生物形象智能音箱Pro"
-BRAND="SoundMax"
-TAGLINE="听见好声音"
-SELLING_POINTS="高保真音质、24h续航"
-PROMPT="现代客厅场景，阳光透过落地窗洒进来。年轻女性坐在沙发上，轻声对@产品图1说'播放音乐'，产品亮起柔和的蓝光。镜头从全景推到产品特写，展现质感。"
+PRODUCT_NAME="小米24寸电脑显示器"
+BRAND="小米"
+TAGLINE=""
+SELLING_POINTS=""
+PROMPT="请生成一段高端tvb广告"
 RESOLUTION="720p"
 DURATION=15
-WHSTR="16:9"
-VTYPE="剧情短片"
-VTYPE_ADD="温情"
+WHSTR="9:16"
+VTYPE="产品展示"
+VTYPE_ADD=""
 PLATFORM="抖音"
 REGION="国内电商"
-LANGUAGE="中文简体"
-VIDEO_MODEL="alpha-flash"
-MEDIA_URL="https://static.horse-world.mints-id.com//general/1/image/2026-06-17/ecom/1_1781692735099.png"
+LANGUAGE="简体中文"
+VIDEO_MODEL="42"
+MEDIA_URL="https://aikeep-1416285001.cos.ap-guangzhou.myqcloud.com/ai-tools-upload/1783404917781-1icoz8-20260707-md5"
+ROLE_URL="https://aikeep-1416285001.cos.ap-guangzhou.myqcloud.com/ai-tools-upload/20260630/015f95c8fc716d8ee106f2dd212d01c6.jpg"
 
 # 运行时变量
 BASE_URL="${BASE_URL:-}"
@@ -77,25 +78,30 @@ resolve_defaults() {
 build_request_json() {
   cat <<JSON
 {
-  "product_name": "${PRODUCT_NAME}",
+  "productName": "${PRODUCT_NAME}",
   "brand": "${BRAND}",
   "tagline": "${TAGLINE}",
-  "selling_points": "${SELLING_POINTS}",
+  "sellingPoints": "${SELLING_POINTS}",
   "prompt": "${PROMPT}",
   "resolution": "${RESOLUTION}",
   "duration": ${DURATION},
   "whstr": "${WHSTR}",
   "vtype": "${VTYPE}",
-  "vtype_add": "${VTYPE_ADD}",
+  "vtypeAdd": "${VTYPE_ADD}",
   "platform": "${PLATFORM}",
   "region": "${REGION}",
   "language": "${LANGUAGE}",
-  "video_model": "${VIDEO_MODEL}",
+  "videoModel": "${VIDEO_MODEL}",
   "mediaList": [
     {
       "mediaType": "PRODUCT",
       "mediaUrl": "${MEDIA_URL}",
       "sortOrder": 1
+    },
+    {
+      "mediaType": "ROLE",
+      "mediaUrl": "${ROLE_URL}",
+      "sortOrder": 2
     }
   ]
 }
@@ -151,6 +157,7 @@ do_list() {
   echo -e "  ${CYAN}language${NC}       ${LANGUAGE}"
   echo -e "  ${CYAN}video_model${NC}    ${VIDEO_MODEL}"
   echo -e "  ${CYAN}mediaUrl${NC}       ${MEDIA_URL}"
+  echo -e "  ${CYAN}roleUrl${NC}        ${ROLE_URL}"
   echo ""
   log_sep
   log_info "完整请求 JSON"
