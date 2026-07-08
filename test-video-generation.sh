@@ -78,20 +78,20 @@ resolve_defaults() {
 build_request_json() {
   cat <<JSON
 {
-  "productName": "${PRODUCT_NAME}",
+  "product_name": "${PRODUCT_NAME}",
   "brand": "${BRAND}",
   "tagline": "${TAGLINE}",
-  "sellingPoints": "${SELLING_POINTS}",
+  "selling_points": "${SELLING_POINTS}",
   "prompt": "${PROMPT}",
   "resolution": "${RESOLUTION}",
   "duration": ${DURATION},
   "whstr": "${WHSTR}",
   "vtype": "${VTYPE}",
-  "vtypeAdd": "${VTYPE_ADD}",
+  "vtype_add": "${VTYPE_ADD}",
   "platform": "${PLATFORM}",
   "region": "${REGION}",
   "language": "${LANGUAGE}",
-  "videoModel": "${VIDEO_MODEL}",
+  "video_model": "${VIDEO_MODEL}",
   "mediaList": [
     {
       "mediaType": "PRODUCT",
