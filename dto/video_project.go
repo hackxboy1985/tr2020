@@ -16,7 +16,7 @@ type CreateVideoProjectRequest struct {
 	// 广告基础信息（必填）
 	// ProductImgUrl: 旧格式兼容，优先使用 MediaList
 	ProductImgUrl string `json:"product_img_url"`
-	Brand         string `json:"brand" binding:"required"`
+	Brand         string `json:"brand"`
 	ProductName   string `json:"product_name" binding:"required"`
 	Tagline       string `json:"tagline"`
 	SellingPoints string `json:"selling_points"`
@@ -40,7 +40,7 @@ type CreateVideoProjectRequest struct {
 	// 输出配置（必填）
 	Duration   int    `json:"duration" binding:"required,oneof=15 30 45 60"`
 	Resolution string `json:"resolution" binding:"required"`
-	VideoModel string `json:"video_model"`
+	VideoModel string `json:"video_model" binding:"required"`
 	Whstr      string `json:"whstr" binding:"required"`
 
 	// 渠道选择（可选）
