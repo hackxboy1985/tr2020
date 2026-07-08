@@ -68,7 +68,10 @@ func (a *PlatformAdapter) CreateProject(ctx context.Context, req *dto.CreateVide
 
 	// 应用模型映射
 	videoModel := req.VideoModel
-	if mapped, _ := ApplyModelMapping(a.ch.ModelMapping, req.VideoModel); mapped != "" {
+	if mapped, hasMapping, matched := ApplyModelMapping(a.ch.ModelMapping, req.VideoModel); hasMapping {
+		if !matched {
+			return &dto.AdapterCreateResponse{}, fmt.Errorf("video model '%s' is not supported by this channel", req.VideoModel)
+		}
 		videoModel = mapped
 	}
 

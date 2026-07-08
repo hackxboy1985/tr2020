@@ -84,9 +84,9 @@ func (a *CozeAdapter) CreateProject(ctx context.Context, req *dto.CreateVideoPro
 
 	// 模型映射验证：有映射配置但未匹配到则拒绝
 	effectiveModel := req.VideoModel
-	if mapped, hasMapping := ApplyModelMapping(a.ch.ModelMapping, req.VideoModel); hasMapping {
-		if mapped == req.VideoModel {
-			return nil, fmt.Errorf("video model %q not in channel model mapping", req.VideoModel)
+	if mapped, hasMapping, matched := ApplyModelMapping(a.ch.ModelMapping, req.VideoModel); hasMapping {
+		if !matched {
+			return nil, fmt.Errorf("video model '%s' is not supported by this channel", req.VideoModel)
 		}
 		effectiveModel = mapped
 	}
