@@ -24,10 +24,10 @@ type CreateVideoProjectRequest struct {
 	// 创意方向（必填）
 	Prompt   string `json:"prompt" binding:"required"`
 	Vtype    string `json:"vtype" binding:"required"`
-	VtypeAdd string `json:"vtype_add"`
-	Language string `json:"language"`
-	Platform string `json:"platform"`
-	Region   string `json:"region"`
+	VtypeAdd string `json:"vtype_add" binding:"required"`
+	Language string `json:"language" binding:"required"`
+	Platform string `json:"platform" binding:"required"`
+	Region   string `json:"region" binding:"required"`
 
 	// 媒体列表（OpenAPI 格式，优先于旧字段）
 	// 至少 1 张 PRODUCT 图；为空时从 ProductImgUrl + Roles 自动转换
