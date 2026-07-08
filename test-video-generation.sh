@@ -20,11 +20,11 @@ RESOLUTION="720p"
 DURATION=15
 WHSTR="9:16"
 VTYPE="产品展示"
-VTYPE_ADD=""
+VTYPE_ADD="搞笑"
 PLATFORM="抖音"
 REGION="国内电商"
 LANGUAGE="简体中文"
-VIDEO_MODEL="42"
+VIDEO_MODEL="alpha-flash"
 MEDIA_URL="https://aikeep-1416285001.cos.ap-guangzhou.myqcloud.com/ai-tools-upload/1783404917781-1icoz8-20260707-md5"
 ROLE_URL="https://aikeep-1416285001.cos.ap-guangzhou.myqcloud.com/ai-tools-upload/20260630/015f95c8fc716d8ee106f2dd212d01c6.jpg"
 

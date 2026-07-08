@@ -24,7 +24,7 @@ type CreateVideoProjectRequest struct {
 	// 创意方向（必填）
 	Prompt   string `json:"prompt" binding:"required"`
 	Vtype    string `json:"vtype" binding:"required"`
-	VtypeAdd string `json:"vtype_add"`
+	VtypeAdd string `json:"vtype_add" binding:"required"`
 	Language string `json:"language" binding:"required"`
 	Platform string `json:"platform" binding:"required"`
 	Region   string `json:"region" binding:"required"`
