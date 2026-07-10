@@ -16,7 +16,7 @@ BRAND="小米"
 TAGLINE=""
 SELLING_POINTS=""
 PROMPT="请生成一段高端tvb广告"
-RESOLUTION="720p"
+RESOLUTION="480p"
 DURATION=15
 WHSTR="9:16"
 VTYPE="产品展示"
@@ -26,7 +26,7 @@ REGION="国内电商"
 LANGUAGE="简体中文"
 VIDEO_MODEL="alpha-flash"
 MEDIA_URL="https://aikeep-1416285001.cos.ap-guangzhou.myqcloud.com/ai-tools-upload/1783404917781-1icoz8-20260707-md5"
-ROLE_URL="https://aikeep-1416285001.cos.ap-guangzhou.myqcloud.com/ai-tools-upload/20260630/015f95c8fc716d8ee106f2dd212d01c6.jpg"
+ROLE_URL="https://static.horse-world.mints-id.com/gy/general/1/image/2026-07-08/1783497394035_4147.png"
 
 # 运行时变量
 BASE_URL="${BASE_URL:-}"
