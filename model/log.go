@@ -240,6 +240,36 @@ type RecordConsumeLogParams struct {
 	Other            map[string]interface{} `json:"other"`
 }
 
+// GetLastVideoProjectQueryStatus 查询指定广告项目最近一条"查询"日志中记录的状态。
+// 若未找到记录则返回 ("", nil)。
+func GetLastVideoProjectQueryStatus(projectId int64) (string, error) {
+	prefix := fmt.Sprintf("广告任务查询%%: id=%d", projectId)
+	var log Log
+	err := LOG_DB.Model(&Log{}).
+		Where("content LIKE ? AND type = ?", prefix, LogTypeConsume).
+		Order("id DESC").
+		Limit(1).
+		Select("other").
+		First(&log).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", nil
+		}
+		return "", err
+	}
+	if log.Other == "" {
+		return "", nil
+	}
+	var other map[string]interface{}
+	if err2 := common.UnmarshalJsonStr(log.Other, &other); err2 != nil {
+		return "", nil
+	}
+	if status, ok := other["status"].(string); ok {
+		return status, nil
+	}
+	return "", nil
+}
+
 func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams) {
 	if !common.LogConsumeEnabled {
 		return

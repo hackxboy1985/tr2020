@@ -240,33 +240,44 @@ func GetVideoProject(c *gin.Context) {
 	if upstreamErr != nil {
 		content = fmt.Sprintf("广告任务查询上游失败: id=%d, err=%s", detail.Id, upstreamErr.Error())
 	}
-	model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
-		ModelName: detail.VideoModel,
-		TokenName: c.GetString("token_name"),
-		TokenId:   c.GetInt("token_id"),
-		Content:   content,
-		Quota:     0,
-		Other: map[string]interface{}{
-			"request_path":           c.Request.URL.String(),
-			"response_body":          string(rawResponse),
-			"project_id":             detail.Id,
-			"project_name":           detail.ProjectName,
-			"status":                 detail.Status,
-			"error_msg":              detail.ErrorMsg,
-			"progress":               detail.Progress,
-			"first_video_url":        detail.FirstVideoUrl,
-			"main_image_url":         detail.MainImageUrl,
-			"pre_deducted_quota":     detail.PreDeductedQuota,
-			"real_quota":             detail.RealQuota,
-			"settled":                detail.Settled,
-			"upstream_credit_amount": detail.UpstreamCreditAmount,
-			"upstream_credit_refund": detail.UpstreamCreditRefund,
-			"upstream_credit_net":    detail.UpstreamCreditNet,
-			"upstream_money_amount":  detail.UpstreamMoneyAmount,
-			"upstream_money_refund":  detail.UpstreamMoneyRefund,
-			"upstream_money_net":     detail.UpstreamMoneyNet,
-		},
-	})
+
+	// 状态去重：若查询到的状态与库中最近一条记录一致，跳过入库
+	skipLog := false
+	if upstreamErr == nil {
+		if lastStatus, err2 := model.GetLastVideoProjectQueryStatus(detail.Id); err2 == nil && lastStatus == detail.Status {
+			skipLog = true
+		}
+	}
+
+	if !skipLog {
+		model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
+			ModelName: detail.VideoModel,
+			TokenName: c.GetString("token_name"),
+			TokenId:   c.GetInt("token_id"),
+			Content:   content,
+			Quota:     0,
+			Other: map[string]interface{}{
+				"request_path":           c.Request.URL.String(),
+				"response_body":          string(rawResponse),
+				"project_id":             detail.Id,
+				"project_name":           detail.ProjectName,
+				"status":                 detail.Status,
+				"error_msg":              detail.ErrorMsg,
+				"progress":               detail.Progress,
+				"first_video_url":        detail.FirstVideoUrl,
+				"main_image_url":         detail.MainImageUrl,
+				"pre_deducted_quota":     detail.PreDeductedQuota,
+				"real_quota":             detail.RealQuota,
+				"settled":                detail.Settled,
+				"upstream_credit_amount": detail.UpstreamCreditAmount,
+				"upstream_credit_refund": detail.UpstreamCreditRefund,
+				"upstream_credit_net":    detail.UpstreamCreditNet,
+				"upstream_money_amount":  detail.UpstreamMoneyAmount,
+				"upstream_money_refund":  detail.UpstreamMoneyRefund,
+				"upstream_money_net":     detail.UpstreamMoneyNet,
+			},
+		})
+	}
 
 	var billing *dto.VideoProjectBilling
 	if detail.Settled == 1 && detail.UpstreamMoneyAmount > 0 {
