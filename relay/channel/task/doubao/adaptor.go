@@ -102,15 +102,21 @@ type responseTask struct {
 
 type TaskAdaptor struct {
 	taskcommon.BaseBilling
-	ChannelType int
-	apiKey      string
-	baseURL     string
+	ChannelType          int
+	apiKey               string
+	baseURL              string
+	videoGeneratePath    string
+	videoFetchPath       string
 }
 
 func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
 	a.ChannelType = info.ChannelType
 	a.baseURL = info.ChannelBaseUrl
 	a.apiKey = info.ApiKey
+	if info.ChannelMeta != nil {
+		a.videoGeneratePath = info.ChannelMeta.ChannelOtherSettings.DoubaoVideoGeneratePath
+		a.videoFetchPath = info.ChannelMeta.ChannelOtherSettings.DoubaoVideoFetchPath
+	}
 }
 
 // ValidateRequestAndSetAction parses body, validates fields and sets default action.
@@ -121,7 +127,11 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 
 // BuildRequestURL constructs the upstream URL.
 func (a *TaskAdaptor) BuildRequestURL(_ *relaycommon.RelayInfo) (string, error) {
-	return fmt.Sprintf("%s/api/v3/contents/generations/tasks", a.baseURL), nil
+	path := a.videoGeneratePath
+	if path == "" {
+		path = "/api/v3/contents/generations/tasks"
+	}
+	return fmt.Sprintf("%s%s", a.baseURL, path), nil
 }
 
 // BuildRequestHeader sets required headers.
@@ -241,7 +251,11 @@ func (a *TaskAdaptor) FetchTask(baseUrl, key string, body map[string]any, proxy 
 		return nil, fmt.Errorf("invalid task_id")
 	}
 
-	uri := fmt.Sprintf("%s/api/v3/contents/generations/tasks/%s", baseUrl, taskID)
+	fetchPath := a.videoFetchPath
+	if fetchPath == "" {
+		fetchPath = "/api/v3/contents/generations/tasks"
+	}
+	uri := fmt.Sprintf("%s%s/%s", baseUrl, fetchPath, taskID)
 
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
 	if err != nil {

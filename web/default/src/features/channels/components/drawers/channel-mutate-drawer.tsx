@@ -620,6 +620,24 @@ export function ChannelMutateDrawer({
         form.setValue('other', 'v2.1')
       }
     }
+
+    // Type 54 (DoubaoVideo) - set default other (upstream path config)
+    if (currentType === 54) {
+      const currentOther = form.getValues('other')
+      if (!currentOther || currentOther === '') {
+        form.setValue(
+          'other',
+          JSON.stringify(
+            {
+              doubao_video_generate_path: '/v1/video/generations',
+              doubao_video_fetch_path: '/v1/videos',
+            },
+            null,
+            2
+          )
+        )
+      }
+    }
   }, [currentType, isEditing, form])
 
   // Validate base_url - warn if it ends with /v1
@@ -1768,6 +1786,56 @@ export function ChannelMutateDrawer({
                             <FormMessage />
                           </FormItem>
                         )}
+                      />
+                    )}
+
+                    {/* DoubaoVideo (type 54) - upstream path config */}
+                    {currentType === 54 && (
+                      <FormField
+                        control={form.control}
+                        name='other'
+                        render={({ field }) => {
+                          const [jsonError, setJsonError] = useState<string | null>(null)
+                          const validateJson = useCallback(() => {
+                            try {
+                              JSON.parse(field.value || '')
+                              setJsonError(null)
+                              toast.success(t('JSON format is valid'))
+                            } catch (e) {
+                              setJsonError((e as Error).message)
+                              toast.error(t('Invalid JSON format'))
+                            }
+                          }, [field.value])
+                          return (
+                            <FormItem>
+                              <div className='flex items-center justify-between'>
+                                <FormLabel>{t('Upstream Path Config')}</FormLabel>
+                                <Button
+                                  type='button'
+                                  variant='outline'
+                                  size='sm'
+                                  onClick={validateJson}
+                                >
+                                  {t('Validate JSON')}
+                                </Button>
+                              </div>
+                              <FormControl>
+                                <Textarea
+                                  className='font-mono text-xs'
+                                  rows={6}
+                                  {...field}
+                                />
+                              </FormControl>
+                              {jsonError && (
+                                <p className='text-destructive text-xs'>{jsonError}</p>
+                              )}
+                              <FormDescription>
+                                {t('Configure upstream API paths. Use /v1/video/generations and /v1/videos when proxying through another new-api instance.')}
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )
+                        }}
                       />
                     )}
 

@@ -41,6 +41,11 @@ type ChannelOtherSettings struct {
 	UpstreamModelUpdateLastDetectedModels []string      `json:"upstream_model_update_last_detected_models,omitempty"` // 上次检测到的可加入模型
 	UpstreamModelUpdateLastRemovedModels  []string      `json:"upstream_model_update_last_removed_models,omitempty"`  // 上次检测到的可删除模型
 	UpstreamModelUpdateIgnoredModels      []string      `json:"upstream_model_update_ignored_models,omitempty"`       // 手动忽略的模型
+	// DoubaoVideo 自定义上游路径，对接 new-api 中转站时填写，留空使用默认 Ark 路径
+	// 生成接口: 默认 /api/v3/contents/generations/tasks，中转填 /v1/video/generations
+	// 查询接口: 默认 /api/v3/contents/generations/tasks，中转填 /v1/videos （后面自动拼 /{task_id}）
+	DoubaoVideoGeneratePath string `json:"doubao_video_generate_path,omitempty"`
+	DoubaoVideoFetchPath    string `json:"doubao_video_fetch_path,omitempty"`
 }
 
 func (s *ChannelOtherSettings) IsOpenRouterEnterprise() bool {
