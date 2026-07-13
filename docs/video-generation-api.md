@@ -1,4 +1,4 @@
-# 视频生成 API 接口文档-对外文档
+# 广告视频生成 API 接口文档-对外文档
 
 **url**：`http://open.mints-id.com`
 

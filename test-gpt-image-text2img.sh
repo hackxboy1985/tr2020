@@ -33,9 +33,6 @@ cat > "$REQ_FILE" <<EOF
 EOF
 
 
-cat >  "$REQ_FILE" << EOF
-"$BASE_URL/v1/chat/completions" 
-EOF
 
 
 echo "Request saved: $REQ_FILE"
