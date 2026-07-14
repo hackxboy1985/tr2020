@@ -36,3 +36,8 @@ data/
 token_estimator_test.go
 skills-lock.json
 .playwright-mcp
+test-ad-video-generation.sh
+test-gemini-image.sh
+test-gpt-image-edit.sh
+test-gpt-image-text2img.sh
+test-seedance-1.sh
