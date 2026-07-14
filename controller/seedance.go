@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
@@ -308,6 +309,16 @@ func SeedanceListAssets(c *gin.Context) {
 	proxyAndPassthrough(c, gw, http.MethodGet, "/api/seedance/proxy/assets", forwardQuery(c), nil, nil)
 }
 
+// resolveAsset 支持本地数字 ID 或上游 asset-xxxxxxxx 格式查询素材
+func resolveAsset(c *gin.Context, userID int) (*model.SeedanceAsset, error) {
+	rawID := c.Param("id")
+	if strings.HasPrefix(rawID, "asset-") {
+		return model.GetSeedanceAssetByUpstreamID(rawID, userID)
+	}
+	localID, _ := strconv.ParseInt(rawID, 10, 64)
+	return model.GetSeedanceAssetByID(localID, userID)
+}
+
 // GET /api/seedance/assets/:id
 func SeedanceGetAsset(c *gin.Context) {
 	gw, ok := seedanceGetGW(c)
@@ -315,21 +326,19 @@ func SeedanceGetAsset(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("id")
-	localID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	a, err := model.GetSeedanceAssetByID(localID, userID)
+	a, err := resolveAsset(c, userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset not found"})
 		return
 	}
 	proxyAndPassthrough(c, gw, http.MethodGet, "/api/seedance/proxy/assets/"+a.UpstreamAssetID, forwardQuery(c), nil, func(_ int, respBody []byte) {
-		// update local status from upstream response
 		var resp struct {
 			Result struct {
 				Status string `json:"Status"`
 			} `json:"Result"`
 		}
 		if err2 := common.Unmarshal(respBody, &resp); err2 == nil && resp.Result.Status != "" {
-			_ = model.UpdateSeedanceAssetStatus(localID, resp.Result.Status, string(respBody))
+			_ = model.UpdateSeedanceAssetStatus(a.ID, resp.Result.Status, string(respBody))
 		}
 	})
 }
@@ -350,15 +359,14 @@ func seedanceModifyAsset(c *gin.Context, method string) {
 		return
 	}
 	userID := c.GetInt("id")
-	localID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	a, err := model.GetSeedanceAssetByID(localID, userID)
+	a, err := resolveAsset(c, userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset not found"})
 		return
 	}
 	body := readBody(c)
 	proxyAndPassthrough(c, gw, method, "/api/seedance/proxy/assets/"+a.UpstreamAssetID, nil, body, func(_ int, respBody []byte) {
-		_ = model.UpdateSeedanceAssetStatus(localID, a.Status, string(respBody))
+		_ = model.UpdateSeedanceAssetStatus(a.ID, a.Status, string(respBody))
 	})
 }
 
@@ -369,14 +377,13 @@ func SeedanceDeleteAsset(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("id")
-	localID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	a, err := model.GetSeedanceAssetByID(localID, userID)
+	a, err := resolveAsset(c, userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset not found"})
 		return
 	}
 	proxyAndPassthrough(c, gw, http.MethodDelete, "/api/seedance/proxy/assets/"+a.UpstreamAssetID, nil, nil, func(_ int, _ []byte) {
-		_ = model.SoftDeleteSeedanceAsset(localID, userID)
+		_ = model.SoftDeleteSeedanceAsset(a.ID, userID)
 	})
 }
 

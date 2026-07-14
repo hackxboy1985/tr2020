@@ -65,7 +65,9 @@ POST /api/seedance/assets
 GET /api/seedance/assets/:id
 ```
 
-`:id` 为创建时响应里的 `Result.LocalId`。
+`:id` 支持两种格式：
+- **本地 ID**（数字）：创建时响应里的 `Result.LocalId`
+- **上游 asset_id**：创建时响应里的 `Result.Id`，例如 `asset-xxxxxxxx`
 
 **响应示例：**
 
@@ -101,6 +103,8 @@ GET /api/seedance/assets?PageNumber=1&PageSize=20
 ```http
 DELETE /api/seedance/assets/:id
 ```
+
+`:id` 同样支持本地 ID（数字）或上游 `asset-xxxxxxxx` 格式。
 
 ---
 
