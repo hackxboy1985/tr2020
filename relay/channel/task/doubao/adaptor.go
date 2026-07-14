@@ -312,15 +312,20 @@ func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq) (*
 		r.Content = append(imageItems, r.Content...)
 	}
 
-	// Doubao reference-media mode requires audio_url items to carry role="reference_audio".
+	// Doubao reference-media mode requires role fields for media content items.
 	for i := range r.Content {
 		if (r.Content[i].Type == "audio_url" || r.Content[i].AudioURL != nil) && r.Content[i].Role == "" {
 			r.Content[i].Role = "reference_audio"
+		}
+		if (r.Content[i].Type == "image_url" || r.Content[i].ImageURL != nil) && r.Content[i].Role == "" {
+			r.Content[i].Role = "reference_image"
 		}
 	}
 
 	if sec, _ := strconv.Atoi(req.Seconds); sec > 0 {
 		r.Duration = lo.ToPtr(dto.IntValue(sec))
+	} else if req.Duration > 0 {
+		r.Duration = lo.ToPtr(dto.IntValue(req.Duration))
 	}
 
 	r.Content = lo.Reject(r.Content, func(c ContentItem, _ int) bool { return c.Type == "text" })
