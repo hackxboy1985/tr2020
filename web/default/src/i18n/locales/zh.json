@@ -4541,6 +4541,19 @@
     "2. Copy the webhook URL": "2. 复制 Webhook 地址",
     "3. Optionally set up a signing secret for security": "3. 可选：设置签名校验密钥",
     "4. Paste the webhook URL above": "4. 将地址粘贴到上方输入框",
-    "Feishu Bot Documentation": "飞书机器人文档"
+    "Feishu Bot Documentation": "飞书机器人文档",
+    "Seedance Assets": "资产库",
+    "Seedance Asset Library": "Seedance 资产库",
+    "Asset Groups": "素材组",
+    "Assets": "素材",
+    "Face Verifications": "人脸认证",
+    "Upstream Group ID": "上游素材组 ID",
+    "Upstream Asset ID": "上游素材 ID",
+    "Verification ID": "认证任务 ID",
+    "Group ID": "素材组 ID",
+    "Expires At": "过期时间",
+    "No data": "暂无数据",
+    "Upstream Path Config": "上游路径配置",
+    "Validate JSON": "校验 JSON"
   }
 }
