@@ -44,6 +44,12 @@ func GetSeedanceGatewayChannel(userGroup string) (*SeedanceGatewayChannel, error
 		if apiErr != nil {
 			continue
 		}
+		common.SysLog(fmt.Sprintf("seedance: selected channel %d, key prefix: %s, gateway: %s", ch.Id, func() string {
+			if len(key) > 10 {
+				return key[:10] + "..."
+			}
+			return key
+		}(), strings.TrimRight(settings.SeedanceAssetBaseUrl, "/")))
 		return &SeedanceGatewayChannel{
 			Channel:    ch,
 			GatewayURL: strings.TrimRight(settings.SeedanceAssetBaseUrl, "/"),
