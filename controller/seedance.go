@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -176,6 +177,50 @@ func SeedanceDeleteAssetGroup(c *gin.Context) {
 // Assets
 // ============================================================
 
+// getOrCreateDefaultAssetGroup 获取或创建用户的默认 AIGC 素材组（每用户一个）
+func getOrCreateDefaultAssetGroup(c *gin.Context, gw *service.SeedanceGatewayChannel, userID int) (string, error) {
+	// 查本地表有无该用户的 AIGC 素材组
+	groups, _, err := model.ListSeedanceAssetGroups(userID, 1, 1)
+	if err == nil && len(groups) > 0 {
+		return groups[0].UpstreamGroupID, nil
+	}
+
+	// 没有则创建
+	user, err2 := model.GetUserById(userID, false)
+	groupName := "default"
+	if err2 == nil && user != nil {
+		groupName = user.Username
+	}
+
+	createBody, _ := json.Marshal(map[string]string{
+		"Name":        groupName,
+		"Description": "auto-created",
+		"GroupType":   "AIGC",
+	})
+	statusCode, respBody, err3 := service.SeedanceProxyRequest(gw, "POST", "/api/seedance/proxy/assets/groups", nil, createBody)
+	if err3 != nil || statusCode < 200 || statusCode >= 300 {
+		return "", fmt.Errorf("create default asset group failed: %v", err3)
+	}
+	var resp struct {
+		Result struct {
+			ID string `json:"Id"`
+		} `json:"Result"`
+	}
+	if err4 := common.Unmarshal(respBody, &resp); err4 != nil || resp.Result.ID == "" {
+		return "", fmt.Errorf("parse create group response failed")
+	}
+	g := &model.SeedanceAssetGroup{
+		UserID:          userID,
+		ChannelID:       gw.Channel.Id,
+		UpstreamGroupID: resp.Result.ID,
+		Name:            groupName,
+		GroupType:       "AIGC",
+		RawData:         string(respBody),
+	}
+	_ = model.CreateSeedanceAssetGroup(g)
+	return resp.Result.ID, nil
+}
+
 // POST /api/seedance/assets
 func SeedanceCreateAsset(c *gin.Context) {
 	gw, ok := seedanceGetGW(c)
@@ -185,36 +230,73 @@ func SeedanceCreateAsset(c *gin.Context) {
 	userID := c.GetInt("id")
 	body := readBody(c)
 
-	proxyAndPassthrough(c, gw, http.MethodPost, "/api/seedance/proxy/assets", nil, body, func(_ int, respBody []byte) {
-		var resp struct {
-			Result struct {
-				ID string `json:"Id"`
-			} `json:"Result"`
-		}
-		if err := common.Unmarshal(respBody, &resp); err != nil || resp.Result.ID == "" {
+	// 解析请求体，如果没有 GroupId，自动获取或创建默认素材组
+	var req struct {
+		GroupID   string `json:"GroupId"`
+		URL       string `json:"URL"`
+		AssetType string `json:"AssetType"`
+		Name      string `json:"Name"`
+	}
+	_ = common.Unmarshal(body, &req)
+
+	if req.GroupID == "" {
+		groupID, err := getOrCreateDefaultAssetGroup(c, gw, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
 			return
 		}
-		var req struct {
-			GroupID   string `json:"GroupId"`
-			URL       string `json:"URL"`
-			AssetType string `json:"AssetType"`
-			Name      string `json:"Name"`
-		}
-		_ = common.Unmarshal(body, &req)
+		req.GroupID = groupID
+		// 重新构建请求体，加上 GroupId
+		newBody, _ := json.Marshal(req)
+		body = newBody
+	}
 
-		a := &model.SeedanceAsset{
-			UserID:          userID,
-			ChannelID:       gw.Channel.Id,
-			UpstreamAssetID: resp.Result.ID,
-			UpstreamGroupID: req.GroupID,
-			Name:            req.Name,
-			AssetType:       req.AssetType,
-			SourceURL:       req.URL,
-			Status:          "Processing",
-			RawData:         string(respBody),
-		}
-		_ = model.CreateSeedanceAsset(a)
-	})
+	statusCode, respBody, proxyErr := service.SeedanceProxyRequest(gw, http.MethodPost, "/api/seedance/proxy/assets", nil, body)
+	if proxyErr != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": proxyErr.Error()})
+		return
+	}
+	if statusCode < 200 || statusCode >= 300 {
+		c.Data(statusCode, "application/json; charset=utf-8", respBody)
+		return
+	}
+
+	// 解析上游响应取 upstream_asset_id
+	var resp struct {
+		Result map[string]interface{} `json:"Result"`
+	}
+	if err := common.Unmarshal(respBody, &resp); err != nil || resp.Result == nil {
+		c.Data(statusCode, "application/json; charset=utf-8", respBody)
+		return
+	}
+	upstreamAssetID, _ := resp.Result["Id"].(string)
+	if upstreamAssetID == "" {
+		c.Data(statusCode, "application/json; charset=utf-8", respBody)
+		return
+	}
+
+	a := &model.SeedanceAsset{
+		UserID:          userID,
+		ChannelID:       gw.Channel.Id,
+		UpstreamAssetID: upstreamAssetID,
+		UpstreamGroupID: req.GroupID,
+		Name:            req.Name,
+		AssetType:       req.AssetType,
+		SourceURL:       req.URL,
+		Status:          "Processing",
+		RawData:         string(respBody),
+	}
+	_ = model.CreateSeedanceAsset(a)
+
+	// 在响应里追加 local_id，方便客户端直接用于查询接口
+	resp.Result["LocalId"] = a.ID
+	resp.Result["AssetRef"] = "asset://" + upstreamAssetID
+	merged, mergeErr := common.Marshal(map[string]interface{}{"Result": resp.Result})
+	if mergeErr != nil {
+		c.Data(statusCode, "application/json; charset=utf-8", respBody)
+		return
+	}
+	c.Data(statusCode, "application/json; charset=utf-8", merged)
 }
 
 // GET /api/seedance/assets
