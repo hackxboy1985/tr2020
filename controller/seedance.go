@@ -199,8 +199,11 @@ func getOrCreateDefaultAssetGroup(c *gin.Context, gw *service.SeedanceGatewayCha
 		"GroupType":   "AIGC",
 	})
 	statusCode, respBody, err3 := service.SeedanceProxyRequest(gw, "POST", "/api/seedance/proxy/assets/groups", nil, createBody)
-	if err3 != nil || statusCode < 200 || statusCode >= 300 {
-		return "", fmt.Errorf("create default asset group failed: %v", err3)
+	if err3 != nil {
+		return "", fmt.Errorf("create default asset group failed: %w", err3)
+	}
+	if statusCode < 200 || statusCode >= 300 {
+		return "", fmt.Errorf("create default asset group upstream error %d: %s", statusCode, string(respBody))
 	}
 	var resp struct {
 		Result struct {
