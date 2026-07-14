@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
-
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relay/channel"
 	"github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
@@ -205,6 +205,12 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	if err != nil {
 		return nil, err
 	}
+
+	// 打印最终发往上游的请求体，方便排查转换问题
+	logger.LogInfo(c, fmt.Sprintf("doubao video upstream request body: %s", data))
+	// 保存到 context，供 savePrompt 写入 prompt_logs.request_body
+	c.Set(string(constant.ContextKeyVideoRequestBody), string(data))
+
 	return bytes.NewReader(data), nil
 }
 
@@ -287,21 +293,30 @@ func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq) (*
 		Content: []ContentItem{},
 	}
 
-	// Add images if present
-	if req.HasImage() {
-		for _, imgURL := range req.Images {
-			r.Content = append(r.Content, ContentItem{
-				Type: "image_url",
-				ImageURL: &MediaURL{
-					URL: imgURL,
-				},
-			})
-		}
-	}
-
 	metadata := req.Metadata
 	if err := taskcommon.UnmarshalMetadata(metadata, &r); err != nil {
 		return nil, errors.Wrap(err, "unmarshal metadata failed")
+	}
+
+	// Re-merge image items extracted during parsing.
+	// UnmarshalMetadata may overwrite r.Content with metadata["content"] (audio/video only),
+	// so images from req.Images must be prepended afterwards to preserve correct order.
+	if req.HasImage() {
+		var imageItems []ContentItem
+		for _, imgURL := range req.Images {
+			imageItems = append(imageItems, ContentItem{
+				Type:     "image_url",
+				ImageURL: &MediaURL{URL: imgURL},
+			})
+		}
+		r.Content = append(imageItems, r.Content...)
+	}
+
+	// Doubao reference-media mode requires audio_url items to carry role="reference_audio".
+	for i := range r.Content {
+		if (r.Content[i].Type == "audio_url" || r.Content[i].AudioURL != nil) && r.Content[i].Role == "" {
+			r.Content[i].Role = "reference_audio"
+		}
 	}
 
 	if sec, _ := strconv.Atoi(req.Seconds); sec > 0 {
