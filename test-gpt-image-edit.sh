@@ -2,7 +2,7 @@
 
 
 BASE_URL="${1:-https://www.luluai.cc}"
-API_KEY="${2:-sk-UJkSn1Bxs2Jynb8pBj3iIpbfiXjVVnlsQQeMq8gh33EfBV3}"
+API_KEY="${2:-sk-UJkSn1Bxs2Jynb8pBj3iIpbfiXjVVnlsQQeMq8gh33EfBV37}"
 
 MODEL="gpt-image-2"
 PROMPT="生成分镜图，6个镜头，图中人物在场景中行走，仿佛穿越时空，突出惊讶的表情"
@@ -11,8 +11,9 @@ IMAGE_FILE2="/Users/mac/Downloads/1781612162129_8861.jpg"
 N="1"
 SIZE="1536x1024"
 QUALITY="medium"
-BACKGROUND="auto"
+BACKGROUND="auto" 
 MODERATION="low"
+output_format="jpeg"
 
 OUTPUT_DIR="/tmp/gpt-image-edit-test"
 mkdir -p "$OUTPUT_DIR"

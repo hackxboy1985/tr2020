@@ -1,7 +1,7 @@
 #!/bin/bash
 
 BASE_URL="${1:-https://www.luluai.cc}"
-API_KEY="${2:-sk-UJkSn1Bxs2Jynb8pBj3iIpbfiXjVVnlsQQeMq8gh33EfBV3}"
+API_KEY="${2:-sk-UJkSn1Bxs2Jynb8pBj3iIpbfiXjVVnlsQQeMq8gh33EfBV37}"
 MODEL="${3:-gemini-image-banana2}"
 IMAGE_FILE="/Users/mac/Downloads/girl.jpg"
 IMAGE_DATA=$(base64 -i "$IMAGE_FILE" | tr -d '\n')

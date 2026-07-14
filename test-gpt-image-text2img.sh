@@ -1,9 +1,11 @@
 #!/bin/bash
 
+#BASE_URL="${1:-https://aiyiwei.vip}"
+#API_KEY="${2:-sk-CUNElOy8MPUZ0jR27uyck2i1WS0IpasqVlmOlDn3Rn4Nc2mp}"
 BASE_URL="${1:-https://www.luluai.cc}"
-API_KEY="${2:-sk-UJkSn1Bxs2Jynb8pBj3iIpbfiXjVVnlsQQeMq8gh33EfBV3}"
+API_KEY="${2:-sk-UJkSn1Bxs2Jynb8pBj3iIpbfiXjVVnlsQQeMq8gh33EfBV37}"
 
-MODEL="gpt-image-2:stable"
+MODEL="gpt-image-2"
 PROMPT="A futuristic city skyline at sunset with neon lights"
 SIZE="1024x1536"
 QUALITY="medium"
