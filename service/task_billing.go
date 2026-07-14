@@ -225,7 +225,7 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 		model.UpdateChannelUsedQuota(task.ChannelId, quotaDelta)
 	} else {
 		logType = model.LogTypeRefund
-		logQuota = -quotaDelta
+		logQuota = quotaDelta // 负数，sum(quota) 时自动相减，避免用量统计双计
 	}
 	other := taskBillingOther(task)
 	other["task_id"] = task.TaskID
