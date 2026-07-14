@@ -67,9 +67,15 @@ func GetUserQuotaDates(c *gin.Context) {
 	return
 }
 
-// GetUserQuotaByToken 查询当前用户各令牌的用量统计（普通用户只能看自己）
+// GetUserQuotaByToken 查询各令牌的用量统计
+// 管理员可查看所有用户，普通用户只能看自己
 func GetUserQuotaByToken(c *gin.Context) {
 	userId := c.GetInt("id")
+	role := c.GetInt("role")
+	// 管理员不按 userId 过滤（传 0 表示全量）
+	if role >= common.RoleAdminUser {
+		userId = 0
+	}
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	if endTimestamp-startTimestamp > 2592000 {

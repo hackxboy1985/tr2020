@@ -637,14 +637,19 @@ type TokenQuotaStat struct {
 	CreatedAt int64  `json:"created_at"`
 }
 
-// GetQuotaStatByToken 查询某用户在时间范围内各令牌的用量，按小时聚合
+// GetQuotaStatByToken 查询在时间范围内各令牌的用量，按小时聚合
+// userId=0 时查全量（管理员视角）
 func GetQuotaStatByToken(userId int, startTimestamp int64, endTimestamp int64) ([]TokenQuotaStat, error) {
 	var results []TokenQuotaStat
-	err := LOG_DB.Table("logs").
+	query := LOG_DB.Table("logs").
 		Select("token_name, sum(quota) as quota, count(*) as count, sum(prompt_tokens)+sum(completion_tokens) as token_used, (created_at - (created_at % 3600)) as created_at").
-		Where("user_id = ? AND type IN ? AND created_at >= ? AND created_at <= ?",
-			userId, []int{LogTypeConsume, LogTypeRefund}, startTimestamp, endTimestamp).
-		Where("token_name != ''").
+		Where("type IN ? AND created_at >= ? AND created_at <= ?",
+			[]int{LogTypeConsume, LogTypeRefund}, startTimestamp, endTimestamp).
+		Where("token_name != ''")
+	if userId != 0 {
+		query = query.Where("user_id = ?", userId)
+	}
+	err := query.
 		Group("token_name, (created_at - (created_at % 3600))").
 		Order("created_at asc").
 		Scan(&results).Error
