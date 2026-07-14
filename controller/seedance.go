@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
@@ -22,6 +23,7 @@ func seedanceGetGW(c *gin.Context) (*service.SeedanceGatewayChannel, bool) {
 	userGroup := c.GetString("group")
 	gw, err := service.GetSeedanceGatewayChannel(userGroup)
 	if err != nil {
+		logger.LogError(c, fmt.Sprintf("seedance: no gateway channel for group %s: %v", userGroup, err))
 		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "message": err.Error()})
 		return nil, false
 	}
@@ -183,6 +185,7 @@ func getOrCreateDefaultAssetGroup(c *gin.Context, gw *service.SeedanceGatewayCha
 	// 查本地表有无该用户的 AIGC 素材组
 	groups, _, err := model.ListSeedanceAssetGroups(userID, 1, 1)
 	if err == nil && len(groups) > 0 {
+		logger.LogInfo(c, fmt.Sprintf("seedance: found existing asset group %s for user %d", groups[0].UpstreamGroupID, userID))
 		return groups[0].UpstreamGroupID, nil
 	}
 
@@ -192,6 +195,8 @@ func getOrCreateDefaultAssetGroup(c *gin.Context, gw *service.SeedanceGatewayCha
 	if err2 == nil && user != nil {
 		groupName = user.Username
 	}
+
+	logger.LogInfo(c, fmt.Sprintf("seedance: creating default asset group '%s' for user %d", groupName, userID))
 
 	createBody, _ := json.Marshal(map[string]string{
 		"Name":        groupName,
@@ -211,7 +216,7 @@ func getOrCreateDefaultAssetGroup(c *gin.Context, gw *service.SeedanceGatewayCha
 		} `json:"Result"`
 	}
 	if err4 := common.Unmarshal(respBody, &resp); err4 != nil || resp.Result.ID == "" {
-		return "", fmt.Errorf("parse create group response failed")
+		return "", fmt.Errorf("parse create group response failed: %s", string(respBody))
 	}
 	g := &model.SeedanceAssetGroup{
 		UserID:          userID,
@@ -222,6 +227,7 @@ func getOrCreateDefaultAssetGroup(c *gin.Context, gw *service.SeedanceGatewayCha
 		RawData:         string(respBody),
 	}
 	_ = model.CreateSeedanceAssetGroup(g)
+	logger.LogInfo(c, fmt.Sprintf("seedance: created asset group %s for user %d", resp.Result.ID, userID))
 	return resp.Result.ID, nil
 }
 

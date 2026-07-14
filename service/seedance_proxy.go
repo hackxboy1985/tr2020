@@ -95,8 +95,11 @@ func SeedanceProxyRequest(
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
+	common.SysLog(fmt.Sprintf("seedance proxy: %s %s", method, targetURL))
+
 	resp, err := GetHttpClient().Do(req)
 	if err != nil {
+		common.SysError(fmt.Sprintf("seedance proxy do request failed: %s %s: %v", method, targetURL, err))
 		return 0, nil, fmt.Errorf("do request failed: %w", err)
 	}
 	defer resp.Body.Close()
@@ -105,5 +108,10 @@ func SeedanceProxyRequest(
 	if err != nil {
 		return resp.StatusCode, nil, fmt.Errorf("read response failed: %w", err)
 	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		common.SysError(fmt.Sprintf("seedance proxy upstream error: %s %s -> %d: %s", method, targetURL, resp.StatusCode, string(respBody)))
+	}
+
 	return resp.StatusCode, respBody, nil
 }
