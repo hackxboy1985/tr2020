@@ -41,6 +41,33 @@ export async function adminListAssets(params: {
   return res.data.data
 }
 
+// ---- User: Asset Groups ----
+
+export async function userListAssetGroups(params: {
+  p?: number
+  page_size?: number
+}): Promise<PagedResponse<SeedanceAssetGroup>> {
+  const res = await api.get<ApiResponse<PagedResponse<SeedanceAssetGroup>>>(
+    '/api/seedance/asset-groups',
+    { params }
+  )
+  return res.data.data
+}
+
+// ---- User: Assets ----
+
+export async function userListAssets(params: {
+  p?: number
+  page_size?: number
+  group_id?: string
+}): Promise<PagedResponse<SeedanceAsset>> {
+  const res = await api.get<ApiResponse<PagedResponse<SeedanceAsset>>>(
+    '/api/seedance/assets',
+    { params }
+  )
+  return res.data.data
+}
+
 // ---- Admin: Face Verifications ----
 
 export async function adminListFaceVerifications(params: {

@@ -112,6 +112,11 @@ export function useSidebarData(): SidebarData {
             url: '/profile',
             icon: User,
           },
+          {
+            title: t('Seedance Assets'),
+            url: '/seedance',
+            icon: Image,
+          },
         ],
       },
       {
@@ -127,11 +132,6 @@ export function useSidebarData(): SidebarData {
             title: t('Video Channels'),
             url: '/video-channels',
             icon: Video,
-          },
-          {
-            title: t('Seedance Assets'),
-            url: '/seedance',
-            icon: Image,
           },
           {
             title: t('Models'),

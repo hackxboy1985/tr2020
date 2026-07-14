@@ -19,10 +19,14 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useAuthStore } from '@/stores/auth-store'
+import { ROLE } from '@/lib/roles'
 import {
   adminListAssetGroups,
   adminListAssets,
   adminListFaceVerifications,
+  userListAssetGroups,
+  userListAssets,
   seedanceQueryKeys,
 } from './api'
 import type {
@@ -44,15 +48,21 @@ function AssetGroupsTab() {
   const { t } = useTranslation()
   const [page, setPage] = useState(1)
   const pageSize = 20
+  const isAdmin = (useAuthStore.getState().auth.user?.role ?? 0) >= ROLE.ADMIN
 
   const { data, isLoading } = useQuery({
     queryKey: seedanceQueryKeys.assetGroups({ p: page, page_size: pageSize }),
-    queryFn: () => adminListAssetGroups({ p: page, page_size: pageSize }),
+    queryFn: () =>
+      isAdmin
+        ? adminListAssetGroups({ p: page, page_size: pageSize })
+        : userListAssetGroups({ p: page, page_size: pageSize }),
   })
 
   const columns = [
     groupColHelper.accessor('id', { header: 'ID', size: 60 }),
-    groupColHelper.accessor('user_id', { header: t('User ID'), size: 80 }),
+    ...(isAdmin
+      ? [groupColHelper.accessor('user_id', { header: t('User ID'), size: 80 })]
+      : []),
     groupColHelper.accessor('upstream_group_id', {
       header: t('Upstream Group ID'),
       cell: (info) => (
@@ -104,15 +114,21 @@ function AssetsTab() {
   const { t } = useTranslation()
   const [page, setPage] = useState(1)
   const pageSize = 20
+  const isAdmin = (useAuthStore.getState().auth.user?.role ?? 0) >= ROLE.ADMIN
 
   const { data, isLoading } = useQuery({
     queryKey: seedanceQueryKeys.assets({ p: page, page_size: pageSize }),
-    queryFn: () => adminListAssets({ p: page, page_size: pageSize }),
+    queryFn: () =>
+      isAdmin
+        ? adminListAssets({ p: page, page_size: pageSize })
+        : userListAssets({ p: page, page_size: pageSize }),
   })
 
   const columns = [
     assetColHelper.accessor('id', { header: 'ID', size: 60 }),
-    assetColHelper.accessor('user_id', { header: t('User ID'), size: 80 }),
+    ...(isAdmin
+      ? [assetColHelper.accessor('user_id', { header: t('User ID'), size: 80 })]
+      : []),
     assetColHelper.accessor('upstream_asset_id', {
       header: t('Upstream Asset ID'),
       cell: (info) => (
@@ -128,6 +144,26 @@ function AssetsTab() {
       ),
     }),
     assetColHelper.accessor('name', { header: t('Name') }),
+    assetColHelper.accessor('source_url', {
+      header: t('URL'),
+      cell: (info) => {
+        const url = info.getValue()
+        if (!url) return <span className='text-muted-foreground text-xs'>—</span>
+        const isImage = info.row.original.asset_type === 'Image'
+        return (
+          <a
+            href={url}
+            target='_blank'
+            rel='noopener noreferrer'
+            title={url}
+            className='inline-flex items-center gap-1 text-xs text-blue-500 hover:underline max-w-[180px] truncate block'
+          >
+            {isImage ? '🖼 ' : ''}
+            {url.split('/').pop() ?? url}
+          </a>
+        )
+      },
+    }),
     assetColHelper.accessor('asset_type', {
       header: t('Type'),
       cell: (info) => <Badge variant='outline'>{info.getValue()}</Badge>,
