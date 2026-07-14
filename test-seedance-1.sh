@@ -19,7 +19,7 @@ UPSTREAM_API_KEY="${UPSTREAM_API_KEY:-sk-KIzafhiGGLfG14AdRxLvvL76bEN7lQ70zjQ0UpN
 MODEL="${MODEL:-doubao-seedance-2-0-260128}"
 
 # 请求参数（Ark 原生格式，字段在根级）
-PROMPT="${PROMPT:-女子人物面对镜头自然说话：“你好，我是归一体验官”}"
+PROMPT="${PROMPT:-女子人物面对镜头自然说话（使用音频1声音）：“你好，我是归一体验官”}"
 DURATION="${DURATION:-4}"           # integer，不是字符串
 RESOLUTION="${RESOLUTION:-480p}"
 RATIO="${RATIO:-16:9}"
