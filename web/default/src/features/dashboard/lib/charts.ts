@@ -1031,6 +1031,24 @@ export function processTokenChartData(
       color: { type: 'ordinal', range: colorRange },
       background: { fill: 'transparent' },
     },
+    spec_token_pie: {
+      type: 'pie',
+      data: [{ id: 'tokenPieData', values: [] }],
+      outerRadius: 0.8,
+      innerRadius: 0.5,
+      padAngle: 0.6,
+      valueField: 'value',
+      categoryField: 'type',
+      title: {
+        visible: true,
+        text: tt('Token Consumption Distribution'),
+        subtext: tt('No data available'),
+      },
+      legends: { visible: true, orient: 'left' },
+      label: { visible: true },
+      color: { type: 'ordinal', range: colorRange },
+      background: { fill: 'transparent' },
+    },
     spec_token_trend: {
       type: 'area',
       data: [{ id: 'tokenTrendData', values: [] }],
@@ -1114,6 +1132,30 @@ export function processTokenChartData(
               key: (d: { Token: string }) => d.Token,
               value: (d: { rawQuota: number }) =>
                 `${(d.rawQuota / quotaPerUnit).toFixed(4)}`,
+            },
+          ],
+        },
+      },
+      color: { specified: tokenColorMap },
+      background: { fill: 'transparent' },
+      animation: true,
+    },
+    spec_token_pie: {
+      ...emptyResult.spec_token_pie,
+      data: [
+        {
+          id: 'tokenPieData',
+          values: rankValues.map((r) => ({ type: r.Token, value: r.rawQuota })),
+        },
+      ],
+      title: { visible: true, text: tt('Token Consumption Distribution') },
+      tooltip: {
+        mark: {
+          content: [
+            {
+              key: (datum: Record<string, unknown>) => datum?.type,
+              value: (datum: Record<string, unknown>) =>
+                `${(Number(datum?.value || 0) / quotaPerUnit).toFixed(4)}`,
             },
           ],
         },

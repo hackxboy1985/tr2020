@@ -122,6 +122,7 @@ export interface ProcessedUserChartData {
 
 export interface ProcessedTokenChartData {
   spec_token_rank: VChartSpec
+  spec_token_pie: VChartSpec
   spec_token_trend: VChartSpec
 }
 

@@ -55,6 +55,11 @@ const TOKEN_CHARTS: {
     specKey: 'spec_token_rank',
   },
   {
+    value: 'pie',
+    labelKey: 'Token Consumption Distribution',
+    specKey: 'spec_token_pie',
+  },
+  {
     value: 'trend',
     labelKey: 'Token Consumption Trend',
     specKey: 'spec_token_trend',
