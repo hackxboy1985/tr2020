@@ -41,3 +41,11 @@ test-gemini-image.sh
 test-gpt-image-edit.sh
 test-gpt-image-text2img.sh
 test-seedance-1.sh
+docs/咪咕/API.zh-CN.md
+docs/咪咕/ARK-VIDEO-API.zh-CN.md
+docs/咪咕/DIGITAL-AVATAR-DEMO.zh-CN.md
+docs/咪咕/FACE-ASSET-DEMO.zh-CN.md
+docs/咪咕/seedance-asset-api.md
+docs/咪咕/seedance-asset-design.md
+docs/咪咕/seedance-asset-simple.md
+docs/咪咕/中教.md
