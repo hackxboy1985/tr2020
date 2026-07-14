@@ -972,6 +972,11 @@ func (channel *Channel) SetSetting(setting dto.ChannelSettings) {
 
 func (channel *Channel) GetOtherSettings() dto.ChannelOtherSettings {
 	setting := dto.ChannelOtherSettings{}
+	// 先尝试从 Other 字段解析（前端渠道特定配置 textarea 写入此列）
+	if channel.Other != "" {
+		_ = common.UnmarshalJsonStr(channel.Other, &setting)
+	}
+	// 再用 OtherSettings（settings 列）覆盖，优先级更高
 	if channel.OtherSettings != "" {
 		err := common.UnmarshalJsonStr(channel.OtherSettings, &setting)
 		if err != nil {
