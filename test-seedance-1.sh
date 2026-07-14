@@ -2,9 +2,10 @@
 # ============================================================
 # Seedance 2.0 计费对比测试脚本（火山方舟原生接口格式）
 # 对应文档: docs/咪咕/ARK-VIDEO-API.zh-CN.md
+# 请求体使用 Ark 原生格式（content[] 根级字段），路径与 test-seedance.sh 相同
 # 接口路径:
-#   创建: POST /api/v3/contents/generations/tasks
-#   查询: GET  /api/v3/contents/generations/tasks/{task_id}
+#   创建: POST /v1/video/generations
+#   查询: GET  /v1/videos/{task_id}
 # ============================================================
 
 # ---------- 配置区（按需修改）----------
@@ -12,17 +13,17 @@ NEWAPI_BASE_URL="${NEWAPI_BASE_URL:-http://book2:3000}"
 NEWAPI_API_KEY="${NEWAPI_API_KEY:-sk-60oOqvQYb8vziFfg2hPHlTKW3X80Pc6sIBDC5EFHCY0sn5NY}"
 
 UPSTREAM_BASE_URL="${UPSTREAM_BASE_URL:-https://sd.dawnloadai.com:8443}"
-UPSTREAM_API_KEY="${UPSTREAM_API_KEY:-}"   # 上游 new-api 令牌（留空则跳过上游日志对比）
+UPSTREAM_API_KEY="${UPSTREAM_API_KEY:-sk-KIzafhiGGLfG14AdRxLvvL76bEN7lQ70zjQ0UpNZQm0rKfPS}"   # 上游 new-api 令牌（留空则跳过上游日志对比）
 
 # 视频模型
 MODEL="${MODEL:-doubao-seedance-2-0-260128}"
 
 # 请求参数（Ark 原生格式，字段在根级）
-PROMPT="${PROMPT:-人物面对镜头自然介绍产品}"
-DURATION="${DURATION:-5}"           # integer，不是字符串
-RESOLUTION="${RESOLUTION:-720p}"
+PROMPT="${PROMPT:-女子人物面对镜头自然说话：“你好，我是归一体验官”}"
+DURATION="${DURATION:-4}"           # integer，不是字符串
+RESOLUTION="${RESOLUTION:-480p}"
 RATIO="${RATIO:-16:9}"
-GENERATE_AUDIO="${GENERATE_AUDIO:-false}"
+GENERATE_AUDIO="${GENERATE_AUDIO:-true}"
 WATERMARK="${WATERMARK:-false}"
 
 # 参考图 URL（留空则纯文生视频）
@@ -30,7 +31,7 @@ IMAGE_URL="${IMAGE_URL:-https://static.horse-world.mints-id.com/rh/2026060420460
 # 参考视频 URL（留空则不传）
 VIDEO_URL="${VIDEO_URL:-}"
 # 参考音频 URL（留空则不传）
-AUDIO_URL="${AUDIO_URL:-}"
+AUDIO_URL="${AUDIO_URL:-https://static.horse-world.mints-id.com/audio/trim/f0eab3ec-2bbc-49cb-8e26-59ca050ceaf2.wav}"
 
 # ---------- 颜色 ----------
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
@@ -116,7 +117,7 @@ submit_task() {
 
   local tmpfile; tmpfile=$(mktemp)
   HTTP_CODE=$(curl -s -o "$tmpfile" -w "%{http_code}" \
-    -X POST "${NEWAPI_BASE_URL}/api/v3/contents/generations/tasks" \
+    -X POST "${NEWAPI_BASE_URL}/v1/video/generations" \
     -H "Authorization: Bearer ${NEWAPI_API_KEY}" \
     -H "Content-Type: application/json" \
     -d "$body")
@@ -131,7 +132,7 @@ poll_task() {
   local retry=0
 
   log_info "开始轮询 task_id=${task_id}，间隔 ${interval}s，最多 ${max_retries} 次"
-  log_info "查询路径: GET /api/v3/contents/generations/tasks/${task_id}"
+  log_info "查询路径: GET /v1/videos/${task_id}"
 
   while [ $retry -lt $max_retries ]; do
     retry=$((retry + 1))
@@ -139,7 +140,7 @@ poll_task() {
 
     local tmpfile; tmpfile=$(mktemp)
     curl -s -o "$tmpfile" \
-      -X GET "${NEWAPI_BASE_URL}/api/v3/contents/generations/tasks/${task_id}" \
+      -X GET "${NEWAPI_BASE_URL}/v1/videos/${task_id}" \
       -H "Authorization: Bearer ${NEWAPI_API_KEY}"
     POLL_BODY=$(cat "$tmpfile"); rm -f "$tmpfile"
 
@@ -211,7 +212,7 @@ echo -e "  音频生成:      ${GENERATE_AUDIO}  水印: ${WATERMARK}"
 log_sep
 
 # ---------- Step 1: 提交任务 ----------
-log_title "Step 1 · 提交 Seedance 任务（POST /api/v3/contents/generations/tasks）"
+log_title "Step 1 · 提交 Seedance 任务（POST /v1/video/generations，Ark 原生格式）"
 
 SUBMIT_TS=$(date +%s)
 submit_task
@@ -313,7 +314,7 @@ fi
 
 echo ""
 echo -e "  ${BOLD}[ 接口路径对比 ]${NC}"
-echo -e "  本脚本 (Ark 原生): POST /api/v3/contents/generations/tasks"
+echo -e "  本脚本 (Ark 原生请求体): POST /v1/video/generations"
 echo -e "  旧脚本 (兼容接口): POST /v1/video/generations"
 
 if [ "$VIDEO_URL_RESULT" != "N/A" ] && [ -n "$VIDEO_URL_RESULT" ]; then
