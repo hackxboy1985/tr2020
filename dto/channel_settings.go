@@ -46,6 +46,8 @@ type ChannelOtherSettings struct {
 	// 查询接口: 默认 /api/v3/contents/generations/tasks，中转填 /v1/videos （后面自动拼 /{task_id}）
 	DoubaoVideoGeneratePath string `json:"doubao_video_generate_path,omitempty"`
 	DoubaoVideoFetchPath    string `json:"doubao_video_fetch_path,omitempty"`
+	// Seedance Gateway 素材库/人脸认证服务地址，例如 https://sd.dawnloadai.com:9444
+	SeedanceAssetBaseUrl string `json:"seedance_asset_base_url,omitempty"`
 }
 
 func (s *ChannelOtherSettings) IsOpenRouterEnterprise() bool {

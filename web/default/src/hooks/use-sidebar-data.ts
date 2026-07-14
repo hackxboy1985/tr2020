@@ -33,6 +33,7 @@ import {
   Video,
   Users,
   Wallet,
+  Image,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { type SidebarData } from '@/components/layout/types'
@@ -126,6 +127,11 @@ export function useSidebarData(): SidebarData {
             title: t('Video Channels'),
             url: '/video-channels',
             icon: Video,
+          },
+          {
+            title: t('Seedance Assets'),
+            url: '/seedance',
+            icon: Image,
           },
           {
             title: t('Models'),

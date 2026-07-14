@@ -284,6 +284,9 @@ func migrateDB() error {
 		&PromptLog{},
 		&VideoProject{},
 		&VideoChannel{},
+		&SeedanceAssetGroup{},
+		&SeedanceAsset{},
+		&SeedanceFaceVerification{},
 	)
 	if err != nil {
 		return err

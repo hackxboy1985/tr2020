@@ -1,0 +1,408 @@
+package controller
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/url"
+	"strconv"
+
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
+	"github.com/gin-gonic/gin"
+)
+
+// ============================================================
+// helpers
+// ============================================================
+
+func seedanceGetGW(c *gin.Context) (*service.SeedanceGatewayChannel, bool) {
+	userGroup := c.GetString("group")
+	gw, err := service.GetSeedanceGatewayChannel(userGroup)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "message": err.Error()})
+		return nil, false
+	}
+	return gw, true
+}
+
+// proxyAndPassthrough sends the request to upstream and writes response back.
+// It also calls the onSuccess callback (with status code and body) before writing.
+func proxyAndPassthrough(c *gin.Context, gw *service.SeedanceGatewayChannel, method, path string, query url.Values, body []byte, onSuccess func(statusCode int, body []byte)) {
+	statusCode, respBody, err := service.SeedanceProxyRequest(gw, method, path, query, body)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	if onSuccess != nil && statusCode >= 200 && statusCode < 300 {
+		onSuccess(statusCode, respBody)
+	}
+	c.Data(statusCode, "application/json; charset=utf-8", respBody)
+}
+
+func readBody(c *gin.Context) []byte {
+	body, _ := c.GetRawData()
+	return body
+}
+
+func forwardQuery(c *gin.Context) url.Values {
+	return c.Request.URL.Query()
+}
+
+// ============================================================
+// Asset Groups
+// ============================================================
+
+// POST /api/seedance/asset-groups
+func SeedanceCreateAssetGroup(c *gin.Context) {
+	gw, ok := seedanceGetGW(c)
+	if !ok {
+		return
+	}
+	userID := c.GetInt("id")
+	body := readBody(c)
+
+	proxyAndPassthrough(c, gw, http.MethodPost, "/api/seedance/proxy/assets/groups", nil, body, func(_ int, respBody []byte) {
+		// parse upstream_group_id
+		var resp struct {
+			Result struct {
+				ID   string `json:"Id"`
+				Name string `json:"Name"`
+				Desc string `json:"Description"`
+				Type string `json:"GroupType"`
+			} `json:"Result"`
+		}
+		if err := common.Unmarshal(respBody, &resp); err != nil || resp.Result.ID == "" {
+			return
+		}
+		// parse name/desc/type from request body for local record
+		var req struct {
+			Name        string `json:"Name"`
+			Description string `json:"Description"`
+			GroupType   string `json:"GroupType"`
+		}
+		_ = common.Unmarshal(body, &req)
+
+		g := &model.SeedanceAssetGroup{
+			UserID:          userID,
+			ChannelID:       gw.Channel.Id,
+			UpstreamGroupID: resp.Result.ID,
+			Name:            req.Name,
+			Description:     req.Description,
+			GroupType:       req.GroupType,
+			RawData:         string(respBody),
+		}
+		_ = model.CreateSeedanceAssetGroup(g)
+	})
+}
+
+// GET /api/seedance/asset-groups
+func SeedanceListAssetGroups(c *gin.Context) {
+	gw, ok := seedanceGetGW(c)
+	if !ok {
+		return
+	}
+	proxyAndPassthrough(c, gw, http.MethodGet, "/api/seedance/proxy/assets/groups", forwardQuery(c), nil, nil)
+}
+
+// GET /api/seedance/asset-groups/:id
+func SeedanceGetAssetGroup(c *gin.Context) {
+	gw, ok := seedanceGetGW(c)
+	if !ok {
+		return
+	}
+	userID := c.GetInt("id")
+	localID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	g, err := model.GetSeedanceAssetGroupByID(localID, userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset group not found"})
+		return
+	}
+	proxyAndPassthrough(c, gw, http.MethodGet, "/api/seedance/proxy/assets/groups/"+g.UpstreamGroupID, forwardQuery(c), nil, nil)
+}
+
+// PUT /api/seedance/asset-groups/:id
+func SeedancePutAssetGroup(c *gin.Context) {
+	seedanceModifyAssetGroup(c, http.MethodPut)
+}
+
+// PATCH /api/seedance/asset-groups/:id
+func SeedancePatchAssetGroup(c *gin.Context) {
+	seedanceModifyAssetGroup(c, http.MethodPatch)
+}
+
+func seedanceModifyAssetGroup(c *gin.Context, method string) {
+	gw, ok := seedanceGetGW(c)
+	if !ok {
+		return
+	}
+	userID := c.GetInt("id")
+	localID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	g, err := model.GetSeedanceAssetGroupByID(localID, userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset group not found"})
+		return
+	}
+	body := readBody(c)
+	proxyAndPassthrough(c, gw, method, "/api/seedance/proxy/assets/groups/"+g.UpstreamGroupID, nil, body, func(_ int, respBody []byte) {
+		var req struct {
+			Name        string `json:"Name"`
+			Description string `json:"Description"`
+		}
+		_ = common.Unmarshal(body, &req)
+		_ = model.UpdateSeedanceAssetGroupRaw(localID, req.Name, req.Description, string(respBody))
+	})
+}
+
+// DELETE /api/seedance/asset-groups/:id
+func SeedanceDeleteAssetGroup(c *gin.Context) {
+	gw, ok := seedanceGetGW(c)
+	if !ok {
+		return
+	}
+	userID := c.GetInt("id")
+	localID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	g, err := model.GetSeedanceAssetGroupByID(localID, userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset group not found"})
+		return
+	}
+	proxyAndPassthrough(c, gw, http.MethodDelete, "/api/seedance/proxy/assets/groups/"+g.UpstreamGroupID, nil, nil, func(_ int, _ []byte) {
+		_ = model.SoftDeleteSeedanceAssetGroup(localID, userID)
+	})
+}
+
+// ============================================================
+// Assets
+// ============================================================
+
+// POST /api/seedance/assets
+func SeedanceCreateAsset(c *gin.Context) {
+	gw, ok := seedanceGetGW(c)
+	if !ok {
+		return
+	}
+	userID := c.GetInt("id")
+	body := readBody(c)
+
+	proxyAndPassthrough(c, gw, http.MethodPost, "/api/seedance/proxy/assets", nil, body, func(_ int, respBody []byte) {
+		var resp struct {
+			Result struct {
+				ID string `json:"Id"`
+			} `json:"Result"`
+		}
+		if err := common.Unmarshal(respBody, &resp); err != nil || resp.Result.ID == "" {
+			return
+		}
+		var req struct {
+			GroupID   string `json:"GroupId"`
+			URL       string `json:"URL"`
+			AssetType string `json:"AssetType"`
+			Name      string `json:"Name"`
+		}
+		_ = common.Unmarshal(body, &req)
+
+		a := &model.SeedanceAsset{
+			UserID:          userID,
+			ChannelID:       gw.Channel.Id,
+			UpstreamAssetID: resp.Result.ID,
+			UpstreamGroupID: req.GroupID,
+			Name:            req.Name,
+			AssetType:       req.AssetType,
+			SourceURL:       req.URL,
+			Status:          "Processing",
+			RawData:         string(respBody),
+		}
+		_ = model.CreateSeedanceAsset(a)
+	})
+}
+
+// GET /api/seedance/assets
+func SeedanceListAssets(c *gin.Context) {
+	gw, ok := seedanceGetGW(c)
+	if !ok {
+		return
+	}
+	proxyAndPassthrough(c, gw, http.MethodGet, "/api/seedance/proxy/assets", forwardQuery(c), nil, nil)
+}
+
+// GET /api/seedance/assets/:id
+func SeedanceGetAsset(c *gin.Context) {
+	gw, ok := seedanceGetGW(c)
+	if !ok {
+		return
+	}
+	userID := c.GetInt("id")
+	localID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	a, err := model.GetSeedanceAssetByID(localID, userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset not found"})
+		return
+	}
+	proxyAndPassthrough(c, gw, http.MethodGet, "/api/seedance/proxy/assets/"+a.UpstreamAssetID, forwardQuery(c), nil, func(_ int, respBody []byte) {
+		// update local status from upstream response
+		var resp struct {
+			Result struct {
+				Status string `json:"Status"`
+			} `json:"Result"`
+		}
+		if err2 := common.Unmarshal(respBody, &resp); err2 == nil && resp.Result.Status != "" {
+			_ = model.UpdateSeedanceAssetStatus(localID, resp.Result.Status, string(respBody))
+		}
+	})
+}
+
+// PUT /api/seedance/assets/:id
+func SeedancePutAsset(c *gin.Context) {
+	seedanceModifyAsset(c, http.MethodPut)
+}
+
+// PATCH /api/seedance/assets/:id
+func SeedancePatchAsset(c *gin.Context) {
+	seedanceModifyAsset(c, http.MethodPatch)
+}
+
+func seedanceModifyAsset(c *gin.Context, method string) {
+	gw, ok := seedanceGetGW(c)
+	if !ok {
+		return
+	}
+	userID := c.GetInt("id")
+	localID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	a, err := model.GetSeedanceAssetByID(localID, userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset not found"})
+		return
+	}
+	body := readBody(c)
+	proxyAndPassthrough(c, gw, method, "/api/seedance/proxy/assets/"+a.UpstreamAssetID, nil, body, func(_ int, respBody []byte) {
+		_ = model.UpdateSeedanceAssetStatus(localID, a.Status, string(respBody))
+	})
+}
+
+// DELETE /api/seedance/assets/:id
+func SeedanceDeleteAsset(c *gin.Context) {
+	gw, ok := seedanceGetGW(c)
+	if !ok {
+		return
+	}
+	userID := c.GetInt("id")
+	localID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	a, err := model.GetSeedanceAssetByID(localID, userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset not found"})
+		return
+	}
+	proxyAndPassthrough(c, gw, http.MethodDelete, "/api/seedance/proxy/assets/"+a.UpstreamAssetID, nil, nil, func(_ int, _ []byte) {
+		_ = model.SoftDeleteSeedanceAsset(localID, userID)
+	})
+}
+
+// ============================================================
+// Face Verifications
+// ============================================================
+
+// POST /api/seedance/face-verifications
+func SeedanceCreateFaceVerification(c *gin.Context) {
+	gw, ok := seedanceGetGW(c)
+	if !ok {
+		return
+	}
+	userID := c.GetInt("id")
+	body := readBody(c)
+
+	proxyAndPassthrough(c, gw, http.MethodPost, "/api/seedance/face-verifications", nil, body, func(_ int, respBody []byte) {
+		var resp struct {
+			VerificationID string `json:"verification_id"`
+			H5URL          string `json:"h5_url"`
+			ExpiresAt      int64  `json:"expires_at"`
+		}
+		if err := common.Unmarshal(respBody, &resp); err != nil || resp.VerificationID == "" {
+			return
+		}
+		v := &model.SeedanceFaceVerification{
+			UserID:         userID,
+			ChannelID:      gw.Channel.Id,
+			VerificationID: resp.VerificationID,
+			Status:         "waiting_user",
+			H5URL:          resp.H5URL,
+			ExpiresAt:      resp.ExpiresAt,
+			RawData:        string(respBody),
+		}
+		_ = model.CreateSeedanceFaceVerification(v)
+	})
+}
+
+// GET /api/seedance/face-verifications/:id
+func SeedanceGetFaceVerification(c *gin.Context) {
+	gw, ok := seedanceGetGW(c)
+	if !ok {
+		return
+	}
+	userID := c.GetInt("id")
+	localID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	v, err := model.GetSeedanceFaceVerificationByID(localID, userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "face verification not found"})
+		return
+	}
+	proxyAndPassthrough(c, gw, http.MethodGet, "/api/seedance/face-verifications/"+v.VerificationID, nil, nil, func(_ int, respBody []byte) {
+		var resp struct {
+			Status  string `json:"status"`
+			GroupID string `json:"group_id"`
+		}
+		if err2 := common.Unmarshal(respBody, &resp); err2 == nil && resp.Status != "" {
+			_ = model.UpdateSeedanceFaceVerificationStatus(localID, resp.Status, resp.GroupID, string(respBody))
+		}
+	})
+}
+
+// ============================================================
+// Admin list endpoints (GET /api/admin/seedance/*)
+// ============================================================
+
+// GET /api/admin/seedance/asset-groups
+func SeedanceAdminListAssetGroups(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	userIDFilter, _ := strconv.Atoi(c.Query("user_id"))
+	groups, total, err := model.ListAllSeedanceAssetGroups(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), userIDFilter)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(groups)
+	common.ApiSuccess(c, pageInfo)
+}
+
+// GET /api/admin/seedance/assets
+func SeedanceAdminListAssets(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	userIDFilter, _ := strconv.Atoi(c.Query("user_id"))
+	groupID := c.Query("group_id")
+	assets, total, err := model.ListAllSeedanceAssets(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), userIDFilter, groupID)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(assets)
+	common.ApiSuccess(c, pageInfo)
+}
+
+// GET /api/admin/seedance/face-verifications
+func SeedanceAdminListFaceVerifications(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	userIDFilter, _ := strconv.Atoi(c.Query("user_id"))
+	items, total, err := model.ListAllSeedanceFaceVerifications(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), userIDFilter)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(items)
+	common.ApiSuccess(c, pageInfo)
+}
+
+// ensure json import used
+var _ = json.Marshal
