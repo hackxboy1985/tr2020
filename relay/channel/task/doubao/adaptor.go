@@ -320,6 +320,9 @@ func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq) (*
 		if (r.Content[i].Type == "image_url" || r.Content[i].ImageURL != nil) && r.Content[i].Role == "" {
 			r.Content[i].Role = "reference_image"
 		}
+		if (r.Content[i].Type == "video_url" || r.Content[i].VideoURL != nil) && r.Content[i].Role == "" {
+			r.Content[i].Role = "reference_video"
+		}
 	}
 
 	if sec, _ := strconv.Atoi(req.Seconds); sec > 0 {
