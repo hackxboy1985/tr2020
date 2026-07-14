@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"crypto/md5"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -189,11 +190,12 @@ func getOrCreateDefaultAssetGroup(c *gin.Context, gw *service.SeedanceGatewayCha
 		return groups[0].UpstreamGroupID, nil
 	}
 
-	// 没有则创建
+	// 没有则创建，组名用 u{id}-{md5(username)前8位}，保证 ASCII 且可追溯
 	user, err2 := model.GetUserById(userID, false)
-	groupName := "default"
-	if err2 == nil && user != nil {
-		groupName = user.Username
+	groupName := fmt.Sprintf("u%d", userID)
+	if err2 == nil && user != nil && user.Username != "" {
+		h := fmt.Sprintf("%x", md5.Sum([]byte(user.Username)))
+		groupName = fmt.Sprintf("u%d-%s", userID, h[:8])
 	}
 
 	logger.LogInfo(c, fmt.Sprintf("seedance: creating default asset group '%s' for user %d", groupName, userID))
