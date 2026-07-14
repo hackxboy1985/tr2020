@@ -103,6 +103,12 @@ func GetSeedanceAssetByUpstreamID(upstreamAssetID string, userID int) (*Seedance
 	return &a, err
 }
 
+func GetSeedanceAssetBySourceURL(sourceURL string, userID int) (*SeedanceAsset, error) {
+	var a SeedanceAsset
+	err := DB.Where("source_url = ? AND user_id = ? AND deleted_at = 0", sourceURL, userID).Order("id desc").First(&a).Error
+	return &a, err
+}
+
 func ListSeedanceAssets(userID int, groupID string, page, pageSize int) ([]*SeedanceAsset, int64, error) {
 	var assets []*SeedanceAsset
 	var total int64

@@ -240,14 +240,30 @@ func SeedanceCreateAsset(c *gin.Context) {
 	userID := c.GetInt("id")
 	body := readBody(c)
 
-	// 解析请求体，如果没有 GroupId，自动获取或创建默认素材组
+	// 解析请求体
 	var req struct {
 		GroupID   string `json:"GroupId"`
 		URL       string `json:"URL"`
 		AssetType string `json:"AssetType"`
 		Name      string `json:"Name"`
+		Force     bool   `json:"Force"` // true=强制重新上传，忽略本地缓存
 	}
 	_ = common.Unmarshal(body, &req)
+
+	// 如果未强制，先按 source_url 查本地表，有 Active 记录直接返回
+	if !req.Force && req.URL != "" {
+		if existing, err := model.GetSeedanceAssetBySourceURL(req.URL, userID); err == nil && existing.Status == "Active" {
+			logger.LogInfo(c, fmt.Sprintf("seedance: asset already exists for url %s, asset_id=%s", req.URL, existing.UpstreamAssetID))
+			result := map[string]interface{}{
+				"Id":       existing.UpstreamAssetID,
+				"LocalId":  existing.ID,
+				"AssetRef": "asset://" + existing.UpstreamAssetID,
+				"Status":   existing.Status,
+			}
+			c.JSON(http.StatusOK, gin.H{"Result": result})
+			return
+		}
+	}
 
 	if req.GroupID == "" {
 		groupID, err := getOrCreateDefaultAssetGroup(c, gw, userID)
@@ -256,10 +272,15 @@ func SeedanceCreateAsset(c *gin.Context) {
 			return
 		}
 		req.GroupID = groupID
-		// 重新构建请求体，加上 GroupId
-		newBody, _ := json.Marshal(req)
-		body = newBody
 	}
+	// 重新构建请求体（去掉 Force 字段，上游不认识）
+	newBody, _ := json.Marshal(map[string]string{
+		"GroupId":   req.GroupID,
+		"URL":       req.URL,
+		"AssetType": req.AssetType,
+		"Name":      req.Name,
+	})
+	body = newBody
 
 	statusCode, respBody, proxyErr := service.SeedanceProxyRequest(gw, http.MethodPost, "/api/seedance/proxy/assets", nil, body)
 	if proxyErr != nil {
