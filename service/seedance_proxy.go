@@ -40,7 +40,12 @@ func GetSeedanceGatewayChannel(userGroup string) (*SeedanceGatewayChannel, error
 		if settings.SeedanceAssetBaseUrl == "" {
 			continue
 		}
-		key, _, apiErr := ch.GetNextEnabledKey()
+		// GetChannelsByType omits the key field — reload with key
+		fullCh, err := model.GetChannelById(ch.Id, true)
+		if err != nil {
+			continue
+		}
+		key, _, apiErr := fullCh.GetNextEnabledKey()
 		if apiErr != nil {
 			continue
 		}
@@ -51,7 +56,7 @@ func GetSeedanceGatewayChannel(userGroup string) (*SeedanceGatewayChannel, error
 			return key
 		}(), strings.TrimRight(settings.SeedanceAssetBaseUrl, "/")))
 		return &SeedanceGatewayChannel{
-			Channel:    ch,
+			Channel:    fullCh,
 			GatewayURL: strings.TrimRight(settings.SeedanceAssetBaseUrl, "/"),
 			Key:        key,
 		}, nil
