@@ -10,7 +10,7 @@ func SetSeedanceRouter(router *gin.Engine) {
 	// 用户侧：TokenAuth 验证，透传到上游 Gateway
 	userGroup := router.Group("/api/seedance")
 	userGroup.Use(middleware.RouteTag("api"))
-	userGroup.Use(middleware.TokenAuth())
+	userGroup.Use(middleware.TokenOrUserAuth())
 	{
 		// 素材组
 		userGroup.POST("/asset-groups", controller.SeedanceCreateAssetGroup)

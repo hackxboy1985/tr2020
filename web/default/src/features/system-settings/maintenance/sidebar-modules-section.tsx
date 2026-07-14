@@ -124,6 +124,10 @@ export function SidebarModulesSection({
         title: t('Profile'),
         description: t('Personal settings and profile management.'),
       },
+      seedance: {
+        title: t('Asset Library'),
+        description: t('Seedance asset library for managing images and videos.'),
+      },
     },
     admin: {
       channel: {
