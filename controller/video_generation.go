@@ -104,6 +104,7 @@ func CreateVideoProject(c *gin.Context) {
 
 	// 检查余额是否足够
 	if quota, _ := model.GetUserQuota(userId, false); quota < preDeductQuota {
+		common.SysLog(fmt.Sprintf("video create rejected: user=%d, need=%d, have=%d, model=%s, ip=%s", userId, preDeductQuota, quota, req.VideoModel, c.ClientIP()))
 		c.JSON(http.StatusOK, gin.H{
 			"code": 400,
 			"msg":  fmt.Sprintf("余额不足，至少需要 %d 积分，当前余额 %d 积分", preDeductQuota, quota),
