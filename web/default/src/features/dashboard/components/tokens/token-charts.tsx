@@ -19,12 +19,13 @@ For commercial licensing, please contact support@quantumnous.com
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { VChart } from '@visactor/react-vchart'
-import { KeyRound, Loader2 } from 'lucide-react'
+import { KeyRound, Loader2, BarChart2, AreaChart } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { getRollingDateRange, type TimeGranularity } from '@/lib/time'
 import { VCHART_OPTION } from '@/lib/vchart'
 import { useThemeCustomization } from '@/context/theme-customization-provider'
 import { useTheme } from '@/context/theme-provider'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getUserQuotaByToken } from '@/features/dashboard/api'
@@ -48,6 +49,7 @@ const TOKEN_CHARTS: {
   value: string
   labelKey: string
   specKey: keyof ProcessedTokenChartData
+  hasToggle?: boolean
 }[] = [
   {
     value: 'rank',
@@ -55,9 +57,10 @@ const TOKEN_CHARTS: {
     specKey: 'spec_token_rank',
   },
   {
-    value: 'pie',
+    value: 'distribution',
     labelKey: 'Token Consumption Distribution',
-    specKey: 'spec_token_pie',
+    specKey: 'spec_token_bar',
+    hasToggle: true,
   },
   {
     value: 'trend',
@@ -84,6 +87,7 @@ export function TokenCharts() {
     getDefaultDays(timeGranularity)
   )
   const [topLimit, setTopLimit] = useState(10)
+  const [distributionMode, setDistributionMode] = useState<'bar' | 'area'>('bar')
   const [timeRange, setTimeRange] = useState(() => {
     const days = getDefaultDays(timeGranularity)
     const { start, end } = getRollingDateRange(days)
@@ -218,12 +222,40 @@ export function TokenCharts() {
 
       <div className='grid gap-3'>
         {TOKEN_CHARTS.map((chart) => {
-          const spec = chartData[chart.specKey]
+          const specKey =
+            chart.hasToggle
+              ? distributionMode === 'bar'
+                ? 'spec_token_bar'
+                : 'spec_token_area'
+              : chart.specKey
+          const spec = chartData[specKey]
           return (
             <div key={chart.value} className='overflow-hidden rounded-lg border'>
               <div className='flex w-full items-center gap-2 border-b px-3 py-2 sm:px-5 sm:py-3'>
                 <KeyRound className='text-muted-foreground/60 size-4' />
-                <div className='text-sm font-semibold'>{t(chart.labelKey)}</div>
+                <div className='flex-1 text-sm font-semibold'>{t(chart.labelKey)}</div>
+                {chart.hasToggle && (
+                  <div className='flex gap-1'>
+                    <Button
+                      variant={distributionMode === 'bar' ? 'secondary' : 'ghost'}
+                      size='sm'
+                      className='h-6 px-2'
+                      onClick={() => setDistributionMode('bar')}
+                    >
+                      <BarChart2 className='size-3.5 mr-1' />
+                      {t('Bar Chart')}
+                    </Button>
+                    <Button
+                      variant={distributionMode === 'area' ? 'secondary' : 'ghost'}
+                      size='sm'
+                      className='h-6 px-2'
+                      onClick={() => setDistributionMode('area')}
+                    >
+                      <AreaChart className='size-3.5 mr-1' />
+                      {t('Area Chart')}
+                    </Button>
+                  </div>
+                )}
               </div>
               <div className='h-[300px] p-1.5 sm:h-96 sm:p-2'>
                 {isLoading ? (
@@ -232,7 +264,7 @@ export function TokenCharts() {
                   themeReady &&
                   spec && (
                     <VChart
-                      key={`token-${chart.value}-${topLimit}-${resolvedTheme}-${customization.preset}`}
+                      key={`token-${chart.value}-${topLimit}-${resolvedTheme}-${customization.preset}-${distributionMode}`}
                       spec={{
                         ...spec,
                         theme: resolvedTheme === 'dark' ? 'dark' : 'light',

@@ -1031,22 +1031,37 @@ export function processTokenChartData(
       color: { type: 'ordinal', range: colorRange },
       background: { fill: 'transparent' },
     },
-    spec_token_pie: {
-      type: 'pie',
-      data: [{ id: 'tokenPieData', values: [] }],
-      outerRadius: 0.8,
-      innerRadius: 0.5,
-      padAngle: 0.6,
-      valueField: 'value',
-      categoryField: 'type',
+    spec_token_bar: {
+      type: 'bar',
+      data: [{ id: 'tokenBarData', values: [] }],
+      xField: 'Time',
+      yField: 'rawQuota',
+      seriesField: 'Token',
+      stack: true,
       title: {
         visible: true,
         text: tt('Token Consumption Distribution'),
         subtext: tt('No data available'),
       },
-      legends: { visible: true, orient: 'left' },
-      label: { visible: true },
+      legends: { visible: true, selectMode: 'single' },
       color: { type: 'ordinal', range: colorRange },
+      background: { fill: 'transparent' },
+    },
+    spec_token_area: {
+      type: 'area',
+      data: [{ id: 'tokenAreaData', values: [] }],
+      xField: 'Time',
+      yField: 'rawQuota',
+      seriesField: 'Token',
+      stack: false,
+      title: {
+        visible: true,
+        text: tt('Token Consumption Distribution'),
+        subtext: tt('No data available'),
+      },
+      legends: { visible: true, selectMode: 'single' },
+      color: { type: 'ordinal', range: colorRange },
+      point: { visible: false },
       background: { fill: 'transparent' },
     },
     spec_token_trend: {
@@ -1140,26 +1155,61 @@ export function processTokenChartData(
       background: { fill: 'transparent' },
       animation: true,
     },
-    spec_token_pie: {
-      ...emptyResult.spec_token_pie,
-      data: [
+    spec_token_bar: {
+      ...emptyResult.spec_token_bar,
+      data: [{ id: 'tokenBarData', values: trendValues }],
+      title: { visible: true, text: tt('Token Consumption Distribution') },
+      axes: [
+        { orient: 'bottom' },
         {
-          id: 'tokenPieData',
-          values: rankValues.map((r) => ({ type: r.Token, value: r.rawQuota })),
+          orient: 'left',
+          label: {
+            formatMethod: (val: number) =>
+              `${(val / quotaPerUnit).toFixed(2)}`,
+          },
         },
       ],
-      title: { visible: true, text: tt('Token Consumption Distribution') },
       tooltip: {
         mark: {
           content: [
             {
-              key: (datum: Record<string, unknown>) => datum?.type,
-              value: (datum: Record<string, unknown>) =>
-                `${(Number(datum?.value || 0) / quotaPerUnit).toFixed(4)}`,
+              key: (d: { Token: string }) => d.Token,
+              value: (d: { rawQuota: number }) =>
+                `${(d.rawQuota / quotaPerUnit).toFixed(4)}`,
             },
           ],
         },
       },
+      color: { specified: tokenColorMap },
+      background: { fill: 'transparent' },
+      animation: true,
+    },
+    spec_token_area: {
+      ...emptyResult.spec_token_area,
+      data: [{ id: 'tokenAreaData', values: trendValues }],
+      title: { visible: true, text: tt('Token Consumption Distribution') },
+      axes: [
+        { orient: 'bottom' },
+        {
+          orient: 'left',
+          label: {
+            formatMethod: (val: number) =>
+              `${(val / quotaPerUnit).toFixed(2)}`,
+          },
+        },
+      ],
+      tooltip: {
+        mark: {
+          content: [
+            {
+              key: (d: { Token: string }) => d.Token,
+              value: (d: { rawQuota: number }) =>
+                `${(d.rawQuota / quotaPerUnit).toFixed(4)}`,
+            },
+          ],
+        },
+      },
+      line: { style: { lineWidth: 2, curveType: 'monotone' } },
       color: { specified: tokenColorMap },
       background: { fill: 'transparent' },
       animation: true,

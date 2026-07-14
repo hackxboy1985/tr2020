@@ -4597,6 +4597,8 @@
     "Add model...": "添加模型...",
     "default 1 ≈ 1 yuan": "默认 1 ≈ 1 元",
     "Internal note": "内部备注",
-    "Token Consumption Distribution": "消耗分布"
+    "Token Consumption Distribution": "消耗分布",
+    "Bar Chart": "柱状图",
+    "Area Chart": "面积图"
   }
 }
