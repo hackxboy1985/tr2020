@@ -682,16 +682,18 @@ type TaskRelayInfo struct {
 }
 
 type TaskSubmitReq struct {
-	Prompt         string                 `json:"prompt"`
-	Model          string                 `json:"model,omitempty"`
-	Mode           string                 `json:"mode,omitempty"`
-	Image          string                 `json:"image,omitempty"`
-	Images         []string               `json:"images,omitempty"`
-	Size           string                 `json:"size,omitempty"`
-	Duration       int                    `json:"duration,omitempty"`
-	Seconds        string                 `json:"seconds,omitempty"`
-	InputReference string                 `json:"input_reference,omitempty"`
-	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	Prompt         string                   `json:"prompt"`
+	Model          string                   `json:"model,omitempty"`
+	Mode           string                   `json:"mode,omitempty"`
+	Image          string                   `json:"image,omitempty"`
+	Images         []string                 `json:"images,omitempty"`
+	Size           string                   `json:"size,omitempty"`
+	Duration       int                      `json:"duration,omitempty"`
+	Seconds        string                   `json:"seconds,omitempty"`
+	InputReference string                   `json:"input_reference,omitempty"`
+	Metadata       map[string]interface{}   `json:"metadata,omitempty"`
+	// Ark 原生格式：content[] 数组，兼容直接透传
+	Content        []map[string]interface{} `json:"content,omitempty"`
 }
 
 func (t *TaskSubmitReq) GetPrompt() string {

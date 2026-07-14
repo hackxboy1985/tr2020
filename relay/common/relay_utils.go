@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -208,6 +209,63 @@ func ValidateBasicTaskRequest(c *gin.Context, info *RelayInfo, action string) *d
 	// 为了metadata字段的兼容性，统一UnmarshalBodyReusable
 	if err := common.UnmarshalBodyReusable(c, &req); err != nil {
 		return createTaskError(err, "invalid_request", http.StatusBadRequest, true)
+	}
+
+	// 兼容 Ark 原生格式：content[] 根级字段
+	// 当 prompt 为空但有 content[] 时，从 content[] 中提取各字段
+	if strings.TrimSpace(req.Prompt) == "" && len(req.Content) > 0 {
+		var imageURLs []string
+		var otherContent []map[string]interface{}
+		for _, item := range req.Content {
+			t, _ := item["type"].(string)
+			switch t {
+			case "text":
+				if text, ok := item["text"].(string); ok && req.Prompt == "" {
+					req.Prompt = text
+				}
+			case "image_url":
+				if imgObj, ok := item["image_url"].(map[string]interface{}); ok {
+					if u, ok := imgObj["url"].(string); ok {
+						imageURLs = append(imageURLs, u)
+					}
+				}
+			default:
+				// audio_url / video_url 等放进 metadata.content
+				otherContent = append(otherContent, item)
+			}
+		}
+		if len(imageURLs) > 0 {
+			req.Images = append(req.Images, imageURLs...)
+		}
+		if len(otherContent) > 0 {
+			if req.Metadata == nil {
+				req.Metadata = make(map[string]interface{})
+			}
+			req.Metadata["content"] = otherContent
+		}
+		req.Content = nil
+
+		// 把 Ark 原生根级字段（resolution/ratio/generate_audio/watermark 等）补进 Metadata
+		// 通过重新解析原始 body 获取这些字段
+		var rawBody map[string]interface{}
+		if bodyReader, err2 := common.GetRequestBody(c); err2 == nil {
+			if rs, ok := bodyReader.(io.ReadSeeker); ok {
+				_, _ = rs.Seek(0, io.SeekStart)
+				_ = common.DecodeJson(rs, &rawBody)
+				_, _ = rs.Seek(0, io.SeekStart)
+			}
+		}
+		arkRootFields := []string{"resolution", "ratio", "generate_audio", "watermark", "seed", "camera_fixed", "service_tier"}
+		for _, field := range arkRootFields {
+			if v, ok := rawBody[field]; ok {
+				if req.Metadata == nil {
+					req.Metadata = make(map[string]interface{})
+				}
+				if _, exists := req.Metadata[field]; !exists {
+					req.Metadata[field] = v
+				}
+			}
+		}
 	}
 
 	if taskErr := validatePrompt(req.Prompt); taskErr != nil {
