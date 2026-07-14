@@ -111,7 +111,7 @@ poll_task() {
 
     local tmpfile; tmpfile=$(mktemp)
     curl -s -o "$tmpfile" \
-      -X GET "${NEWAPI_BASE_URL}/v1/video/generations/${task_id}" \
+      -X GET "${NEWAPI_BASE_URL}/v1/videos/${task_id}" \
       -H "Authorization: Bearer ${NEWAPI_API_KEY}"
     POLL_BODY=$(cat "$tmpfile"); rm -f "$tmpfile"
 
