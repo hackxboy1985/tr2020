@@ -33,7 +33,7 @@ VIDEO_URL="${VIDEO_URL:-}"
 # 参考音频 URL（留空则不传）
 AUDIO_URL="${AUDIO_URL:-https://static.horse-world.mints-id.com/audio/trim/f0eab3ec-2bbc-49cb-8e26-59ca050ceaf2.wav}"
 # 角色图片 URL（会先上传到资产库，激活后用 asset:// 引用；留空则跳过资产库上传）
-ROLE_IMAGE_URL="${ROLE_IMAGE_URL:-https://static.horse-world.mints-id.com/rh/20260604204600/1780577160529_9921.png}"
+ROLE_IMAGE_URL="${ROLE_IMAGE_URL:-https://static.horse-world.mints-id.com/rh/20260602024700/1780339620793_5209.png}"
 
 # ---------- 颜色 ----------
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
