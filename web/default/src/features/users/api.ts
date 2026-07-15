@@ -150,6 +150,84 @@ export async function getGroups(): Promise<ApiResponse<string[]>> {
 }
 
 // ============================================================================
+// Admin User Records APIs
+// ============================================================================
+
+export interface UserTopupRecord {
+  id: number
+  user_id: number
+  amount: number
+  money: number
+  trade_no: string
+  payment_method: string
+  payment_provider: string
+  create_time: number
+  complete_time?: number
+  status: string
+}
+
+export interface UserTopupHistoryResponse {
+  items: UserTopupRecord[]
+  total: number
+}
+
+export interface UserLogRecord {
+  id: number
+  user_id: number
+  username: string
+  token_name: string
+  type: number
+  model_name: string
+  quota: number
+  prompt_tokens: number
+  completion_tokens: number
+  created_at: number
+  content: string
+  other?: string
+}
+
+export interface UserLogHistoryResponse {
+  items: UserLogRecord[]
+  total: number
+}
+
+/**
+ * Get topup records for a specific user (admin)
+ */
+export async function getAdminUserTopups(
+  userId: number,
+  page: number,
+  pageSize: number
+): Promise<ApiResponse<UserTopupHistoryResponse>> {
+  const params = new URLSearchParams({
+    p: page.toString(),
+    page_size: pageSize.toString(),
+    user_id: userId.toString(),
+  })
+  const res = await api.get(`/api/user/topup?${params.toString()}`)
+  return res.data
+}
+
+/**
+ * Get log records (topup + manage) for a specific user (admin)
+ */
+export async function getAdminUserLogs(
+  username: string,
+  logType: number,
+  page: number,
+  pageSize: number
+): Promise<ApiResponse<UserLogHistoryResponse>> {
+  const params = new URLSearchParams({
+    p: page.toString(),
+    page_size: pageSize.toString(),
+    username,
+    type: logType.toString(),
+  })
+  const res = await api.get(`/api/log/?${params.toString()}`)
+  return res.data
+}
+
+// ============================================================================
 // Admin Binding Management APIs
 // ============================================================================
 
