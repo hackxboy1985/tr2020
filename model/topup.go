@@ -159,6 +159,20 @@ func Recharge(referenceId string, customerId string, callerIp string) (err error
 	return nil
 }
 
+// BillingRecord 统一账单记录，合并充值订单和兑换券两种来源。
+type BillingRecord struct {
+	Id            int     `json:"id"`
+	UserId        int     `json:"user_id"`
+	Amount        int64   `json:"amount"`   // 获得的积分额度
+	Money         float64 `json:"money"`    // 实付金额（兑换券为 0）
+	TradeNo       string  `json:"trade_no"` // 订单号或兑换券 key
+	PaymentMethod string  `json:"payment_method"`
+	CreateTime    int64   `json:"create_time"`
+	CompleteTime  int64   `json:"complete_time"`
+	Status        string  `json:"status"`
+	Source        string  `json:"source"` // "topup" | "redemption"
+}
+
 // topUpQueryWindowSeconds 限制充值记录查询的时间窗口（秒）。
 const topUpQueryWindowSeconds int64 = 30 * 24 * 60 * 60
 
@@ -596,4 +610,196 @@ func RechargeWaffoPancake(tradeNo string) (err error) {
 	}
 
 	return nil
+}
+
+// topUpToBillingRecord 将 TopUp 转换为 BillingRecord。
+func topUpToBillingRecord(t *TopUp) *BillingRecord {
+	return &BillingRecord{
+		Id:            t.Id,
+		UserId:        t.UserId,
+		Amount:        t.Amount,
+		Money:         t.Money,
+		TradeNo:       t.TradeNo,
+		PaymentMethod: t.PaymentMethod,
+		CreateTime:    t.CreateTime,
+		CompleteTime:  t.CompleteTime,
+		Status:        t.Status,
+		Source:        "topup",
+	}
+}
+
+// redemptionToBillingRecord 将已使用的 Redemption 转换为 BillingRecord。
+func redemptionToBillingRecord(r *Redemption) *BillingRecord {
+	return &BillingRecord{
+		Id:            r.Id,
+		UserId:        r.UsedUserId,
+		Amount:        int64(r.Quota),
+		Money:         0,
+		TradeNo:       r.Key,
+		PaymentMethod: "redemption",
+		CreateTime:    r.RedeemedTime,
+		CompleteTime:  r.RedeemedTime,
+		Status:        common.TopUpStatusSuccess,
+		Source:        "redemption",
+	}
+}
+
+// mergeBillingRecords 合并并按 CreateTime 降序排序。
+func mergeBillingRecords(topups []*TopUp, redemptions []*Redemption) []*BillingRecord {
+	records := make([]*BillingRecord, 0, len(topups)+len(redemptions))
+	for _, t := range topups {
+		records = append(records, topUpToBillingRecord(t))
+	}
+	for _, r := range redemptions {
+		records = append(records, redemptionToBillingRecord(r))
+	}
+	// 按 create_time 降序排序
+	for i := 0; i < len(records); i++ {
+		for j := i + 1; j < len(records); j++ {
+			if records[j].CreateTime > records[i].CreateTime {
+				records[i], records[j] = records[j], records[i]
+			}
+		}
+	}
+	return records
+}
+
+// GetUserBillingRecords 获取当前用户的合并账单（充值 + 兑换券），近30天。
+func GetUserBillingRecords(userId int, pageInfo *common.PageInfo) (records []*BillingRecord, total int64, err error) {
+	cutoff := topUpQueryCutoff()
+
+	var topups []*TopUp
+	if err = DB.Where("user_id = ? AND create_time >= ?", userId, cutoff).Find(&topups).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var redemptions []*Redemption
+	if err = DB.Where("used_user_id = ? AND status = ? AND redeemed_time >= ?", userId, common.RedemptionCodeStatusUsed, cutoff).Find(&redemptions).Error; err != nil {
+		return nil, 0, err
+	}
+
+	all := mergeBillingRecords(topups, redemptions)
+	total = int64(len(all))
+
+	start := pageInfo.GetStartIdx()
+	end := start + pageInfo.GetPageSize()
+	if start > len(all) {
+		start = len(all)
+	}
+	if end > len(all) {
+		end = len(all)
+	}
+	return all[start:end], total, nil
+}
+
+// GetAllBillingRecords 管理员获取全平台合并账单，不限时间窗口。
+func GetAllBillingRecords(pageInfo *common.PageInfo, userId int) (records []*BillingRecord, total int64, err error) {
+	topupQuery := DB.Model(&TopUp{})
+	redemptionQuery := DB.Model(&Redemption{}).Where("status = ?", common.RedemptionCodeStatusUsed)
+	if userId > 0 {
+		topupQuery = topupQuery.Where("user_id = ?", userId)
+		redemptionQuery = redemptionQuery.Where("used_user_id = ?", userId)
+	}
+
+	var topups []*TopUp
+	if err = topupQuery.Find(&topups).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var redemptions []*Redemption
+	if err = redemptionQuery.Find(&redemptions).Error; err != nil {
+		return nil, 0, err
+	}
+
+	all := mergeBillingRecords(topups, redemptions)
+	total = int64(len(all))
+
+	start := pageInfo.GetStartIdx()
+	end := start + pageInfo.GetPageSize()
+	if start > len(all) {
+		start = len(all)
+	}
+	if end > len(all) {
+		end = len(all)
+	}
+	return all[start:end], total, nil
+}
+
+// SearchUserBillingRecords 按订单号/兑换码关键字搜索当前用户的账单，近30天。
+func SearchUserBillingRecords(userId int, keyword string, pageInfo *common.PageInfo) (records []*BillingRecord, total int64, err error) {
+	cutoff := topUpQueryCutoff()
+	pattern, perr := sanitizeLikePattern(keyword)
+	if perr != nil {
+		return nil, 0, perr
+	}
+
+	var topups []*TopUp
+	if err = DB.Where("user_id = ? AND create_time >= ? AND trade_no LIKE ? ESCAPE '!'", userId, cutoff, pattern).Find(&topups).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var redemptions []*Redemption
+	keyCol := "`key`"
+	if common.UsingPostgreSQL {
+		keyCol = `"key"`
+	}
+	if err = DB.Where("used_user_id = ? AND status = ? AND redeemed_time >= ? AND "+keyCol+" LIKE ? ESCAPE '!'", userId, common.RedemptionCodeStatusUsed, cutoff, pattern).Find(&redemptions).Error; err != nil {
+		return nil, 0, err
+	}
+
+	all := mergeBillingRecords(topups, redemptions)
+	total = int64(len(all))
+
+	start := pageInfo.GetStartIdx()
+	end := start + pageInfo.GetPageSize()
+	if start > len(all) {
+		start = len(all)
+	}
+	if end > len(all) {
+		end = len(all)
+	}
+	return all[start:end], total, nil
+}
+
+// SearchAllBillingRecords 管理员按关键字搜索全平台账单，不限时间窗口。
+func SearchAllBillingRecords(keyword string, pageInfo *common.PageInfo, userId int) (records []*BillingRecord, total int64, err error) {
+	pattern, perr := sanitizeLikePattern(keyword)
+	if perr != nil {
+		return nil, 0, perr
+	}
+
+	topupQuery := DB.Where("trade_no LIKE ? ESCAPE '!'", pattern)
+	if userId > 0 {
+		topupQuery = topupQuery.Where("user_id = ?", userId)
+	}
+	var topups []*TopUp
+	if err = topupQuery.Find(&topups).Error; err != nil {
+		return nil, 0, err
+	}
+
+	keyCol := "`key`"
+	if common.UsingPostgreSQL {
+		keyCol = `"key"`
+	}
+	redemptionQuery := DB.Where("status = ? AND "+keyCol+" LIKE ? ESCAPE '!'", common.RedemptionCodeStatusUsed, pattern)
+	if userId > 0 {
+		redemptionQuery = redemptionQuery.Where("used_user_id = ?", userId)
+	}
+	var redemptions []*Redemption
+	if err = redemptionQuery.Find(&redemptions).Error; err != nil {
+		return nil, 0, err
+	}
+
+	all := mergeBillingRecords(topups, redemptions)
+	total = int64(len(all))
+
+	start := pageInfo.GetStartIdx()
+	end := start + pageInfo.GetPageSize()
+	if start > len(all) {
+		start = len(all)
+	}
+	if end > len(all) {
+		end = len(all)
+	}
+	return all[start:end], total, nil
 }

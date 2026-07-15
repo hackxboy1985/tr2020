@@ -271,6 +271,8 @@ export interface TopupRecord {
   complete_time?: number
   /** Payment status */
   status: TopupStatus
+  /** Record source: topup order or redemption code */
+  source?: 'topup' | 'redemption'
 }
 
 /**

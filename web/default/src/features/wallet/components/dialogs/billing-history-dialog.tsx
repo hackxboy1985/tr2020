@@ -251,18 +251,20 @@ export function BillingHistoryDialog({
                               })}
                             </div>
                           </div>
-                          <div className='space-y-1'>
-                            <Label className='text-muted-foreground text-xs'>
-                              {t('Payment')}
-                            </Label>
-                            <div className='text-sm font-semibold text-red-600'>
-                              {formatNumber(record.money)}
+                          {record.source !== 'redemption' && (
+                            <div className='space-y-1'>
+                              <Label className='text-muted-foreground text-xs'>
+                                {t('Payment')}
+                              </Label>
+                              <div className='text-sm font-semibold text-red-600'>
+                                {formatNumber(record.money)}
+                              </div>
                             </div>
-                          </div>
+                          )}
                         </div>
 
                         {/* Admin Actions */}
-                        {isAdmin && record.status === 'pending' && (
+                        {isAdmin && record.status === 'pending' && record.source !== 'redemption' && (
                           <div className='mt-4 flex justify-end'>
                             <Button
                               size='sm'

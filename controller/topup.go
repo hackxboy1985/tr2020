@@ -443,14 +443,14 @@ func GetUserTopUps(c *gin.Context) {
 	keyword := c.Query("keyword")
 
 	var (
-		topups []*model.TopUp
-		total  int64
-		err    error
+		records []*model.BillingRecord
+		total   int64
+		err     error
 	)
 	if keyword != "" {
-		topups, total, err = model.SearchUserTopUps(userId, keyword, pageInfo)
+		records, total, err = model.SearchUserBillingRecords(userId, keyword, pageInfo)
 	} else {
-		topups, total, err = model.GetUserTopUps(userId, pageInfo)
+		records, total, err = model.GetUserBillingRecords(userId, pageInfo)
 	}
 	if err != nil {
 		common.ApiError(c, err)
@@ -458,7 +458,7 @@ func GetUserTopUps(c *gin.Context) {
 	}
 
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(topups)
+	pageInfo.SetItems(records)
 	common.ApiSuccess(c, pageInfo)
 }
 
@@ -470,14 +470,14 @@ func GetAllTopUps(c *gin.Context) {
 	userId, _ := strconv.Atoi(userIdStr)
 
 	var (
-		topups []*model.TopUp
-		total  int64
-		err    error
+		records []*model.BillingRecord
+		total   int64
+		err     error
 	)
 	if keyword != "" {
-		topups, total, err = model.SearchAllTopUps(keyword, pageInfo, userId)
+		records, total, err = model.SearchAllBillingRecords(keyword, pageInfo, userId)
 	} else {
-		topups, total, err = model.GetAllTopUps(pageInfo, userId)
+		records, total, err = model.GetAllBillingRecords(pageInfo, userId)
 	}
 	if err != nil {
 		common.ApiError(c, err)
@@ -485,7 +485,7 @@ func GetAllTopUps(c *gin.Context) {
 	}
 
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(topups)
+	pageInfo.SetItems(records)
 	common.ApiSuccess(c, pageInfo)
 }
 
