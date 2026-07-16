@@ -279,9 +279,10 @@ func recalcQuotaFromRatios(info *relaycommon.RelayInfo, ratios map[string]float6
 }
 
 var fetchRespBuilders = map[int]func(c *gin.Context) (respBody []byte, taskResp *dto.TaskError){
-	relayconstant.RelayModeSunoFetchByID:  sunoFetchByIDRespBodyBuilder,
-	relayconstant.RelayModeSunoFetch:      sunoFetchRespBodyBuilder,
-	relayconstant.RelayModeVideoFetchByID: videoFetchByIDRespBodyBuilder,
+	relayconstant.RelayModeSunoFetchByID:        sunoFetchByIDRespBodyBuilder,
+	relayconstant.RelayModeSunoFetch:            sunoFetchRespBodyBuilder,
+	relayconstant.RelayModeVideoFetchByID:       videoFetchByIDRespBodyBuilder,
+	relayconstant.RelayModeImageTaskFetchByID:   imageTaskFetchByIDRespBodyBuilder,
 }
 
 func RelayTaskFetch(c *gin.Context, relayMode int) (taskResp *dto.TaskError) {
@@ -560,5 +561,69 @@ func TaskModel2Dto(task *model.Task) *dto.TaskDto {
 		Properties: task.Properties,
 		Username:   task.Username,
 		Data:       task.Data,
+	}
+}
+
+// imageTaskFetchByIDRespBodyBuilder handles GET /v1/images/tasks/:task_id
+// Returns image task status in the image.task format defined in the design doc.
+func imageTaskFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *dto.TaskError) {
+	taskId := c.Param("task_id")
+	if taskId == "" {
+		taskId = c.GetString("task_id")
+	}
+	userId := c.GetInt("id")
+
+	originTask, exist, err := model.GetByTaskId(userId, taskId)
+	if err != nil {
+		taskResp = service.TaskErrorWrapper(err, "get_task_failed", http.StatusInternalServerError)
+		return
+	}
+	if !exist {
+		taskResp = service.TaskErrorWrapperLocal(errors.New("task_not_exist"), "task_not_exist", http.StatusBadRequest)
+		return
+	}
+
+	resp := map[string]any{
+		"id":      originTask.TaskID,
+		"object":  "image.task",
+		"status":  mapTaskStatusToImageStatus(originTask.Status),
+		"model":   originTask.Properties.OriginModelName,
+		"created": originTask.CreatedAt,
+	}
+
+	switch originTask.Status {
+	case model.TaskStatusSuccess:
+		resultURL := originTask.GetResultURL()
+		var imageData []map[string]string
+		for _, u := range strings.Split(resultURL, ",") {
+			u = strings.TrimSpace(u)
+			if u != "" {
+				imageData = append(imageData, map[string]string{"url": u})
+			}
+		}
+		resp["result"] = map[string]any{"data": imageData}
+	case model.TaskStatusFailure:
+		resp["error"] = map[string]string{
+			"message": originTask.FailReason,
+			"code":    "task_failed",
+		}
+	}
+
+	respBody, err = common.Marshal(resp)
+	if err != nil {
+		taskResp = service.TaskErrorWrapper(err, "marshal_response_failed", http.StatusInternalServerError)
+	}
+	return
+}
+
+// mapTaskStatusToImageStatus maps internal TaskStatus to image task status string
+func mapTaskStatusToImageStatus(status model.TaskStatus) string {
+	switch status {
+	case model.TaskStatusSuccess:
+		return "succeeded"
+	case model.TaskStatusFailure:
+		return "failed"
+	default:
+		return "processing"
 	}
 }

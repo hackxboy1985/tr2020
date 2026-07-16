@@ -43,6 +43,9 @@ const (
 	RelayModeVideoFetchByID
 	RelayModeVideoSubmit
 
+	RelayModeImageTaskSubmit
+	RelayModeImageTaskFetchByID
+
 	RelayModeRerank
 
 	RelayModeResponses
@@ -70,6 +73,12 @@ func Path2RelayMode(path string) int {
 		relayMode = RelayModeImagesGenerations
 	} else if strings.HasPrefix(path, "/v1/images/edits") {
 		relayMode = RelayModeImagesEdits
+	} else if strings.HasPrefix(path, "/v1/images/tasks/") {
+		// GET /v1/images/tasks/:task_id — fetch task status
+		relayMode = RelayModeImageTaskFetchByID
+	} else if strings.HasPrefix(path, "/v1/images/tasks") {
+		// POST /v1/images/tasks — submit task
+		relayMode = RelayModeImageTaskSubmit
 	} else if strings.HasPrefix(path, "/v1/edits") {
 		relayMode = RelayModeEdits
 	} else if strings.HasPrefix(path, "/v1/responses/compact") {
