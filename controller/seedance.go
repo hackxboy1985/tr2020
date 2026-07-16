@@ -122,11 +122,16 @@ func SeedanceCreateAssetGroup(c *gin.Context) {
 
 // GET /api/seedance/asset-groups
 func SeedanceListAssetGroups(c *gin.Context) {
-	gw, ok := seedanceGetGW(c)
-	if !ok {
+	userID := c.GetInt("id")
+	pageInfo := common.GetPageQuery(c)
+	groups, total, err := model.ListSeedanceAssetGroups(userID, pageInfo.GetPage(), pageInfo.GetPageSize())
+	if err != nil {
+		common.ApiError(c, err)
 		return
 	}
-	proxyAndPassthrough(c, gw, http.MethodGet, "/api/seedance/proxy/assets/groups", forwardQuery(c), nil, nil)
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(groups)
+	common.ApiSuccess(c, pageInfo)
 }
 
 // GET /api/seedance/asset-groups/:id
@@ -387,11 +392,17 @@ func SeedanceCreateAsset(c *gin.Context) {
 
 // GET /api/seedance/assets
 func SeedanceListAssets(c *gin.Context) {
-	gw, ok := seedanceGetGW(c)
-	if !ok {
+	userID := c.GetInt("id")
+	pageInfo := common.GetPageQuery(c)
+	groupID := c.Query("group_id")
+	assets, total, err := model.ListAllSeedanceAssets(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), userID, groupID)
+	if err != nil {
+		common.ApiError(c, err)
 		return
 	}
-	proxyAndPassthrough(c, gw, http.MethodGet, "/api/seedance/proxy/assets", forwardQuery(c), nil, nil)
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(assets)
+	common.ApiSuccess(c, pageInfo)
 }
 
 // resolveAsset 支持本地数字 ID 或上游 asset-xxxxxxxx 格式查询素材
@@ -561,6 +572,20 @@ func SeedanceAdminListAssets(c *gin.Context) {
 	}
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(assets)
+	common.ApiSuccess(c, pageInfo)
+}
+
+// GET /api/seedance/face-verifications
+func SeedanceListFaceVerifications(c *gin.Context) {
+	userID := c.GetInt("id")
+	pageInfo := common.GetPageQuery(c)
+	items, total, err := model.ListSeedanceFaceVerifications(userID, pageInfo.GetPage(), pageInfo.GetPageSize())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(items)
 	common.ApiSuccess(c, pageInfo)
 }
 

@@ -30,6 +30,7 @@ func SetSeedanceRouter(router *gin.Engine) {
 
 		// 人脸认证
 		userGroup.POST("/face-verifications", controller.SeedanceCreateFaceVerification)
+		userGroup.GET("/face-verifications", controller.SeedanceListFaceVerifications)
 		userGroup.GET("/face-verifications/:id", controller.SeedanceGetFaceVerification)
 	}
 

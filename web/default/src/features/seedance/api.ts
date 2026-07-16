@@ -81,6 +81,18 @@ export async function adminListFaceVerifications(params: {
   return res.data.data
 }
 
+// ---- User: Face Verifications ----
+
+export async function userListFaceVerifications(params: {
+  p?: number
+  page_size?: number
+}): Promise<PagedResponse<SeedanceFaceVerification>> {
+  const res = await api.get<
+    ApiResponse<PagedResponse<SeedanceFaceVerification>>
+  >('/api/seedance/face-verifications', { params })
+  return res.data.data
+}
+
 export const seedanceQueryKeys = {
   all: ['seedance'] as const,
   assetGroups: (params?: object) =>

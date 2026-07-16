@@ -27,6 +27,7 @@ import {
   adminListFaceVerifications,
   userListAssetGroups,
   userListAssets,
+  userListFaceVerifications,
   seedanceQueryKeys,
 } from './api'
 import type {
@@ -218,15 +219,21 @@ function FaceVerificationsTab() {
   const { t } = useTranslation()
   const [page, setPage] = useState(1)
   const pageSize = 20
+  const isAdmin = (useAuthStore.getState().auth.user?.role ?? 0) >= ROLE.ADMIN
 
   const { data, isLoading } = useQuery({
     queryKey: seedanceQueryKeys.faceVerifications({ p: page, page_size: pageSize }),
-    queryFn: () => adminListFaceVerifications({ p: page, page_size: pageSize }),
+    queryFn: () =>
+      isAdmin
+        ? adminListFaceVerifications({ p: page, page_size: pageSize })
+        : userListFaceVerifications({ p: page, page_size: pageSize }),
   })
 
   const columns = [
     faceColHelper.accessor('id', { header: 'ID', size: 60 }),
-    faceColHelper.accessor('user_id', { header: t('User ID'), size: 80 }),
+    ...(isAdmin
+      ? [faceColHelper.accessor('user_id', { header: t('User ID'), size: 80 })]
+      : []),
     faceColHelper.accessor('verification_id', {
       header: t('Verification ID'),
       cell: (info) => (
