@@ -39,10 +39,29 @@ func proxyAndPassthrough(c *gin.Context, gw *service.SeedanceGatewayChannel, met
 		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": err.Error()})
 		return
 	}
-	if onSuccess != nil && statusCode >= 200 && statusCode < 300 {
+	if statusCode < 200 || statusCode >= 300 {
+		c.JSON(statusCode, gin.H{"success": false, "message": extractUpstreamErrMsg(respBody)})
+		return
+	}
+	if onSuccess != nil {
 		onSuccess(statusCode, respBody)
 	}
 	c.Data(statusCode, "application/json; charset=utf-8", respBody)
+}
+
+// extractUpstreamErrMsg 从上游标准错误结构中提取 Message，解析失败时返回通用提示。
+func extractUpstreamErrMsg(body []byte) string {
+	var errResp struct {
+		ResponseMetadata struct {
+			Error struct {
+				Message string `json:"Message"`
+			} `json:"Error"`
+		} `json:"ResponseMetadata"`
+	}
+	if common.Unmarshal(body, &errResp) == nil && errResp.ResponseMetadata.Error.Message != "" {
+		return errResp.ResponseMetadata.Error.Message
+	}
+	return "upstream request failed"
 }
 
 func readBody(c *gin.Context) []byte {
@@ -324,7 +343,7 @@ func SeedanceCreateAsset(c *gin.Context) {
 	}
 
 	if statusCode < 200 || statusCode >= 300 {
-		c.Data(statusCode, "application/json; charset=utf-8", respBody)
+		c.JSON(statusCode, gin.H{"success": false, "message": extractUpstreamErrMsg(respBody)})
 		return
 	}
 
