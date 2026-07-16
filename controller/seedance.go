@@ -395,7 +395,7 @@ func SeedanceListAssets(c *gin.Context) {
 	userID := c.GetInt("id")
 	pageInfo := common.GetPageQuery(c)
 	groupID := c.Query("group_id")
-	assets, total, err := model.ListAllSeedanceAssets(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), userID, groupID)
+	assets, total, err := model.ListAllSeedanceAssets(pageInfo.GetPage(), pageInfo.GetPageSize(), userID, groupID)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -550,7 +550,7 @@ func SeedanceGetFaceVerification(c *gin.Context) {
 func SeedanceAdminListAssetGroups(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	userIDFilter, _ := strconv.Atoi(c.Query("user_id"))
-	groups, total, err := model.ListAllSeedanceAssetGroups(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), userIDFilter)
+	groups, total, err := model.ListAllSeedanceAssetGroups(pageInfo.GetPage(), pageInfo.GetPageSize(), userIDFilter)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -565,7 +565,7 @@ func SeedanceAdminListAssets(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	userIDFilter, _ := strconv.Atoi(c.Query("user_id"))
 	groupID := c.Query("group_id")
-	assets, total, err := model.ListAllSeedanceAssets(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), userIDFilter, groupID)
+	assets, total, err := model.ListAllSeedanceAssets(pageInfo.GetPage(), pageInfo.GetPageSize(), userIDFilter, groupID)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -593,7 +593,7 @@ func SeedanceListFaceVerifications(c *gin.Context) {
 func SeedanceAdminListFaceVerifications(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	userIDFilter, _ := strconv.Atoi(c.Query("user_id"))
-	items, total, err := model.ListAllSeedanceFaceVerifications(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), userIDFilter)
+	items, total, err := model.ListAllSeedanceFaceVerifications(pageInfo.GetPage(), pageInfo.GetPageSize(), userIDFilter)
 	if err != nil {
 		common.ApiError(c, err)
 		return
