@@ -75,8 +75,26 @@ func ListSeedanceAssetGroups(userID int, page, pageSize int) ([]*SeedanceAssetGr
 	return groups, total, err
 }
 
+// ListSeedanceAssetGroupsByChannel 按用户+渠道查询素材组，避免跨渠道引用无效 group。
+func ListSeedanceAssetGroupsByChannel(userID int, channelID int, page, pageSize int) ([]*SeedanceAssetGroup, int64, error) {
+	var groups []*SeedanceAssetGroup
+	var total int64
+	query := DB.Model(&SeedanceAssetGroup{}).Where("user_id = ? AND channel_id = ? AND deleted_at = 0", userID, channelID)
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err := query.Order("id desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&groups).Error
+	return groups, total, err
+}
+
 func UpdateSeedanceAssetGroup(g *SeedanceAssetGroup) error {
 	return DB.Save(g).Error
+}
+
+func SoftDeleteSeedanceAssetGroupByUpstreamID(upstreamGroupID string, userID int) error {
+	return DB.Model(&SeedanceAssetGroup{}).
+		Where("upstream_group_id = ? AND user_id = ? AND deleted_at = 0", upstreamGroupID, userID).
+		Update("deleted_at", time.Now().Unix()).Error
 }
 
 func SoftDeleteSeedanceAssetGroup(id int64, userID int) error {

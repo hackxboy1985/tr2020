@@ -181,10 +181,10 @@ func SeedanceDeleteAssetGroup(c *gin.Context) {
 // Assets
 // ============================================================
 
-// getOrCreateDefaultAssetGroup 获取或创建用户的默认 AIGC 素材组（每用户一个）
+// getOrCreateDefaultAssetGroup 获取或创建用户的默认 AIGC 素材组（每用户每渠道一个）
 func getOrCreateDefaultAssetGroup(c *gin.Context, gw *service.SeedanceGatewayChannel, userID int) (string, error) {
-	// 查本地表有无该用户的 AIGC 素材组
-	groups, _, err := model.ListSeedanceAssetGroups(userID, 1, 1)
+	// 查本地表有无该用户+渠道的 AIGC 素材组，必须匹配渠道，避免跨渠道引用不存在的 group
+	groups, _, err := model.ListSeedanceAssetGroupsByChannel(userID, gw.Channel.Id, 1, 1)
 	if err == nil && len(groups) > 0 {
 		logger.LogInfo(c, fmt.Sprintf("seedance: found existing asset group %s for user %d", groups[0].UpstreamGroupID, userID))
 		return groups[0].UpstreamGroupID, nil
@@ -289,6 +289,40 @@ func SeedanceCreateAsset(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": proxyErr.Error()})
 		return
 	}
+
+	// 若上游返回 404 且是 group_id 不存在，自动软删本地旧记录并重建 group 后重试一次
+	if statusCode == http.StatusNotFound && req.GroupID != "" {
+		var errResp struct {
+			ResponseMetadata struct {
+				Error struct {
+					Code string `json:"Code"`
+				} `json:"Error"`
+			} `json:"ResponseMetadata"`
+		}
+		if common.Unmarshal(respBody, &errResp) == nil &&
+			errResp.ResponseMetadata.Error.Code == "NotFound.group_id" {
+			logger.LogWarn(c, fmt.Sprintf("seedance: upstream group %s not found, rebuilding for user %d", req.GroupID, userID))
+			_ = model.SoftDeleteSeedanceAssetGroupByUpstreamID(req.GroupID, userID)
+			newGroupID, rebuildErr := getOrCreateDefaultAssetGroup(c, gw, userID)
+			if rebuildErr != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": rebuildErr.Error()})
+				return
+			}
+			req.GroupID = newGroupID
+			retryBody, _ := json.Marshal(map[string]string{
+				"GroupId":   req.GroupID,
+				"URL":       req.URL,
+				"AssetType": req.AssetType,
+				"Name":      req.Name,
+			})
+			statusCode, respBody, proxyErr = service.SeedanceProxyRequest(gw, http.MethodPost, "/api/seedance/proxy/assets", nil, retryBody)
+			if proxyErr != nil {
+				c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": proxyErr.Error()})
+				return
+			}
+		}
+	}
+
 	if statusCode < 200 || statusCode >= 300 {
 		c.Data(statusCode, "application/json; charset=utf-8", respBody)
 		return
