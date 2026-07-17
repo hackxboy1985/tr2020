@@ -174,7 +174,7 @@ func RefundTaskQuota(ctx context.Context, task *model.Task, reason string) {
 		Content:   "",
 		ChannelId: task.ChannelId,
 		ModelName: taskModelName(task),
-		Quota:     quota,
+		Quota:     -quota, // 负数，与 RecalculateTaskQuota 退款路径一致，前端显示为负值
 		TokenId:   task.PrivateData.TokenId,
 		Group:     task.Group,
 		Other:     other,
