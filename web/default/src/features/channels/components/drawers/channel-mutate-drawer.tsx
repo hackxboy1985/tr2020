@@ -100,6 +100,7 @@ import {
   sideDrawerSwitchItemClassName,
 } from '@/components/drawer-layout'
 import { JsonEditor } from '@/components/json-editor'
+import { PosterPathConfigEditor } from '../poster-path-config-editor'
 import { MultiSelect } from '@/components/multi-select'
 import {
   SecureVerificationDialog,
@@ -1836,6 +1837,26 @@ export function ChannelMutateDrawer({
                             </FormItem>
                           )
                         }}
+                      />
+                    )}
+
+                    {/* Poster (type 58) - upstream path config */}
+                    {currentType === 58 && (
+                      <FormField
+                        control={form.control}
+                        name='other'
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('Upstream Path Config')}</FormLabel>
+                            <FormControl>
+                              <PosterPathConfigEditor
+                                value={field.value ?? ''}
+                                onChange={field.onChange}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
                       />
                     )}
 

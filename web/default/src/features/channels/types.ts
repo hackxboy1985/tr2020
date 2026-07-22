@@ -106,6 +106,9 @@ export interface ChannelOtherSettings {
   upstream_model_update_ignored_models?: string[]
   upstream_model_update_last_check_time?: number
   upstream_model_update_last_detected_models?: string[]
+  // Poster 渠道路径覆盖
+  poster_api_version?: string
+  poster_endpoints?: Record<string, string>
 }
 
 // ============================================================================
