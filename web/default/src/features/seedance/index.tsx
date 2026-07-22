@@ -11,6 +11,11 @@ import { SectionPageLayout } from '@/components/layout'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import {
   Table,
   TableBody,
   TableCell,
@@ -180,6 +185,23 @@ function AssetsTab() {
             : s === 'Failed'
               ? 'destructive'
               : 'secondary'
+        if (s === 'Failed') {
+          const rawData = info.row.original.raw_data
+          return (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Badge variant={variant} className='cursor-pointer'>
+                  {s}
+                </Badge>
+              </PopoverTrigger>
+              <PopoverContent className='w-96 max-h-64 overflow-auto'>
+                <pre className='text-xs whitespace-pre-wrap break-all'>
+                  {rawData || t('No detail available')}
+                </pre>
+              </PopoverContent>
+            </Popover>
+          )
+        }
         return <Badge variant={variant}>{s}</Badge>
       },
       size: 110,
