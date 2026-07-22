@@ -169,15 +169,16 @@ func RefundTaskQuota(ctx context.Context, task *model.Task, reason string) {
 	other["task_id"] = task.TaskID
 	other["reason"] = reason
 	model.RecordTaskBillingLog(model.RecordTaskBillingLogParams{
-		UserId:    task.UserId,
-		LogType:   model.LogTypeRefund,
-		Content:   "",
-		ChannelId: task.ChannelId,
-		ModelName: taskModelName(task),
-		Quota:     -quota, // 负数，与 RecalculateTaskQuota 退款路径一致，前端显示为负值
-		TokenId:   task.PrivateData.TokenId,
-		Group:     task.Group,
-		Other:     other,
+		UserId:            task.UserId,
+		LogType:           model.LogTypeRefund,
+		Content:           "",
+		ChannelId:         task.ChannelId,
+		ModelName:         taskModelName(task),
+		Quota:             -quota, // 负数，与 RecalculateTaskQuota 退款路径一致，前端显示为负值
+		TokenId:           task.PrivateData.TokenId,
+		Group:             task.Group,
+		Other:             other,
+		UpstreamRequestId: task.GetUpstreamTaskID(),
 	})
 }
 
@@ -232,15 +233,16 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 	other["pre_consumed_quota"] = preConsumedQuota
 	other["actual_quota"] = actualQuota
 	model.RecordTaskBillingLog(model.RecordTaskBillingLogParams{
-		UserId:    task.UserId,
-		LogType:   logType,
-		Content:   reason,
-		ChannelId: task.ChannelId,
-		ModelName: taskModelName(task),
-		Quota:     logQuota,
-		TokenId:   task.PrivateData.TokenId,
-		Group:     task.Group,
-		Other:     other,
+		UserId:            task.UserId,
+		LogType:           logType,
+		Content:           reason,
+		ChannelId:         task.ChannelId,
+		ModelName:         taskModelName(task),
+		Quota:             logQuota,
+		TokenId:           task.PrivateData.TokenId,
+		Group:             task.Group,
+		Other:             other,
+		UpstreamRequestId: task.GetUpstreamTaskID(),
 	})
 }
 

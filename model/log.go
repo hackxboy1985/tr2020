@@ -370,15 +370,16 @@ func savePrompt(c *gin.Context, logId int, userId int) {
 }
 
 type RecordTaskBillingLogParams struct {
-	UserId    int
-	LogType   int
-	Content   string
-	ChannelId int
-	ModelName string
-	Quota     int
-	TokenId   int
-	Group     string
-	Other     map[string]interface{}
+	UserId            int
+	LogType           int
+	Content           string
+	ChannelId         int
+	ModelName         string
+	Quota             int
+	TokenId           int
+	Group             string
+	Other             map[string]interface{}
+	UpstreamRequestId string
 }
 
 func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
@@ -393,18 +394,19 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 		}
 	}
 	log := &Log{
-		UserId:    params.UserId,
-		Username:  username,
-		CreatedAt: common.GetTimestamp(),
-		Type:      params.LogType,
-		Content:   params.Content,
-		TokenName: tokenName,
-		ModelName: params.ModelName,
-		Quota:     params.Quota,
-		ChannelId: params.ChannelId,
-		TokenId:   params.TokenId,
-		Group:     params.Group,
-		Other:     common.MapToJsonStr(params.Other),
+		UserId:            params.UserId,
+		Username:          username,
+		CreatedAt:         common.GetTimestamp(),
+		Type:              params.LogType,
+		Content:           params.Content,
+		TokenName:         tokenName,
+		ModelName:         params.ModelName,
+		Quota:             params.Quota,
+		ChannelId:         params.ChannelId,
+		TokenId:           params.TokenId,
+		Group:             params.Group,
+		Other:             common.MapToJsonStr(params.Other),
+		UpstreamRequestId: params.UpstreamRequestId,
 	}
 	err := LOG_DB.Create(log).Error
 	if err != nil {
