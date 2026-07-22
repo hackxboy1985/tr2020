@@ -521,7 +521,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
               )}
               {props.log.upstream_request_id && !isRefund && (
                 <DetailRow
-                  label={other?.is_task ? t('Task ID') : t('Upstream Request ID')}
+                  label={props.log.upstream_request_id.startsWith('task_') ? t('Task ID') : t('Upstream Request ID')}
                   value={props.log.upstream_request_id}
                   mono
                 />
