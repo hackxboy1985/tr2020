@@ -53,6 +53,9 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 	if requestBody := c.GetString(string(constant.ContextKeyVideoRequestBody)); requestBody != "" {
 		other["request_body"] = requestBody
 	}
+	if responseBody := c.GetString(string(constant.ContextKeyVideoResponseBody)); responseBody != "" {
+		other["response_body"] = responseBody
+	}
 	model.RecordConsumeLog(c, info.UserId, model.RecordConsumeLogParams{
 		ChannelId: info.ChannelId,
 		ModelName: info.OriginModelName,
@@ -138,6 +141,12 @@ func taskBillingOther(task *model.Task) map[string]interface{} {
 	if props.UpstreamModelName != "" && props.UpstreamModelName != props.OriginModelName {
 		other["is_model_mapped"] = true
 		other["upstream_model_name"] = props.UpstreamModelName
+	}
+	if task.PrivateData.RequestBody != "" {
+		other["request_body"] = task.PrivateData.RequestBody
+	}
+	if task.PrivateData.SubmitRespBody != "" {
+		other["response_body"] = task.PrivateData.SubmitRespBody
 	}
 	return other
 }

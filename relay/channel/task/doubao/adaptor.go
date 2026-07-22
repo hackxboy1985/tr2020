@@ -247,6 +247,7 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 	ov.Model = info.OriginModelName
 
 	c.JSON(http.StatusOK, ov)
+	c.Set(string(constant.ContextKeyVideoResponseBody), string(responseBody))
 	return dResp.ID, responseBody, nil
 }
 
