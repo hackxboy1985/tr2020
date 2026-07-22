@@ -698,12 +698,15 @@ export function DetailsDialog(props: DetailsDialogProps) {
             )}
 
             {/* Refund details (type=6) */}
-            {isRefund && other && (other.task_id || other.reason) && (
+            {isRefund && (props.log.upstream_request_id || (other && (other.task_id || other.reason))) && (
               <DetailSection label={t('Refund Details')}>
-                {other.task_id && (
+                {props.log.upstream_request_id && (
+                  <DetailRow label={t('Upstream Request ID')} value={props.log.upstream_request_id} mono />
+                )}
+                {other?.task_id && (
                   <DetailRow label={t('Task ID')} value={other.task_id} mono />
                 )}
-                {other.reason && (
+                {other?.reason && (
                   <DetailRow label={t('Reason')} value={other.reason} />
                 )}
               </DetailSection>
