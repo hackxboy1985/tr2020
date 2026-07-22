@@ -619,10 +619,10 @@ func RelayTask(c *gin.Context) {
 			}
 		}
 		if rb := c.GetString(string(constant.ContextKeyVideoRequestBody)); rb != "" {
-			task.PrivateData.RequestBody = rb
+			task.PrivateData.RequestBody = service.TruncateBody(rb)
 		}
 		if len(result.TaskData) > 0 {
-			task.PrivateData.SubmitRespBody = string(result.TaskData)
+			task.PrivateData.SubmitRespBody = service.TruncateBody(string(result.TaskData))
 		}
 		if insertErr := task.Insert(); insertErr != nil {
 			common.SysError("insert task error: " + insertErr.Error())

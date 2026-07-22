@@ -51,10 +51,10 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 		other["upstream_model_name"] = info.UpstreamModelName
 	}
 	if requestBody := c.GetString(string(constant.ContextKeyVideoRequestBody)); requestBody != "" {
-		other["request_body"] = requestBody
+		other["request_body"] = TruncateBody(requestBody)
 	}
 	if responseBody := c.GetString(string(constant.ContextKeyVideoResponseBody)); responseBody != "" {
-		other["response_body"] = responseBody
+		other["response_body"] = TruncateBody(responseBody)
 	}
 	model.RecordConsumeLog(c, info.UserId, model.RecordConsumeLogParams{
 		ChannelId: info.ChannelId,
@@ -122,6 +122,15 @@ func taskAdjustTokenQuota(ctx context.Context, task *model.Task, delta int) {
 	}
 }
 
+// TruncateBody 截断请求/响应体，超过 2046 字节时截断并追加省略标记。
+func TruncateBody(s string) string {
+	const maxLen = 2046
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "...(truncated)"
+}
+
 // taskBillingOther 从 task 的 BillingContext 构建日志 Other 字段。
 func taskBillingOther(task *model.Task) map[string]interface{} {
 	other := make(map[string]interface{})
@@ -143,10 +152,10 @@ func taskBillingOther(task *model.Task) map[string]interface{} {
 		other["upstream_model_name"] = props.UpstreamModelName
 	}
 	if task.PrivateData.RequestBody != "" {
-		other["request_body"] = task.PrivateData.RequestBody
+		other["request_body"] = TruncateBody(task.PrivateData.RequestBody)
 	}
 	if task.PrivateData.SubmitRespBody != "" {
-		other["response_body"] = task.PrivateData.SubmitRespBody
+		other["response_body"] = TruncateBody(task.PrivateData.SubmitRespBody)
 	}
 	return other
 }
