@@ -580,6 +580,21 @@ func RelayTask(c *gin.Context) {
 		if settleErr := service.SettleBilling(c, relayInfo, result.Quota); settleErr != nil {
 			common.SysError("settle task billing error: " + settleErr.Error())
 		}
+
+		// 设置请求体和 prompt，供 LogTaskConsumption → savePrompt 使用
+		if bs, bsErr := common.GetBodyStorage(c); bsErr == nil {
+			if _, seekErr := bs.Seek(0, io.SeekStart); seekErr == nil {
+				if bodyBytes, readErr := io.ReadAll(bs); readErr == nil && len(bodyBytes) > 0 {
+					c.Set(string(constant.ContextKeyVideoRequestBody), string(bodyBytes))
+				}
+			}
+		}
+		if v, exists := c.Get("task_request"); exists {
+			if req, ok := v.(relaycommon.TaskSubmitReq); ok && req.Prompt != "" {
+				c.Set(string(constant.ContextKeyPromptToSave), req.Prompt)
+			}
+		}
+
 		service.LogTaskConsumption(c, relayInfo)
 
 		task := model.InitTask(result.Platform, relayInfo)
@@ -598,6 +613,11 @@ func RelayTask(c *gin.Context) {
 		task.Quota = result.Quota
 		task.Data = result.TaskData
 		task.Action = relayInfo.Action
+		if v, exists := c.Get("task_request"); exists {
+			if req, ok := v.(relaycommon.TaskSubmitReq); ok && req.Prompt != "" {
+				task.Properties.Input = req.Prompt
+			}
+		}
 		if insertErr := task.Insert(); insertErr != nil {
 			common.SysError("insert task error: " + insertErr.Error())
 		}
