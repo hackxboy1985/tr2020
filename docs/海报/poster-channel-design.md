@@ -810,8 +810,71 @@ RelayModeImageTaskFetchByID
 
 ---
 
-## 八、待确认问题
+## 八、上游路径可配置化（已实现）
 
-1. **同步接口路由**：走 `/v1/images/generations` 还是单独定义路由？
-2. **poster-assisted 返回文本**：上游返回字符串数组，不是图片 URL，响应格式如何处理？
-3. **多图计费**：`detailPictureNumber` 影响实际生成张数，是否按张数乘以单价？
+通过渠道「其他配置（Other）」字段的 JSON 覆盖上游路径，无需重启服务。
+
+### 8.1 字段说明
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `poster_api_version` | string | 批量替换版本号，如 `"v2"` 将所有 `/v1/` 改为 `/v2/` |
+| `poster_endpoints` | map | 按模型精确覆盖完整路径，优先级高于 `poster_api_version` |
+
+### 8.2 配置示例
+
+**场景一：只改版本号（全部接口批量生效）**
+```json
+{
+  "poster_api_version": "v2"
+}
+```
+
+**场景二：精确覆盖某个模型路径**
+```json
+{
+  "poster_endpoints": {
+    "poster-matting": "/openapi/v2/ai/matting_pro",
+    "poster-generate": "/openapi/v2/poster/generateAsync"
+  }
+}
+```
+
+**场景三：版本批量改 + 个别路径单独覆盖**
+```json
+{
+  "poster_api_version": "v2",
+  "poster_endpoints": {
+    "poster-matting": "/openapi/v2/ai/matting_pro",
+    "poster-query": "/openapi/v2/poster/queryTaskResult"
+  }
+}
+```
+
+### 8.3 所有可覆盖的 key 及默认路径
+
+| key | 默认路径 |
+|-----|---------|
+| `poster-extension` | `/openapi/v1/ai/extension` |
+| `poster-translate` | `/openapi/v1/ai/translate` |
+| `poster-enlarge` | `/openapi/v1/ai/enlarge` |
+| `poster-matting` | `/openapi/v1/ai/matting` |
+| `poster-enhance` | `/openapi/v1/ai/enhance` |
+| `poster-partial-redraw` | `/openapi/v1/ai/partialRedrawing` |
+| `poster-scene-replace` | `/openapi/v1/ai/sceneReplace` |
+| `poster-product-replace` | `/openapi/v1/ai/productReplace` |
+| `poster-color-change` | `/openapi/v1/ai/colorChange` |
+| `poster-assisted` | `/openapi/v1/ai/assisted` |
+| `poster-generate` | `/openapi/v1/poster/generateAsync` |
+| `poster-free-creation` | `/openapi/v1/poster/allAroundCreation` |
+| `poster-query` | `/openapi/v1/poster/queryTaskResult`（轮询接口） |
+
+> 优先级：`poster_endpoints[model]` > `poster_api_version` 版本替换 > 默认路径
+
+---
+
+## 九、待确认问题
+
+1. **同步接口路由**：走 `/v1/images/generations` ✅ 已确认
+2. **poster-assisted 返回文本**：文案放入 `revised_prompt`，`url` 为空 ✅ 已实现
+3. **多图计费**：`detailPictureNumber` 影响实际生成张数，是否按张数乘以单价？（待确认）
