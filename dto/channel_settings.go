@@ -48,6 +48,12 @@ type ChannelOtherSettings struct {
 	DoubaoVideoFetchPath    string `json:"doubao_video_fetch_path,omitempty"`
 	// Seedance Gateway 素材库/人脸认证服务地址，例如 https://sd.dawnloadai.com:9444
 	SeedanceAssetBaseUrl string `json:"seedance_asset_base_url,omitempty"`
+	// Poster 渠道路径覆盖
+	// PosterApiVersion: 替换默认路径中的版本号，如 "v2" 将 /openapi/v1/... 改为 /openapi/v2/...
+	// PosterEndpoints: 按模型精确覆盖完整路径，优先级高于 PosterApiVersion
+	//   示例: {"poster-matting": "/openapi/v2/ai/matting_pro"}
+	PosterApiVersion string            `json:"poster_api_version,omitempty"`
+	PosterEndpoints  map[string]string `json:"poster_endpoints,omitempty"`
 }
 
 func (s *ChannelOtherSettings) IsOpenRouterEnterprise() bool {

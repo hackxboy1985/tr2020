@@ -55,6 +55,7 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("unsupported poster model: %s", info.UpstreamModelName)
 	}
+	endpoint = resolvePosterEndpoint(info.UpstreamModelName, endpoint, info.ChannelOtherSettings)
 	return fmt.Sprintf("%s%s", info.ChannelBaseUrl, endpoint), nil
 }
 
@@ -342,6 +343,18 @@ func extractMetadata(request dto.ImageRequest) map[string]any {
 		return nil
 	}
 	return meta
+}
+
+// resolvePosterEndpoint 根据渠道 OtherSettings 覆盖上游路径。
+// 优先级：PosterEndpoints[model] > PosterApiVersion 版本替换 > 默认路径
+func resolvePosterEndpoint(model, defaultEndpoint string, s dto.ChannelOtherSettings) string {
+	if ep, ok := s.PosterEndpoints[model]; ok && ep != "" {
+		return ep
+	}
+	if s.PosterApiVersion != "" {
+		return strings.Replace(defaultEndpoint, "/v1/", "/"+s.PosterApiVersion+"/", 1)
+	}
+	return defaultEndpoint
 }
 
 // unmarshalMeta 将 metadata map 反序列化到目标结构体

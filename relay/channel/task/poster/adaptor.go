@@ -73,15 +73,17 @@ type queryTaskResponse struct {
 
 type TaskAdaptor struct {
 	taskcommon.BaseBilling
-	ChannelType int
-	apiKey      string
-	baseURL     string
+	ChannelType   int
+	apiKey        string
+	baseURL       string
+	otherSettings dto.ChannelOtherSettings
 }
 
 func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
 	a.ChannelType = info.ChannelType
 	a.baseURL = info.ChannelBaseUrl
 	a.apiKey = info.ApiKey
+	a.otherSettings = info.ChannelOtherSettings
 }
 
 // ValidateRequestAndSetAction 自定义验证，支持 query 从 metadata 或外层 prompt 读取
@@ -117,6 +119,7 @@ func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, erro
 	if info.UpstreamModelName == "poster-free-creation" {
 		endpoint = EndpointFreeCreation
 	}
+	endpoint = resolvePosterTaskEndpoint(info.UpstreamModelName, endpoint, a.otherSettings)
 	return fmt.Sprintf("%s%s", a.baseURL, endpoint), nil
 }
 
@@ -213,7 +216,8 @@ func (a *TaskAdaptor) FetchTask(baseUrl, key string, body map[string]any, proxy 
 		return nil, fmt.Errorf("invalid task_id")
 	}
 
-	url := fmt.Sprintf("%s%s?taskId=%s", baseUrl, EndpointQueryTaskResult, taskID)
+	queryEndpoint := resolvePosterTaskEndpoint("poster-query", EndpointQueryTaskResult, a.otherSettings)
+	url := fmt.Sprintf("%s%s?taskId=%s", baseUrl, queryEndpoint, taskID)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -312,4 +316,16 @@ func (a *TaskAdaptor) buildFreeCreationBody(req *relaycommon.TaskSubmitReq) (*po
 		body.Query = req.Prompt
 	}
 	return body, nil
+}
+
+// resolvePosterTaskEndpoint 根据渠道 OtherSettings 覆盖上游路径。
+// 优先级：PosterEndpoints[model] > PosterApiVersion 版本替换 > 默认路径
+func resolvePosterTaskEndpoint(model, defaultEndpoint string, s dto.ChannelOtherSettings) string {
+	if ep, ok := s.PosterEndpoints[model]; ok && ep != "" {
+		return ep
+	}
+	if s.PosterApiVersion != "" {
+		return strings.Replace(defaultEndpoint, "/v1/", "/"+s.PosterApiVersion+"/", 1)
+	}
+	return defaultEndpoint
 }

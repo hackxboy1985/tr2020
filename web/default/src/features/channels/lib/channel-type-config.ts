@@ -134,6 +134,19 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
       baseUrl: 'Default: https://api.replicate.com',
     },
   },
+  58: {
+    id: 58,
+    name: CHANNEL_TYPES[58],
+    icon: 'openai',
+    hints: {
+      baseUrl: 'e.g. http://your-host:9096',
+      key: 'Poster API Key (Authorization: Bearer <key>)',
+      models:
+        'poster-generate,poster-free-creation,poster-extension,poster-translate,poster-enlarge,poster-matting,poster-enhance,poster-partial-redraw,poster-scene-replace,poster-product-replace,poster-color-change,poster-assisted',
+      other:
+        '可选，覆盖上游接口路径。示例：\n{"api_version":"v2","endpoints":{"poster-matting":"/openapi/v2/ai/matting_pro"}}\n\n默认路径：\nposter-extension  → /openapi/v1/ai/extension\nposter-translate  → /openapi/v1/ai/translate\nposter-enlarge    → /openapi/v1/ai/enlarge\nposter-matting    → /openapi/v1/ai/matting\nposter-enhance    → /openapi/v1/ai/enhance\nposter-partial-redraw   → /openapi/v1/ai/partialRedrawing\nposter-scene-replace    → /openapi/v1/ai/sceneReplace\nposter-product-replace  → /openapi/v1/ai/productReplace\nposter-color-change     → /openapi/v1/ai/colorChange\nposter-assisted         → /openapi/v1/ai/assisted\nposter-generate         → /openapi/v1/poster/generateAsync\nposter-free-creation    → /openapi/v1/poster/allAroundCreation',
+    },
+  },
 }
 
 /**
