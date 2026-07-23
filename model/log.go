@@ -227,7 +227,6 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 		}(),
 		RequestId:         requestId,
 		UpstreamRequestId: upstreamRequestId,
-		TaskId:            params.TaskId,
 		Other:             otherStr,
 	}
 	err := LOG_DB.Create(log).Error
