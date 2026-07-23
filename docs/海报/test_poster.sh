@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # 海报渠道接口测试脚本
 # 用法：
-#   ./test_poster.sh                    # 执行全部接口
-#   ./test_poster.sh poster-matting     # 只执行 AI 抠图
-#   ./test_poster.sh poster-enhance     # 只执行 AI 超清
-#   ./test_poster.sh poster-generate    # 只执行异步海报生成（含轮询）
+#   ./test_poster.sh                                        # 执行全部接口
+#   ./test_poster.sh poster-enhance                         # 只执行 AI 超清
+#   ./test_poster.sh poster-matting https://example.com/img.jpg  # 指定图片
 #
 # 可用模型：
 #   poster-matting          AI 抠图
@@ -30,6 +29,13 @@ API_KEY="sk-xxx"                    # 你的 new-api Token
 # 测试用图片 URL（需要公网可访问）
 IMG_PRODUCT="https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600"
 IMG_BANNER="https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800"
+
+# 第二个参数可覆盖图片 URL（同时覆盖 IMG_PRODUCT 和 IMG_BANNER）
+if [ -n "$2" ]; then
+    IMG_PRODUCT="$2"
+    IMG_BANNER="$2"
+    info "使用自定义图片: $2"
+fi
 
 # ──────────────────────────────────────────────
 # 工具函数
