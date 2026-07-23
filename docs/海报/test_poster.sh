@@ -23,7 +23,7 @@
 # ──────────────────────────────────────────────
 # 配置区（必填）
 # ──────────────────────────────────────────────
-GATEWAY="http://book:3002"          # new-api 网关地址
+GATEWAY="http://book2:3002"          # new-api 网关地址
 API_KEY="sk-BTx3kf9qRT0TCjaWHg3pL9H4DCbwFDcxbZjW1TUMU9lQJTUG"                    # 你的 new-api Token
 
 # 默认测试图片（公网可访问）
@@ -75,7 +75,8 @@ call_sync() {
     body_resp=$(echo "$resp" | sed '$d')
     echo "HTTP $code"
     echo "$body_resp" | python3 -m json.tool 2>/dev/null || echo "$body_resp"
-    if [ "$code" = "200" ]; then ok "$model"; else fail "$model  HTTP=$code"; fi
+    has_error=$(echo "$body_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print('yes' if 'error' in d else 'no')" 2>/dev/null || echo "no")
+    if [ "$code" = "200" ] && [ "$has_error" = "no" ]; then ok "$model"; else fail "$model  HTTP=$code"; fi
 }
 
 # ──────────────────────────────────────────────
