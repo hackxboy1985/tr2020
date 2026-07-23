@@ -436,7 +436,7 @@ ALL_MODELS=(
     poster-free-creation
 )
 
-if [ -n "$1" ]; then
+if [ -n "$1" ] && [ "$1" != "all" ]; then
     fn="test_$1"
     if declare -f "$fn" > /dev/null; then
         shift
@@ -447,10 +447,30 @@ if [ -n "$1" ]; then
         for m in "${ALL_MODELS[@]}"; do echo "  sh test_poster.sh $m --help"; done
         exit 1
     fi
-else
+elif [ "$1" = "all" ]; then
     for m in "${ALL_MODELS[@]}"; do
         "test_$m"
     done
+else
+    echo "用法："
+    echo "  sh test_poster.sh all                             # 执行全部接口"
+    echo "  sh test_poster.sh <模型名> [参数...]              # 执行单个接口"
+    echo "  sh test_poster.sh <模型名> --help                 # 查看接口参数"
+    echo ""
+    echo "可执行示例："
+    echo "  sh test_poster.sh poster-matting --img https://example.com/product.jpg"
+    echo "  sh test_poster.sh poster-enlarge --img https://example.com/img.jpg --ratio 2"
+    echo "  sh test_poster.sh poster-enhance --img https://example.com/img.jpg"
+    echo "  sh test_poster.sh poster-extension --img https://example.com/banner.jpg --ratio 16:9"
+    echo "  sh test_poster.sh poster-translate --img https://example.com/banner.jpg --to 1"
+    echo "  sh test_poster.sh poster-partial-redraw --source https://example.com/a.jpg --prompt \"将背景换成草原\""
+    echo "  sh test_poster.sh poster-scene-replace --source https://example.com/a.jpg --replace https://example.com/b.jpg --prompt \"换成海滩场景\""
+    echo "  sh test_poster.sh poster-product-replace --source https://example.com/scene.jpg --replace https://example.com/product.jpg --prompt \"替换商品\""
+    echo "  sh test_poster.sh poster-color-change --source https://example.com/bag.jpg --prompt \"换成玫瑰红\""
+    echo "  sh test_poster.sh poster-assisted --query \"为保湿面霜写产品文案\""
+    echo "  sh test_poster.sh poster-generate-sync --query \"高端护肤品海报\""
+    echo "  sh test_poster.sh poster-generate --query \"运动鞋海报，背景户外\""
+    echo "  sh test_poster.sh poster-free-creation --query \"科技感蓝色电子产品海报\""
 fi
 
 sep
