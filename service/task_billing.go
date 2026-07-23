@@ -65,6 +65,7 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 		TokenId:   info.TokenId,
 		Group:     info.UsingGroup,
 		Other:     other,
+		TaskId:    info.PublicTaskID,
 	})
 	model.UpdateUserUsedQuotaAndRequestCount(info.UserId, info.PriceData.Quota)
 	model.UpdateChannelUsedQuota(info.ChannelId, info.PriceData.Quota)
@@ -198,10 +199,11 @@ func RefundTaskQuota(ctx context.Context, task *model.Task, reason string) {
 		Content:   "",
 		ChannelId: task.ChannelId,
 		ModelName: taskModelName(task),
-		Quota:     -quota, // 负数，与 RecalculateTaskQuota 退款路径一致，前端显示为负值
+		Quota:     -quota,
 		TokenId:   task.PrivateData.TokenId,
 		Group:     task.Group,
 		Other:     other,
+		TaskId:    task.TaskID,
 	})
 }
 
@@ -268,6 +270,7 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 		TokenId:   task.PrivateData.TokenId,
 		Group:     task.Group,
 		Other:     other,
+		TaskId:    task.TaskID,
 	})
 }
 

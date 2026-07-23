@@ -53,6 +53,7 @@ type Log struct {
 	Ip                string `json:"ip" gorm:"index;default:''"`
 	RequestId         string `json:"request_id,omitempty" gorm:"type:varchar(64);index:idx_logs_request_id;default:''"`
 	UpstreamRequestId string `json:"upstream_request_id,omitempty" gorm:"type:varchar(128);index:idx_logs_upstream_request_id;default:''"`
+	TaskId            string `json:"task_id,omitempty" gorm:"type:varchar(64);index:idx_logs_task_id;default:''"`
 	Other             string `json:"other"`
 	PromptText        string `json:"prompt_text,omitempty" gorm:"-"`
 	RequestBody       string `json:"request_body,omitempty" gorm:"-"`
@@ -226,6 +227,7 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 		}(),
 		RequestId:         requestId,
 		UpstreamRequestId: upstreamRequestId,
+		TaskId:            params.TaskId,
 		Other:             otherStr,
 	}
 	err := LOG_DB.Create(log).Error
@@ -247,6 +249,7 @@ type RecordConsumeLogParams struct {
 	IsStream         bool                   `json:"is_stream"`
 	Group            string                 `json:"group"`
 	Other            map[string]interface{} `json:"other"`
+	TaskId           string                 `json:"task_id"`
 }
 
 // GetLastVideoProjectQueryStatus 查询指定广告项目最近一条"查询"日志中记录的状态。
@@ -319,6 +322,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		}(),
 		RequestId:         requestId,
 		UpstreamRequestId: upstreamRequestId,
+		TaskId:            params.TaskId,
 		Other:             otherStr,
 	}
 	err := LOG_DB.Create(log).Error
@@ -389,6 +393,7 @@ type RecordTaskBillingLogParams struct {
 	Group             string
 	Other             map[string]interface{}
 	UpstreamRequestId string
+	TaskId            string
 }
 
 func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
@@ -416,6 +421,7 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 		Group:             params.Group,
 		Other:             common.MapToJsonStr(params.Other),
 		UpstreamRequestId: params.UpstreamRequestId,
+		TaskId:            params.TaskId,
 	}
 	err := LOG_DB.Create(log).Error
 	if err != nil {
@@ -423,7 +429,7 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 	}
 }
 
-func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
+func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string, upstreamRequestId string, taskId string) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
 		tx = LOG_DB
@@ -445,6 +451,9 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 	}
 	if upstreamRequestId != "" {
 		tx = tx.Where("logs.upstream_request_id = ?", upstreamRequestId)
+	}
+	if taskId != "" {
+		tx = tx.Where("logs.task_id = ?", taskId)
 	}
 	if startTimestamp != 0 {
 		tx = tx.Where("logs.created_at >= ?", startTimestamp)
@@ -512,7 +521,7 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 
 const logSearchCountLimit = 10000
 
-func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, startIdx int, num int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
+func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, startIdx int, num int, group string, requestId string, upstreamRequestId string, taskId string) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
 		tx = LOG_DB.Where("logs.user_id = ?", userId)
@@ -531,6 +540,9 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 	}
 	if upstreamRequestId != "" {
 		tx = tx.Where("logs.upstream_request_id = ?", upstreamRequestId)
+	}
+	if taskId != "" {
+		tx = tx.Where("logs.task_id = ?", taskId)
 	}
 	if startTimestamp != 0 {
 		tx = tx.Where("logs.created_at >= ?", startTimestamp)
