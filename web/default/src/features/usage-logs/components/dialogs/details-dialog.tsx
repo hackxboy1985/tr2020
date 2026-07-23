@@ -521,8 +521,15 @@ export function DetailsDialog(props: DetailsDialogProps) {
               )}
               {props.log.upstream_request_id && !isRefund && (
                 <DetailRow
-                  label={props.log.upstream_request_id.startsWith('task_') ? t('Task ID') : t('Upstream Request ID')}
+                  label={t('Upstream Request ID')}
                   value={props.log.upstream_request_id}
+                  mono
+                />
+              )}
+              {!isRefund && other?.upstream_task_id && (
+                <DetailRow
+                  label={t('Upstream Task ID')}
+                  value={other.upstream_task_id}
                   mono
                 />
               )}
@@ -698,13 +705,16 @@ export function DetailsDialog(props: DetailsDialogProps) {
             )}
 
             {/* Refund details (type=6) */}
-            {isRefund && (props.log.upstream_request_id || (other && (other.task_id || other.reason))) && (
+            {isRefund && (props.log.upstream_request_id || (other && (other.task_id || other.upstream_task_id || other.reason))) && (
               <DetailSection label={t('Refund Details')}>
                 {other?.task_id && (
                   <DetailRow label={t('Task ID')} value={other.task_id} mono />
                 )}
+                {other?.upstream_task_id && (
+                  <DetailRow label={t('Upstream Task ID')} value={other.upstream_task_id} mono />
+                )}
                 {props.log.upstream_request_id && (
-                  <DetailRow label={other?.task_id ? t('Upstream Task ID') : t('Upstream Request ID')} value={props.log.upstream_request_id} mono />
+                  <DetailRow label={t('Upstream Request ID')} value={props.log.upstream_request_id} mono />
                 )}
                 {other?.reason && (
                   <DetailRow label={t('Reason')} value={other.reason} />

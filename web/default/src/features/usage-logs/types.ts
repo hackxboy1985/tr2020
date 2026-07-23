@@ -179,6 +179,7 @@ export interface LogOtherData {
   // Task-related fields (for refund logs, type=6)
   is_task?: boolean
   task_id?: string
+  upstream_task_id?: string
   reason?: string
   // Subscription billing fields
   subscription_plan_id?: string
