@@ -178,7 +178,7 @@ test_poster_translate() {
 }'
 }
 
-test_poster_partial-redraw() {
+test_poster_partial_redraw() {
     if [ "$1" = "--help" ]; then
         echo "poster-partial-redraw  局部重绘"
         echo "参数："
@@ -202,7 +202,7 @@ test_poster_partial-redraw() {
 }'
 }
 
-test_poster_scene-replace() {
+test_poster_scene_replace() {
     if [ "$1" = "--help" ]; then
         echo "poster-scene-replace  场景替换"
         echo "参数："
@@ -223,7 +223,7 @@ test_poster_scene-replace() {
 }'
 }
 
-test_poster_product-replace() {
+test_poster_product_replace() {
     if [ "$1" = "--help" ]; then
         echo "poster-product-replace  商品替换"
         echo "参数："
@@ -244,7 +244,7 @@ test_poster_product-replace() {
 }'
 }
 
-test_poster_color-change() {
+test_poster_color_change() {
     if [ "$1" = "--help" ]; then
         echo "poster-color-change  商品换色"
         echo "参数："
@@ -285,7 +285,7 @@ test_poster_assisted() {
 }'
 }
 
-test_poster_generate-sync() {
+test_poster_generate_sync() {
     if [ "$1" = "--help" ]; then
         echo "poster-generate-sync  同步海报生成（直接返回图片URL）"
         echo "参数："
@@ -382,7 +382,7 @@ test_poster_generate() {
     fi
 }
 
-test_poster_free-creation() {
+test_poster_free_creation() {
     if [ "$1" = "--help" ]; then
         echo "poster-free-creation  自由创作（异步，仅测试提交）"
         echo "参数："
