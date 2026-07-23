@@ -24,7 +24,7 @@
 # 配置区（必填）
 # ──────────────────────────────────────────────
 GATEWAY="http://book:3002"          # new-api 网关地址
-API_KEY="sk-xxx"                    # 你的 new-api Token
+API_KEY="sk-BTx3kf9qRT0TCjaWHg3pL9H4DCbwFDcxbZjW1TUMU9lQJTUG"                    # 你的 new-api Token
 
 # 默认测试图片（公网可访问）
 DEFAULT_IMG_PRODUCT="https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600"
@@ -72,7 +72,7 @@ call_sync() {
         -H "Content-Type: application/json" \
         -d "$body")
     code=$(echo "$resp" | tail -1)
-    body_resp=$(echo "$resp" | head -n -1)
+    body_resp=$(echo "$resp" | sed '$d')
     echo "HTTP $code"
     echo "$body_resp" | python3 -m json.tool 2>/dev/null || echo "$body_resp"
     if [ "$code" = "200" ]; then ok "$model"; else fail "$model  HTTP=$code"; fi
@@ -351,7 +351,7 @@ test_poster_generate() {
   }
 }')
     task_http=$(echo "$task_resp" | tail -1)
-    task_body=$(echo "$task_resp" | head -n -1)
+    task_body=$(echo "$task_resp" | sed '$d')
     echo "HTTP $task_http"
     echo "$task_body" | python3 -m json.tool 2>/dev/null || echo "$task_body"
 
@@ -365,7 +365,7 @@ test_poster_generate() {
             poll_resp=$(curl -s -w "\n%{http_code}" "$GATEWAY/v1/images/tasks/$TASK_ID" \
                 -H "Authorization: Bearer $API_KEY")
             poll_http=$(echo "$poll_resp" | tail -1)
-            poll_body=$(echo "$poll_resp" | head -n -1)
+            poll_body=$(echo "$poll_resp" | sed '$d')
             echo "HTTP $poll_http"
             echo "$poll_body" | python3 -m json.tool 2>/dev/null || echo "$poll_body"
             status=$(echo "$poll_body" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status',''))" 2>/dev/null || true)
@@ -410,7 +410,7 @@ test_poster_free_creation() {
   }
 }')
     fc_http=$(echo "$fc_resp" | tail -1)
-    fc_body=$(echo "$fc_resp" | head -n -1)
+    fc_body=$(echo "$fc_resp" | sed '$d')
     echo "HTTP $fc_http"
     echo "$fc_body" | python3 -m json.tool 2>/dev/null || echo "$fc_body"
     if [ "$fc_http" = "200" ]; then ok "poster-free-creation 提交成功"; else fail "poster-free-creation  HTTP=$fc_http"; fi
