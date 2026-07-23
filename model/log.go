@@ -73,8 +73,17 @@ const (
 func formatUserLogs(logs []*Log, startIdx int) {
 	for i := range logs {
 		logs[i].ChannelName = ""
-		// 普通用户不展示 Other 字段（Raw Data 仅管理员可见）
-		logs[i].Other = ""
+		// 普通用户隐藏管理员敏感字段（admin_info、request_body），保留计费信息
+		if logs[i].Other != "" {
+			var m map[string]interface{}
+			if err := common.UnmarshalJsonStr(logs[i].Other, &m); err == nil {
+				delete(m, "admin_info")
+				delete(m, "request_body")
+				if b, err2 := common.Marshal(m); err2 == nil {
+					logs[i].Other = string(b)
+				}
+			}
+		}
 		logs[i].Id = startIdx + i + 1
 	}
 }
