@@ -82,7 +82,7 @@ call_sync() {
 # 各接口函数
 # ──────────────────────────────────────────────
 
-test_poster-matting() {
+test_poster_matting() {
     if [ "$1" = "--help" ]; then
         echo "poster-matting  AI 抠图"
         echo "参数："
@@ -99,7 +99,7 @@ test_poster-matting() {
 }'
 }
 
-test_poster-enlarge() {
+test_poster_enlarge() {
     if [ "$1" = "--help" ]; then
         echo "poster-enlarge  无损放大"
         echo "参数："
@@ -118,7 +118,7 @@ test_poster-enlarge() {
 }'
 }
 
-test_poster-enhance() {
+test_poster_enhance() {
     if [ "$1" = "--help" ]; then
         echo "poster-enhance  AI 超清"
         echo "参数："
@@ -137,7 +137,7 @@ test_poster-enhance() {
 }'
 }
 
-test_poster-extension() {
+test_poster_extension() {
     if [ "$1" = "--help" ]; then
         echo "poster-extension  智能延展"
         echo "参数："
@@ -156,7 +156,7 @@ test_poster-extension() {
 }'
 }
 
-test_poster-translate() {
+test_poster_translate() {
     if [ "$1" = "--help" ]; then
         echo "poster-translate  图片翻译"
         echo "参数："
@@ -178,7 +178,7 @@ test_poster-translate() {
 }'
 }
 
-test_poster-partial-redraw() {
+test_poster_partial-redraw() {
     if [ "$1" = "--help" ]; then
         echo "poster-partial-redraw  局部重绘"
         echo "参数："
@@ -202,7 +202,7 @@ test_poster-partial-redraw() {
 }'
 }
 
-test_poster-scene-replace() {
+test_poster_scene-replace() {
     if [ "$1" = "--help" ]; then
         echo "poster-scene-replace  场景替换"
         echo "参数："
@@ -223,7 +223,7 @@ test_poster-scene-replace() {
 }'
 }
 
-test_poster-product-replace() {
+test_poster_product-replace() {
     if [ "$1" = "--help" ]; then
         echo "poster-product-replace  商品替换"
         echo "参数："
@@ -244,7 +244,7 @@ test_poster-product-replace() {
 }'
 }
 
-test_poster-color-change() {
+test_poster_color-change() {
     if [ "$1" = "--help" ]; then
         echo "poster-color-change  商品换色"
         echo "参数："
@@ -263,7 +263,7 @@ test_poster-color-change() {
 }'
 }
 
-test_poster-assisted() {
+test_poster_assisted() {
     if [ "$1" = "--help" ]; then
         echo "poster-assisted  AI 帮写（返回文案，在 revised_prompt 字段）"
         echo "参数："
@@ -285,7 +285,7 @@ test_poster-assisted() {
 }'
 }
 
-test_poster-generate-sync() {
+test_poster_generate-sync() {
     if [ "$1" = "--help" ]; then
         echo "poster-generate-sync  同步海报生成（直接返回图片URL）"
         echo "参数："
@@ -317,7 +317,7 @@ test_poster-generate-sync() {
 }'
 }
 
-test_poster-generate() {
+test_poster_generate() {
     if [ "$1" = "--help" ]; then
         echo "poster-generate  异步海报生成（提交后自动轮询，最多120s）"
         echo "参数："
@@ -382,7 +382,7 @@ test_poster-generate() {
     fi
 }
 
-test_poster-free-creation() {
+test_poster_free-creation() {
     if [ "$1" = "--help" ]; then
         echo "poster-free-creation  自由创作（异步，仅测试提交）"
         echo "参数："
@@ -437,7 +437,7 @@ ALL_MODELS=(
 )
 
 if [ -n "$1" ] && [ "$1" != "all" ]; then
-    fn="test_$1"
+    fn="test_${1//-/_}"
     if declare -f "$fn" > /dev/null; then
         shift
         "$fn" "$@"
@@ -449,7 +449,7 @@ if [ -n "$1" ] && [ "$1" != "all" ]; then
     fi
 elif [ "$1" = "all" ]; then
     for m in "${ALL_MODELS[@]}"; do
-        "test_$m"
+        "test_${m//-/_}"
     done
 else
     echo "用法："
