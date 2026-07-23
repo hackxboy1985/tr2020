@@ -166,9 +166,28 @@ call_sync "poster-assisted" '{
 }'
 
 # ──────────────────────────────────────────────
-# 11. 异步海报生成（提交 + 轮询）
+# 11. 同步海报生成（直接返回图片 URL，无需轮询）
 # ──────────────────────────────────────────────
-sep; echo "11. poster-generate  异步海报生成（提交）"
+sep; echo "11. poster-generate-sync  同步海报生成"
+call_sync "poster-generate-sync" '{
+  "model": "poster-generate-sync",
+  "metadata": {
+    "query": "一款高端护肤品海报，背景简洁白色，突出保湿效果",
+    "generateType": 100,
+    "posterType": 6,
+    "platformType": "天猫",
+    "languageType": "中文",
+    "detailPictureNumber": 2,
+    "modelEdition": 3,
+    "needText": true,
+    "aspectRatio": "1:1"
+  }
+}'
+
+# ──────────────────────────────────────────────
+# 12. 异步海报生成（提交 + 轮询）
+# ──────────────────────────────────────────────
+sep; echo "12. poster-generate  异步海报生成（提交）"
 info "POST /v1/images/tasks  model=poster-generate"
 task_resp=$(curl -s -w "\n%{http_code}" -X POST "$GATEWAY/v1/images/tasks" \
     -H "Authorization: Bearer $API_KEY" \
