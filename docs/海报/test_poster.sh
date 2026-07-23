@@ -451,6 +451,8 @@ elif [ "$1" = "all" ]; then
     for m in "${ALL_MODELS[@]}"; do
         "test_${m//-/_}"
     done
+    sep
+    echo "测试完成"
 else
     echo "用法："
     echo "  sh test_poster.sh all                             # 执行全部接口"
@@ -485,6 +487,3 @@ else
     echo "  # 自由创作（异步，仅测试提交）"
     echo "  sh test_poster.sh poster-free-creation --query \"科技感蓝色电子产品海报\""
 fi
-
-sep
-echo "测试完成"
