@@ -2,6 +2,21 @@ package poster
 
 // ── 同步 AI 工具上游请求结构体 ──────────────────────────────────────────
 
+// generateSyncRequest 对应 /openapi/v1/poster/generate（同步海报生成）
+type generateSyncRequest struct {
+	Query               string   `json:"query"`
+	GenerateType        int      `json:"generateType,omitempty"`
+	PosterType          int      `json:"posterType,omitempty"`
+	PlatformType        string   `json:"platformType,omitempty"`
+	LanguageType        string   `json:"languageType,omitempty"`
+	DetailPictureNumber int      `json:"detailPictureNumber,omitempty"`
+	ModelEdition        int      `json:"modelEdition,omitempty"`
+	NeedText            *bool    `json:"needText,omitempty"`
+	AspectRatio         string   `json:"aspectRatio,omitempty"`
+	FileUrlList         []string `json:"fileUrlList,omitempty"`
+	UserId              int64    `json:"userId,omitempty"`
+}
+
 type extensionRequest struct {
 	ImgUrlList []string `json:"imgUrlList"`
 	Ratio      string   `json:"ratio"`

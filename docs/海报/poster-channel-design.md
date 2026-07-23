@@ -32,7 +32,9 @@
 | `poster-generate` | `POST /openapi/v1/poster/generateAsync` | 异步海报生成（主力接口） |
 | `poster-free-creation` | `POST /openapi/v1/poster/allAroundCreation` | 自由创作异步 |
 
-轮询接口：`GET /openapi/v1/poster/queryTaskResult?taskId={taskId}`
+轮询接口：`GET /openapi/v1/poster/queryTaskResult?taskId={taskId}`（推荐，1.5）
+
+> **旧轮询接口 1.4**（`GET /openapi/v1/poster/queryResult`）响应结构不同，暂不支持，如需接入再补充。
 
 **客户端路由（新增）：**
 - 提交：`POST /v1/images/tasks`
@@ -46,6 +48,7 @@
 
 | 模型名 | 上游接口 | 需要文本 | 说明 |
 |--------|---------|---------|------|
+| `poster-generate-sync` | `POST /openapi/v1/poster/generate` | 是 | 同步海报生成（直接返回图片 URL） |
 | `poster-extension` | `POST /openapi/v1/ai/extension` | 否 | 智能延展 |
 | `poster-translate` | `POST /openapi/v1/ai/translate` | 否 | 图片翻译 |
 | `poster-enlarge` | `POST /openapi/v1/ai/enlarge` | 否 | 无损放大 |
@@ -797,6 +800,7 @@ RelayModeImageTaskFetchByID
 |--------|---------|------|
 | `poster-generate` | 是 | 异步 |
 | `poster-free-creation` | 是 | 异步 |
+| `poster-generate-sync` | 是 | 同步，直接返回图片 URL |
 | `poster-extension` | 否 | 同步，最多6张 |
 | `poster-translate` | 否 | 同步 |
 | `poster-enlarge` | 否 | 同步，最多6张 |

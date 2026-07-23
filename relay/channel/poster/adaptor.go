@@ -20,6 +20,7 @@ import (
 const ChannelName = "poster"
 
 var ModelList = []string{
+	"poster-generate-sync",
 	"poster-extension",
 	"poster-translate",
 	"poster-partial-redraw",
@@ -34,6 +35,7 @@ var ModelList = []string{
 
 // model → upstream endpoint
 var modelEndpoints = map[string]string{
+	"poster-generate-sync":   "/openapi/v1/poster/generate",
 	"poster-extension":       "/openapi/v1/ai/extension",
 	"poster-translate":       "/openapi/v1/ai/translate",
 	"poster-partial-redraw":  "/openapi/v1/ai/partialRedrawing",
@@ -73,6 +75,16 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 	model := info.UpstreamModelName
 
 	switch model {
+	case "poster-generate-sync":
+		req := &generateSyncRequest{}
+		if err := unmarshalMeta(meta, req); err != nil {
+			return nil, err
+		}
+		if req.Query == "" {
+			req.Query = request.Prompt
+		}
+		return req, nil
+
 	case "poster-extension":
 		req := &extensionRequest{}
 		if err := unmarshalMeta(meta, req); err != nil {
