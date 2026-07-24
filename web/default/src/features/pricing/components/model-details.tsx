@@ -54,6 +54,7 @@ import {
 import { DEFAULT_TOKEN_UNIT, QUOTA_TYPE_VALUES } from '../constants'
 import { usePricingData } from '../hooks/use-pricing-data'
 import {
+  formatDynamicUnitPrice,
   getDynamicPriceEntries,
   getDynamicPricingSummary,
   getDynamicPricingTiers,
@@ -63,6 +64,7 @@ import { parseTags } from '../lib/filters'
 import { getAvailableGroups, isTokenBasedModel } from '../lib/model-helpers'
 import { inferModelMetadata } from '../lib/model-metadata'
 import { formatFixedPrice, formatGroupPrice } from '../lib/price'
+import { tryParsePerCallConfig } from '../lib/tier-expr'
 import type {
   Modality,
   ModelCapability,
@@ -278,6 +280,7 @@ function ModelHeader(props: { model: PricingModel }) {
     model.billing_mode === 'tiered_expr' &&
     Boolean(model.billing_expr) &&
     getDynamicPricingTiers(model).length === 0
+  const isPerCallExpr = Boolean(model.billing_expr?.trim().startsWith('v2:'))
 
   return (
     <header className='pb-4'>
@@ -301,11 +304,13 @@ function ModelHeader(props: { model: PricingModel }) {
         )}
         <span className='text-muted-foreground/30'>·</span>
         <span className='text-muted-foreground/70'>
-          {model.quota_type === QUOTA_TYPE_VALUES.TOKEN
-            ? t('Token-based')
-            : t('Per Request')}
+          {isPerCallExpr
+            ? t('Per-call pricing')
+            : model.quota_type === QUOTA_TYPE_VALUES.TOKEN
+              ? t('Token-based')
+              : t('Per Request')}
         </span>
-        {model.billing_mode === 'tiered_expr' && model.billing_expr && (
+        {model.billing_mode === 'tiered_expr' && model.billing_expr && !isPerCallExpr && (
           <>
             <span className='text-muted-foreground/30'>·</span>
             <span className='rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'>
@@ -647,6 +652,71 @@ function GroupPricingSection(props: {
     'text-muted-foreground py-2 text-[10px] font-medium tracking-wider uppercase'
 
   if (isDynamicPricingModel(props.model)) {
+    // v2: 按次计费，独立处理
+    const isPerCall = props.model.billing_expr?.trim().startsWith('v2:')
+    if (isPerCall) {
+      const perCallConfig = tryParsePerCallConfig(props.model.billing_expr || '')
+      return (
+        <section>
+          <SectionTitle>{t('Pricing by Group')}</SectionTitle>
+          <AutoGroupChain model={props.model} autoGroups={props.autoGroups} />
+          <div className='space-y-3'>
+            {availableGroups.map((group) => {
+              const ratio = props.groupRatio[group] || 1
+              return (
+                <div key={group} className='overflow-hidden rounded-lg border'>
+                  <div className='bg-muted/20 flex items-center justify-between gap-3 border-b px-3 py-2'>
+                    <GroupBadge group={group} size='sm' />
+                    <span className='text-muted-foreground font-mono text-xs'>{ratio}x</span>
+                  </div>
+                  <div className='space-y-1 p-2'>
+                    {perCallConfig ? (
+                      <>
+                        {perCallConfig.rules.map((rule, i) => (
+                          <div key={i} className='flex items-center justify-between gap-3 rounded px-2 py-1.5 text-sm'>
+                            <span className='text-muted-foreground text-xs break-all'>
+                              {rule.conditions.length > 0
+                                ? rule.conditions.map((c) => `${c.path} = ${c.value}`).join(' && ')
+                                : t('Always matches')}
+                            </span>
+                            <span className='shrink-0 font-mono text-xs font-semibold'>
+                              {formatDynamicUnitPrice(rule.pricePerCall * 1_000_000 * ratio, {
+                                tokenUnit: props.tokenUnit,
+                                showRechargePrice: showRechargePrice,
+                                priceRate: props.priceRate,
+                                usdExchangeRate: props.usdExchangeRate,
+                                groupRatioMultiplier: 1,
+                              })}/call
+                            </span>
+                          </div>
+                        ))}
+                        <div className='flex items-center justify-between gap-3 rounded px-2 py-1.5 text-sm'>
+                          <span className='text-muted-foreground text-xs'>{t('Fallback price')}</span>
+                          <span className='shrink-0 font-mono text-xs'>
+                            {formatDynamicUnitPrice(perCallConfig.fallbackPrice * 1_000_000 * ratio, {
+                              tokenUnit: props.tokenUnit,
+                              showRechargePrice: showRechargePrice,
+                              priceRate: props.priceRate,
+                              usdExchangeRate: props.usdExchangeRate,
+                              groupRatioMultiplier: 1,
+                            })}/call
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <p className='text-muted-foreground px-2 py-1 text-xs'>
+                        {t('Unable to parse structured pricing')}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )
+    }
+
     const dynamicTiers = getDynamicPricingTiers(props.model)
 
     if (dynamicTiers.length === 0) {
