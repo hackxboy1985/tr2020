@@ -67,12 +67,16 @@ call_sync() {
     local model="$1"
     local body="$2"
     info "POST /v1/images/generations  model=$model"
+    echo "── 请求报文 ──────────────────────────"
+    echo "$body" | python3 -m json.tool 2>/dev/null || echo "$body"
     resp=$(curl -s -w "\n%{http_code}" -X POST "$GATEWAY/v1/images/generations" \
         -H "Authorization: Bearer $API_KEY" \
         -H "Content-Type: application/json" \
         -d "$body")
     code=$(echo "$resp" | tail -1)
     body_resp=$(echo "$resp" | sed '$d')
+    echo ""
+    echo "── 响应报文 ──────────────────────────"
     echo "HTTP $code"
     echo "$body_resp" | python3 -m json.tool 2>/dev/null || echo "$body_resp"
     has_error=$(echo "$body_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print('yes' if 'error' in d else 'no')" 2>/dev/null || echo "no")
