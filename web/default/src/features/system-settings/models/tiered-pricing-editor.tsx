@@ -1103,11 +1103,6 @@ function PerCallCostEstimator({ effectiveExpr }: PerCallEstimatorProps) {
             <span className='font-medium'>
               {t('Estimated cost')}: ${result.cost.toFixed(4)}/call
             </span>
-            {result.matchedTier && (
-              <Badge variant='outline' className='text-xs'>
-                {t('Hit tier')}: {result.matchedTier}
-              </Badge>
-            )}
           </div>
         )}
       </div>

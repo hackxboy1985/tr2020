@@ -387,8 +387,11 @@ export function generateExprFromPerCallConfig(
   const fallback = config?.fallbackPrice ?? 0
   const rules = (config?.rules ?? []).filter((r) => r.conditions.length > 0)
 
+  // 始终输出浮点格式，避免解析时 int/float 不匹配
+  const fmtNum = (n: number) => Number.isInteger(n) ? `${n}.0` : String(n)
+
   if (rules.length === 0) {
-    return `v2: tier("base", ${fallback})`
+    return `v2: tier("base", ${fmtNum(fallback)})`
   }
 
   function buildCondStr(rule: PerCallRule): string {
@@ -396,7 +399,6 @@ export function generateExprFromPerCallConfig(
       .filter((c) => c.path.trim() !== '')
       .map((c) => {
         const numVal = Number(c.value)
-        // gjson 解析 JSON 数字为 float64，比较值必须带小数点避免 int/float64 类型不匹配
         const valStr =
           !isNaN(numVal) && c.value.trim() !== ''
             ? (Number.isInteger(numVal) ? `${numVal}.0` : String(numVal))
@@ -406,15 +408,14 @@ export function generateExprFromPerCallConfig(
     return parts.join(' && ')
   }
 
-  // 从右向左嵌套 max，最右是 fallback
   function buildMaxChain(index: number): string {
     const rule = rules[index]
     const cond = buildCondStr(rule)
-    const price = rule.pricePerCall
-    const term = cond ? `${cond} ? ${price} : 0.0` : String(price)
+    const price = fmtNum(rule.pricePerCall)
+    const term = cond ? `${cond} ? ${price} : 0.0` : price
 
     if (index === rules.length - 1) {
-      return `max(${term}, ${fallback})`
+      return `max(${term}, ${fmtNum(fallback)})`
     }
     return `max(${term}, ${buildMaxChain(index + 1)})`
   }
@@ -471,9 +472,9 @@ export function tryParsePerCallConfig(
       const termStr = inner.slice(0, splitIdx).trim()
       const restStr = inner.slice(splitIdx + 1).trim()
 
-      // 解析 term: cond ? price : 0
+      // 解析 term: cond ? price : 0.0
       const termRe =
-        /^((?:param\("[^"]+"\)\s*==\s*(?:"[^"]*"|-?[\d.]+)(?:\s*&&\s*param\("[^"]+"\)\s*==\s*(?:"[^"]*"|-?[\d.]+))*)\s*\?\s*(-?[\d.eE+]+)\s*:\s*0)$/
+        /^((?:param\("[^"]+"\)\s*==\s*(?:"[^"]*"|-?[\d.]+)(?:\s*&&\s*param\("[^"]+"\)\s*==\s*(?:"[^"]*"|-?[\d.]+))*)\s*\?\s*(-?[\d.eE+]+)\s*:\s*0\.0)$/
       const tm = termStr.match(termRe)
       if (tm) {
         const condStr = tm[1].split('?')[0].trim()
