@@ -80,8 +80,8 @@ type queryTaskResponse struct {
 	Msg  string `json:"msg"`
 	Data struct {
 		TaskList []struct {
-			TaskStatus    string `json:"taskStatus"`
-			ExecuteResult string `json:"executeResult"`
+			TaskStatus    json.RawMessage `json:"taskStatus"`
+			ExecuteResult string          `json:"executeResult"`
 		} `json:"taskList"`
 	} `json:"data"`
 }
@@ -276,7 +276,9 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 
 	// 以第一个任务状态为准（所有子任务状态一致）
 	first := qResp.Data.TaskList[0]
-	switch first.TaskStatus {
+	// taskStatus 可能是字符串或数字，统一转成字符串处理
+	taskStatusStr := strings.Trim(string(first.TaskStatus), `"`)
+	switch taskStatusStr {
 	case TaskStatusRunning:
 		info.Status = model.TaskStatusInProgress
 		info.Progress = taskcommon.ProgressInProgress
