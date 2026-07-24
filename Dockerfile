@@ -19,6 +19,7 @@ RUN node <<'EOF'
   fs.writeFileSync('default/package.json', JSON.stringify(def));
 EOF
 RUN npm install --registry=https://registry.npmmirror.com
+COPY ./web/default ./default
 COPY ./VERSION /build/VERSION
 RUN cd default && DISABLE_ESLINT_PLUGIN='true' VITE_REACT_APP_VERSION=$(cat /build/VERSION) npm run build
 
