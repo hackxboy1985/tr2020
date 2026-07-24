@@ -276,13 +276,13 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 
 	// 以第一个任务状态为准（所有子任务状态一致）
 	first := qResp.Data.TaskList[0]
-	// taskStatus 可能是字符串或数字，统一转成字符串处理
+	// taskStatus 可能是字符串（"RUNNING"/"SUCCESS"/"FAILED"）或数字（1/2/3）
 	taskStatusStr := strings.Trim(string(first.TaskStatus), `"`)
 	switch taskStatusStr {
-	case TaskStatusRunning:
+	case TaskStatusRunning, TaskStatusRunningNum:
 		info.Status = model.TaskStatusInProgress
 		info.Progress = taskcommon.ProgressInProgress
-	case TaskStatusSuccess:
+	case TaskStatusSuccess, TaskStatusSuccessNum:
 		info.Status = model.TaskStatusSuccess
 		info.Progress = taskcommon.ProgressComplete
 		// 收集所有成功的图片 URL，逗号分隔存入 Url
@@ -293,7 +293,7 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 			}
 		}
 		info.Url = strings.Join(urls, ",")
-	case TaskStatusFailed:
+	case TaskStatusFailed, TaskStatusFailedNum:
 		info.Status = model.TaskStatusFailure
 		info.Progress = taskcommon.ProgressComplete
 		info.Reason = "upstream task failed"

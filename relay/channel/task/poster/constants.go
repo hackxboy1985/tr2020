@@ -12,6 +12,11 @@ const (
 	TaskStatusRunning = "RUNNING"
 	TaskStatusSuccess = "SUCCESS"
 	TaskStatusFailed  = "FAILED"
+
+	// 数字状态（上游实际返回）
+	TaskStatusRunningNum = "1"
+	TaskStatusSuccessNum = "2"
+	TaskStatusFailedNum  = "3"
 )
 
 var ModelList = []string{

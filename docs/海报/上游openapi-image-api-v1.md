@@ -131,7 +131,7 @@
 }
 ```
 
-`taskStatus` 枚举：`RUNNING`-进行中，`SUCCESS`-成功，`FAILED`-失败
+`taskStatus` 枚举：`RUNNING`/`1`-进行中，`SUCCESS`/`2`-成功，`FAILED`/`3`-失败（实际返回数字）
 
 ---
 
