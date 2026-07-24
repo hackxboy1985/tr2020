@@ -4618,6 +4618,9 @@
     "Rule": "规则",
     "Conditions": "条件",
     "Enter param values to preview the per-call cost (e.g. metadata.modelEdition=3).": "输入参数值预览每次费用（如 metadata.modelEdition=3）。",
-    "Estimated cost": "预估费用"
+    "Estimated cost": "预估费用",
+    "Prices vary by request parameters. Multiple rules matched: highest price applies.": "价格根据请求参数确定。多条规则同时命中时，取最高价格计费。",
+    "Price unit: per call": "价格单位：按次",
+    "Always matches": "始终命中"
   }
 }

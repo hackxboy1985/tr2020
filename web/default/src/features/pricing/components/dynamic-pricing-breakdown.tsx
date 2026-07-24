@@ -48,6 +48,7 @@ import {
   type RequestRuleGroup,
   type TierCondition,
 } from '../lib/billing-expr'
+import { tryParsePerCallConfig } from '../lib/tier-expr'
 
 type DynamicPricingBreakdownProps = {
   billingExpr: string | null | undefined
@@ -174,6 +175,60 @@ export function DynamicPricingBreakdown({
     }
     return { symbol: '$', rate: 1 }
   }, [currency])
+
+  // v2: 按次计费，独立渲染
+  const perCallConfig = useMemo(() => {
+    if (!expr.trim().startsWith('v2:')) return null
+    return tryParsePerCallConfig(expr)
+  }, [expr])
+
+  if (perCallConfig) {
+    return (
+      <section className='min-w-0 py-3 sm:py-4'>
+        <div className='mb-3 flex items-start gap-2 sm:mb-4'>
+          <span className='mt-0.5 inline-flex size-6 items-center justify-center rounded-lg bg-amber-100 text-amber-700 shadow-sm dark:bg-amber-500/20 dark:text-amber-300'>
+            <TagIcon className='size-3.5' />
+          </span>
+          <div>
+            <div className='text-foreground text-base font-medium'>
+              {t('Per-call pricing')}
+            </div>
+            <div className='text-muted-foreground text-xs'>
+              {t('Prices vary by request parameters. Multiple rules matched: highest price applies.')}
+            </div>
+          </div>
+        </div>
+
+        <div className='space-y-2'>
+          {perCallConfig.rules.map((rule, i) => (
+            <div key={i} className='bg-muted/40 flex items-center justify-between gap-3 rounded-md border px-3 py-2'>
+              <div className='min-w-0 flex-1'>
+                <div className='text-muted-foreground text-xs break-all'>
+                  {rule.conditions.length > 0
+                    ? rule.conditions.map((c) => `${c.path} = ${c.value}`).join(' && ')
+                    : t('Always matches')}
+                </div>
+              </div>
+              <Badge variant='secondary' className='shrink-0 bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300 font-mono'>
+                {symbol}{(rule.pricePerCall * rate).toFixed(4)}/call
+              </Badge>
+            </div>
+          ))}
+
+          <div className='flex items-center justify-between gap-3 rounded-md border px-3 py-2'>
+            <span className='text-muted-foreground text-xs'>{t('Fallback price')} — {t('charged when no rule matches')}</span>
+            <Badge variant='outline' className='shrink-0 font-mono'>
+              {symbol}{(perCallConfig.fallbackPrice * rate).toFixed(4)}/call
+            </Badge>
+          </div>
+        </div>
+
+        <div className='text-muted-foreground mt-2 text-[10px]'>
+          {t('Price unit: per call')}
+        </div>
+      </section>
+    )
+  }
 
   const { tiers, ruleGroups } = useMemo(() => {
     const split = splitBillingExprAndRequestRules(expr)
