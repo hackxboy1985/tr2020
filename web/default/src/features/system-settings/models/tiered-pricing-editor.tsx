@@ -1932,7 +1932,7 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
 
   useEffect(() => {
     initRef.current = false
-  }, [modelName])
+  }, [modelName, currentExpr])
 
   const canUseVisualRules = useMemo(() => {
     if (!currentRequestRuleExpr) return true
