@@ -80,13 +80,11 @@
 {
   "code": 200,
   "msg": "操作成功",
-  "data": {
-    "agentGenerateTaskId": "task_abc123456"
-  }
+  "data": "2080593662147178497"
 }
 ```
 
-> 使用 `agentGenerateTaskId` 通过接口 1.5 轮询结果
+> `data` 为任务 ID 字符串，通过接口 1.5 轮询结果
 
 ---
 
@@ -109,9 +107,7 @@
 {
   "code": 200,
   "msg": "操作成功",
-  "data": {
-    "agentGenerateTaskId": "task_xyz789012"
-  }
+  "data": "2080593662147178498"
 }
 ```
 
