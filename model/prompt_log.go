@@ -14,8 +14,8 @@ type PromptLog struct {
 	Id           int    `json:"id" gorm:"primaryKey;index:idx_prompt_created_id,priority:2"`
 	LogId        int    `json:"log_id" gorm:"uniqueIndex"`
 	PromptText   string `json:"prompt_text" gorm:"type:text"`
-	RequestBody  string `json:"request_body,omitempty" gorm:"type:varchar(500)"`
-	ResponseBody string `json:"response_body,omitempty" gorm:"type:varchar(500)"`
+	RequestBody  string `json:"request_body,omitempty" gorm:"type:text"`
+	ResponseBody string `json:"response_body,omitempty" gorm:"type:text"`
 	CreatedAt    int64  `json:"created_at" gorm:"bigint;index:idx_prompt_created_id,priority:1"`
 }
 
