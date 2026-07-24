@@ -18,8 +18,7 @@ RUN node <<'EOF'
   }
   fs.writeFileSync('default/package.json', JSON.stringify(def));
 EOF
-RUN npm install
-COPY ./web/default ./default
+RUN npm install --registry=https://registry.npmmirror.com
 COPY ./VERSION /build/VERSION
 RUN cd default && DISABLE_ESLINT_PLUGIN='true' VITE_REACT_APP_VERSION=$(cat /build/VERSION) npm run build
 
@@ -43,7 +42,7 @@ RUN node <<'EOF'
   }
   fs.writeFileSync('classic/package.json', JSON.stringify(cls));
 EOF
-RUN npm install
+RUN npm install --registry=https://registry.npmmirror.com
 COPY ./web/classic ./classic
 COPY ./VERSION /build/VERSION
 RUN cd classic && VITE_REACT_APP_VERSION=$(cat /build/VERSION) npm run build
