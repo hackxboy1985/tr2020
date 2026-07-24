@@ -4601,6 +4601,23 @@
     "Internal note": "内部备注",
     "Token Consumption Distribution": "消耗分布",
     "Bar Chart": "柱状图",
-    "Area Chart": "面积图"
+    "Area Chart": "面积图",
+    "AND": "且",
+    "Billing base": "计费基础",
+    "Per-call pricing": "按次计费",
+    "Token pricing": "Token 计费",
+    "Per-call estimator": "按次费用预估",
+    "Param values": "参数值",
+    "Each rule has conditions and a price per call. When multiple rules match, the highest price is charged.": "每条规则包含条件和每次价格。多条规则同时命中时，取最高价格计费。",
+    "Remove rule": "删除规则",
+    "Add rule": "新增规则",
+    "No conditions — this rule always matches.": "无条件——该规则始终命中。",
+    "Price per call": "每次价格",
+    "Fallback price": "兜底价格",
+    "charged when no rule matches": "无规则命中时收取",
+    "Rule": "规则",
+    "Conditions": "条件",
+    "Enter param values to preview the per-call cost (e.g. metadata.modelEdition=3).": "输入参数值预览每次费用（如 metadata.modelEdition=3）。",
+    "Estimated cost": "预估费用"
   }
 }

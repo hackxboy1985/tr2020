@@ -86,16 +86,23 @@ import {
   CACHE_MODE_TIMED,
   type CacheMode,
   type ExtraTokenValues,
+  type PerCallRule,
+  type PerCallVisualConfig,
   type TierConditionInput,
   type VisualConfig,
   type VisualTier,
+  createDefaultPerCallConfig,
   createDefaultVisualConfig,
   evalExprLocally,
+  evalPerCallExprLocally,
   exprUsesExtraVars,
+  generateExprFromPerCallConfig,
   generateExprFromVisualConfig,
   getTierCacheMode,
+  normalizePerCallRule,
   normalizeVisualConfig,
   normalizeVisualTier,
+  tryParsePerCallConfig,
   tryParseVisualConfig,
 } from '@/features/pricing/lib/tier-expr'
 
@@ -870,6 +877,245 @@ function VisualEditor({ visualConfig, onChange }: VisualEditorProps) {
 }
 
 // ---------------------------------------------------------------------------
+// Per-call rule row
+// ---------------------------------------------------------------------------
+
+type PerCallRuleRowProps = {
+  rule: PerCallRule
+  index: number
+  onChange: (next: PerCallRule) => void
+  onRemove: () => void
+}
+
+function PerCallRuleRow({ rule, index, onChange, onRemove }: PerCallRuleRowProps) {
+  const { t } = useTranslation()
+
+  const handleConditionChange = (condIndex: number, field: 'path' | 'value', val: string) => {
+    const conditions = [...rule.conditions]
+    conditions[condIndex] = { ...conditions[condIndex], [field]: val }
+    onChange({ ...rule, conditions })
+  }
+
+  const handleAddCondition = () => {
+    onChange({ ...rule, conditions: [...rule.conditions, { path: '', value: '' }] })
+  }
+
+  const handleRemoveCondition = (condIndex: number) => {
+    onChange({ ...rule, conditions: rule.conditions.filter((_, i) => i !== condIndex) })
+  }
+
+  return (
+    <div className='space-y-2 rounded-lg border p-3'>
+      <div className='flex items-center justify-between gap-2'>
+        <Badge variant='outline'>{t('Rule')} {index + 1}</Badge>
+        <Button variant='ghost' size='icon' onClick={onRemove} aria-label={t('Remove rule')}>
+          <Trash2 className='text-destructive h-4 w-4' />
+        </Button>
+      </div>
+
+      {/* 条件列表 */}
+      <div className='space-y-1.5'>
+        <div className='flex items-center justify-between'>
+          <Label className='text-xs font-medium'>{t('Conditions')} ({t('AND')})</Label>
+          <Button
+            variant='ghost'
+            size='sm'
+            className='h-7 px-2 text-xs'
+            onClick={handleAddCondition}
+          >
+            <Plus className='mr-1 h-3 w-3' />
+            {t('Add condition')}
+          </Button>
+        </div>
+        {rule.conditions.length === 0 ? (
+          <p className='text-muted-foreground text-xs'>{t('No conditions — this rule always matches.')}</p>
+        ) : (
+          rule.conditions.map((cond, condIndex) => (
+            <div key={condIndex} className='flex items-center gap-2'>
+              <Input
+                value={cond.path}
+                onChange={(e) => handleConditionChange(condIndex, 'path', e.target.value)}
+                placeholder='metadata.modelEdition'
+                className='h-7 flex-1 font-mono text-xs'
+              />
+              <span className='text-muted-foreground text-xs'>==</span>
+              <Input
+                value={cond.value}
+                onChange={(e) => handleConditionChange(condIndex, 'value', e.target.value)}
+                placeholder='3'
+                className='h-7 w-24 font-mono text-xs'
+              />
+              <Button
+                variant='ghost'
+                size='icon'
+                className='h-7 w-7'
+                onClick={() => handleRemoveCondition(condIndex)}
+              >
+                <Trash2 className='text-destructive h-3 w-3' />
+              </Button>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* 每次价格 */}
+      <div className='flex items-center gap-3'>
+        <Label className='text-xs'>{t('Price per call')}</Label>
+        <DraftNumberInput
+          min={0}
+          step={0.001}
+          value={rule.pricePerCall}
+          onValueChange={(value) => onChange({ ...rule, pricePerCall: value })}
+          className='w-32'
+          placeholder='0.00'
+        />
+        <span className='text-muted-foreground text-xs'>$/call</span>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Per-call visual editor
+// ---------------------------------------------------------------------------
+
+type PerCallEditorProps = {
+  config: PerCallVisualConfig
+  onChange: (next: PerCallVisualConfig) => void
+}
+
+function PerCallEditor({ config, onChange }: PerCallEditorProps) {
+  const { t } = useTranslation()
+
+  const handleRuleChange = (index: number, next: PerCallRule) => {
+    const rules = [...config.rules]
+    rules[index] = normalizePerCallRule(next)
+    onChange({ ...config, rules })
+  }
+
+  const handleAddRule = () => {
+    onChange({
+      ...config,
+      rules: [...config.rules, normalizePerCallRule({ label: `rule_${config.rules.length + 1}`, conditions: [{ path: '', value: '' }], pricePerCall: 0 })],
+    })
+  }
+
+  const handleRemoveRule = (index: number) => {
+    onChange({ ...config, rules: config.rules.filter((_, i) => i !== index) })
+  }
+
+  return (
+    <div className='space-y-3'>
+      <p className='text-muted-foreground text-xs'>
+        {t('Each rule has conditions and a price per call. When multiple rules match, the highest price is charged.')}
+      </p>
+
+      {config.rules.map((rule, index) => (
+        <PerCallRuleRow
+          key={index}
+          rule={rule}
+          index={index}
+          onChange={(next) => handleRuleChange(index, next)}
+          onRemove={() => handleRemoveRule(index)}
+        />
+      ))}
+
+      <Button variant='outline' size='sm' className='h-9 w-36 justify-center' onClick={handleAddRule}>
+        <Plus className='mr-2 h-4 w-4' />
+        {t('Add rule')}
+      </Button>
+
+      {/* 兜底价 */}
+      <div className='flex items-center gap-3 rounded-md border p-3'>
+        <Badge variant='secondary'>{t('Fallback price')}</Badge>
+        <DraftNumberInput
+          min={0}
+          step={0.001}
+          value={config.fallbackPrice}
+          onValueChange={(value) => onChange({ ...config, fallbackPrice: value })}
+          className='w-32'
+          placeholder='0.00'
+        />
+        <span className='text-muted-foreground text-xs'>$/call — {t('charged when no rule matches')}</span>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Per-call cost estimator
+// ---------------------------------------------------------------------------
+
+type PerCallEstimatorProps = {
+  effectiveExpr: string
+}
+
+function PerCallCostEstimator({ effectiveExpr }: PerCallEstimatorProps) {
+  const { t } = useTranslation()
+  const [paramValues, setParamValues] = useState<Record<string, string>>({})
+  const [paramInput, setParamInput] = useState('')
+
+  const result = useMemo(() => {
+    // 把 "key=value,key2=value2" 解析成 nested object
+    const parsed: Record<string, unknown> = {}
+    for (const pair of paramInput.split(',')) {
+      const [k, v] = pair.split('=').map((s) => s.trim())
+      if (!k) continue
+      const parts = k.split('.')
+      let cur = parsed as Record<string, unknown>
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (!cur[parts[i]]) cur[parts[i]] = {}
+        cur = cur[parts[i]] as Record<string, unknown>
+      }
+      const numV = Number(v)
+      cur[parts[parts.length - 1]] = v !== '' && !isNaN(numV) ? numV : v
+    }
+    return evalPerCallExprLocally(effectiveExpr, parsed)
+  }, [effectiveExpr, paramInput])
+
+  return (
+    <div className='bg-muted/30 space-y-3 rounded-md border p-3'>
+      <div className='space-y-1'>
+        <h4 className='text-sm font-medium'>{t('Per-call estimator')}</h4>
+        <p className='text-muted-foreground text-xs'>
+          {t('Enter param values to preview the per-call cost (e.g. metadata.modelEdition=3).')}
+        </p>
+      </div>
+      <div className='space-y-1'>
+        <Label className='text-xs'>{t('Param values')} (key=value, ...)</Label>
+        <Input
+          value={paramInput}
+          onChange={(e) => setParamInput(e.target.value)}
+          placeholder='metadata.modelEdition=3'
+          className='font-mono text-xs'
+        />
+      </div>
+      <div className={cn(
+        'rounded-md border p-3 text-sm',
+        result.error
+          ? 'border-destructive/50 bg-destructive/10 text-destructive'
+          : 'border-primary/50 bg-primary/10'
+      )}>
+        {result.error ? (
+          <span>{t('Expression error')}: {result.error}</span>
+        ) : (
+          <div className='flex items-center gap-2'>
+            <span className='font-medium'>
+              {t('Estimated cost')}: ${result.cost.toFixed(4)}/call
+            </span>
+            {result.matchedTier && (
+              <Badge variant='outline' className='text-xs'>
+                {t('Hit tier')}: {result.matchedTier}
+              </Badge>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Raw expression editor
 // ---------------------------------------------------------------------------
 
@@ -1630,6 +1876,7 @@ export type TieredPricingEditorProps = {
 }
 
 type EditorMode = 'visual' | 'raw'
+type BillingBase = 'token' | 'per_call'
 
 export const TieredPricingEditor = memo(function TieredPricingEditor({
   modelName,
@@ -1639,9 +1886,19 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
   onRequestRuleExprChange,
 }: TieredPricingEditorProps) {
   const { t } = useTranslation()
+
+  // 根据当前表达式判断初始计费基础
+  const initialBillingBase = useMemo<BillingBase>(() => {
+    return currentExpr?.trim().startsWith('v2:') ? 'per_call' : 'token'
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [billingBase, setBillingBase] = useState<BillingBase>(initialBillingBase)
   const [editorMode, setEditorMode] = useState<EditorMode>('visual')
   const [visualConfig, setVisualConfig] = useState<VisualConfig | null>(() =>
     tryParseVisualConfig(currentExpr)
+  )
+  const [perCallConfig, setPerCallConfig] = useState<PerCallVisualConfig>(() =>
+    tryParsePerCallConfig(currentExpr) ?? createDefaultPerCallConfig()
   )
   const [rawExpr, setRawExpr] = useState(() =>
     combineBillingExpr(currentExpr || '', currentRequestRuleExpr || '')
@@ -1654,16 +1911,23 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
   useEffect(() => {
     if (initRef.current) return
     initRef.current = true
-    const parsedConfig = tryParseVisualConfig(currentExpr)
-    if (parsedConfig) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setVisualConfig(parsedConfig)
+
+    if (currentExpr?.trim().startsWith('v2:')) {
+      setBillingBase('per_call')
+      setPerCallConfig(tryParsePerCallConfig(currentExpr) ?? createDefaultPerCallConfig())
       setEditorMode('visual')
-    } else if (currentExpr) {
-      setVisualConfig(null)
-      setEditorMode('raw')
     } else {
-      setVisualConfig(createDefaultVisualConfig())
+      setBillingBase('token')
+      const parsedConfig = tryParseVisualConfig(currentExpr)
+      if (parsedConfig) {
+        setVisualConfig(parsedConfig)
+        setEditorMode('visual')
+      } else if (currentExpr) {
+        setVisualConfig(null)
+        setEditorMode('raw')
+      } else {
+        setVisualConfig(createDefaultVisualConfig())
+      }
     }
     setRawExpr(
       combineBillingExpr(currentExpr || '', currentRequestRuleExpr || '')
@@ -1681,12 +1945,15 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
   }, [currentRequestRuleExpr])
 
   const effectiveExpr = useMemo(() => {
+    if (billingBase === 'per_call') {
+      return generateExprFromPerCallConfig(perCallConfig)
+    }
     if (editorMode === 'visual') {
       return generateExprFromVisualConfig(visualConfig)
     }
     const { billingExpr } = splitBillingExprAndRequestRules(rawExpr)
     return billingExpr
-  }, [editorMode, visualConfig, rawExpr])
+  }, [billingBase, perCallConfig, editorMode, visualConfig, rawExpr])
 
   useEffect(() => {
     if (effectiveExpr !== currentExpr) {
@@ -1695,20 +1962,42 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
   }, [effectiveExpr, currentExpr, onBillingExprChange])
 
   useEffect(() => {
+    if (billingBase === 'per_call') return  // per_call 模式不使用请求规则
     if (editorMode !== 'visual') return
     const ruleExpr = buildRequestRuleExpr(requestRuleGroups)
     if (ruleExpr !== currentRequestRuleExpr) {
       onRequestRuleExprChange(ruleExpr)
     }
   }, [
+    billingBase,
     editorMode,
     requestRuleGroups,
     currentRequestRuleExpr,
     onRequestRuleExprChange,
   ])
 
+  const handleBillingBaseChange = useCallback(
+    (next: BillingBase) => {
+      setBillingBase(next)
+      if (next === 'per_call') {
+        // 切换到按次：清空请求规则
+        onRequestRuleExprChange('')
+        setRequestRuleGroups([])
+      } else {
+        // 切换到 token：重置为默认视觉配置
+        setVisualConfig(createDefaultVisualConfig())
+        setEditorMode('visual')
+      }
+    },
+    [onRequestRuleExprChange]
+  )
+
   const handleVisualChange = useCallback((next: VisualConfig) => {
     setVisualConfig(next)
+  }, [])
+
+  const handlePerCallChange = useCallback((next: PerCallVisualConfig) => {
+    setPerCallConfig(next)
   }, [])
 
   const handleRawChange = useCallback(
@@ -1771,37 +2060,66 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
 
   return (
     <div className='space-y-4'>
+      {/* 计费基础切换 */}
       <div className='flex items-center justify-between gap-2'>
-        <Label className='text-xs'>{t('Editor mode')}</Label>
+        <Label className='text-xs'>{t('Billing base')}</Label>
         <Select
           items={[
-            { value: 'visual', label: t('Visual editor') },
-            { value: 'raw', label: t('Expression editor') },
+            { value: 'token', label: t('Token pricing') },
+            { value: 'per_call', label: t('Per-call pricing') },
           ]}
-          value={editorMode}
-          onValueChange={(value) => handleModeChange(value as EditorMode)}
+          value={billingBase}
+          onValueChange={(value) => handleBillingBaseChange(value as BillingBase)}
         >
           <SelectTrigger className='w-44' size='sm'>
             <SelectValue />
           </SelectTrigger>
           <SelectContent alignItemWithTrigger={false}>
             <SelectGroup>
-              <SelectItem value='visual'>{t('Visual editor')}</SelectItem>
-              <SelectItem value='raw'>{t('Expression editor')}</SelectItem>
+              <SelectItem value='token'>{t('Token pricing')}</SelectItem>
+              <SelectItem value='per_call'>{t('Per-call pricing')}</SelectItem>
             </SelectGroup>
           </SelectContent>
         </Select>
       </div>
 
-      <div className='flex flex-wrap items-start gap-x-4 gap-y-1'>
-        <div className='flex-1'>
-          <PresetSection applyPreset={applyPreset} />
-        </div>
-        {editorMode === 'raw' && <LlmPromptHelper modelName={modelName} />}
-      </div>
+      {billingBase === 'token' && (
+        <>
+          <div className='flex items-center justify-between gap-2'>
+            <Label className='text-xs'>{t('Editor mode')}</Label>
+            <Select
+              items={[
+                { value: 'visual', label: t('Visual editor') },
+                { value: 'raw', label: t('Expression editor') },
+              ]}
+              value={editorMode}
+              onValueChange={(value) => handleModeChange(value as EditorMode)}
+            >
+              <SelectTrigger className='w-44' size='sm'>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false}>
+                <SelectGroup>
+                  <SelectItem value='visual'>{t('Visual editor')}</SelectItem>
+                  <SelectItem value='raw'>{t('Expression editor')}</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className='flex flex-wrap items-start gap-x-4 gap-y-1'>
+            <div className='flex-1'>
+              <PresetSection applyPreset={applyPreset} />
+            </div>
+            {editorMode === 'raw' && <LlmPromptHelper modelName={modelName} />}
+          </div>
+        </>
+      )}
 
       <div className='bg-muted/30 space-y-3 rounded-md border p-3'>
-        {editorMode === 'visual' ? (
+        {billingBase === 'per_call' ? (
+          <PerCallEditor config={perCallConfig} onChange={handlePerCallChange} />
+        ) : editorMode === 'visual' ? (
           <VisualEditor
             visualConfig={visualConfig}
             onChange={handleVisualChange}
@@ -1810,7 +2128,8 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
           <RawExprEditor exprString={rawExpr} onChange={handleRawChange} />
         )}
 
-        {editorMode === 'visual' && (
+        {/* 请求规则：仅 token 模式 + visual 编辑器下显示 */}
+        {billingBase === 'token' && editorMode === 'visual' && (
           <div className='space-y-3 border-t pt-3'>
             <div className='space-y-1'>
               <h4 className='text-sm font-medium'>
@@ -1870,7 +2189,11 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
         )}
       </div>
 
-      <CostEstimator effectiveExpr={effectiveExpr} />
+      {billingBase === 'per_call' ? (
+        <PerCallCostEstimator effectiveExpr={effectiveExpr} />
+      ) : (
+        <CostEstimator effectiveExpr={effectiveExpr} />
+      )}
     </div>
   )
 })

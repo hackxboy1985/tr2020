@@ -23,6 +23,9 @@ func ParseExprVersion(exprStr string) (version int, body string) {
 	if strings.HasPrefix(exprStr, "v1:") {
 		return 1, exprStr[3:]
 	}
+	if strings.HasPrefix(exprStr, "v2:") {
+		return 2, exprStr[3:]
+	}
 	return DefaultExprVersion, exprStr
 }
 

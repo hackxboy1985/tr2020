@@ -17,14 +17,17 @@
 #   ./test_poster.sh poster-extension --img https://example.com/banner.jpg --ratio 16:9
 #   ./test_poster.sh poster-assisted --query "为保湿面霜写产品文案"
 #   ./test_poster.sh poster-generate-sync --query "高端护肤品海报"
+#   ./test_poster.sh poster-generate-sync --query "高端护肤品海报" --img https://example.com/product.jpg
 #   ./test_poster.sh poster-generate --query "运动鞋海报，背景户外"
+#   ./test_poster.sh poster-generate --query "运动鞋海报，背景户外" --img https://example.com/shoe.jpg
 #   ./test_poster.sh poster-free-creation --query "科技感蓝色电子产品海报"
+#   ./test_poster.sh poster-free-creation --query "科技感蓝色电子产品海报" --img https://example.com/tech.jpg
 
 # ──────────────────────────────────────────────
 # 配置区（必填）
 # ──────────────────────────────────────────────
-GATEWAY="http://book2:3002"          # new-api 网关地址
-API_KEY="sk-BTx3kf9qRT0TCjaWHg3pL9H4DCbwFDcxbZjW1TUMU9lQJT"                    # 你的 new-api Token
+GATEWAY="http://open.mints-id.com"          # new-api 网关地址
+API_KEY="sk-BTx3kf9qRT0TCjaWHg3pL9H4DCbwFDcxbZjW1TUMU9lQJTUG"                    # 你的 new-api Token
 
 # 默认测试图片（公网可访问）
 DEFAULT_IMG_PRODUCT="https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600"
@@ -338,10 +341,7 @@ test_poster_generate() {
     if [ -n "$ARG_IMG" ]; then
         file_field=', "fileUrlList": ["'"$ARG_IMG"'"]'
     fi
-    task_resp=$(curl -s -w "\n%{http_code}" -X POST "$GATEWAY/v1/images/tasks" \
-        -H "Authorization: Bearer $API_KEY" \
-        -H "Content-Type: application/json" \
-        -d '{
+    local req_body='{
   "model": "poster-generate",
   "metadata": {
     "query": "'"$query"'",
@@ -354,9 +354,17 @@ test_poster_generate() {
     "needText": true,
     "aspectRatio": "1:1"'"$file_field"'
   }
-}')
+}'
+    echo "── 请求报文 ──────────────────────────"
+    echo "$req_body" | python3 -m json.tool 2>/dev/null || echo "$req_body"
+    task_resp=$(curl -s -w "\n%{http_code}" -X POST "$GATEWAY/v1/images/tasks" \
+        -H "Authorization: Bearer $API_KEY" \
+        -H "Content-Type: application/json" \
+        -d "$req_body")
     task_http=$(echo "$task_resp" | tail -1)
     task_body=$(echo "$task_resp" | sed '$d')
+    echo ""
+    echo "── 响应报文 ──────────────────────────"
     echo "HTTP $task_http"
     echo "$task_body" | python3 -m json.tool 2>/dev/null || echo "$task_body"
 
@@ -403,21 +411,26 @@ test_poster_free_creation() {
     if [ -n "$ARG_IMG" ]; then
         img_field=', "apiImgUrlList": ["'"$ARG_IMG"'"]'
     fi
-    fc_resp=$(curl -s -w "\n%{http_code}" -X POST "$GATEWAY/v1/images/tasks" \
-        -H "Authorization: Bearer $API_KEY" \
-        -H "Content-Type: application/json" \
-        -d '{
+    local fc_body='{
   "model": "poster-free-creation",
   "metadata": {
     "query": "'"$query"'",
     "detailPictureNumber": 2,
     "aspectRatio": "16:9"'"$img_field"'
   }
-}')
-    fc_http=$(echo "$fc_resp" | tail -1)
-    fc_body=$(echo "$fc_resp" | sed '$d')
-    echo "HTTP $fc_http"
+}'
+    echo "── 请求报文 ──────────────────────────"
     echo "$fc_body" | python3 -m json.tool 2>/dev/null || echo "$fc_body"
+    fc_resp=$(curl -s -w "\n%{http_code}" -X POST "$GATEWAY/v1/images/tasks" \
+        -H "Authorization: Bearer $API_KEY" \
+        -H "Content-Type: application/json" \
+        -d "$fc_body")
+    fc_http=$(echo "$fc_resp" | tail -1)
+    fc_body_resp=$(echo "$fc_resp" | sed '$d')
+    echo ""
+    echo "── 响应报文 ──────────────────────────"
+    echo "HTTP $fc_http"
+    echo "$fc_body_resp" | python3 -m json.tool 2>/dev/null || echo "$fc_body_resp"
     if [ "$fc_http" = "200" ]; then ok "poster-free-creation 提交成功"; else fail "poster-free-creation  HTTP=$fc_http"; fi
 }
 
@@ -487,8 +500,11 @@ else
     echo "  sh test_poster.sh poster-assisted --query \"为保湿面霜写产品文案\""
     echo "  # 同步海报生成（直接返回图片URL）"
     echo "  sh test_poster.sh poster-generate-sync --query \"高端护肤品海报\""
+    echo "  sh test_poster.sh poster-generate-sync --query \"高端护肤品海报\" --img https://example.com/product.jpg"
     echo "  # 异步海报生成（提交后自动轮询）"
     echo "  sh test_poster.sh poster-generate --query \"运动鞋海报，背景户外\""
+    echo "  sh test_poster.sh poster-generate --query \"运动鞋海报，背景户外\" --img https://example.com/shoe.jpg"
     echo "  # 自由创作（异步，仅测试提交）"
     echo "  sh test_poster.sh poster-free-creation --query \"科技感蓝色电子产品海报\""
+    echo "  sh test_poster.sh poster-free-creation --query \"科技感蓝色电子产品海报\" --img https://example.com/tech.jpg"
 fi

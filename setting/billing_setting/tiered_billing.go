@@ -2,6 +2,7 @@ package billing_setting
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	"github.com/QuantumNous/new-api/setting/config"
@@ -81,6 +82,9 @@ func smokeTestExpr(exprStr string) error {
 		{P: 100000, C: 100000, Len: 100000},
 		{P: 1000000, C: 1000000, Len: 1000000},
 	}
+
+	// v2: per-call 表达式不依赖 token，提供带参数的 mock 请求体
+	isV2 := strings.HasPrefix(exprStr, "v2:")
 	requests := []billingexpr.RequestInput{
 		{},
 		{
@@ -89,6 +93,14 @@ func smokeTestExpr(exprStr string) error {
 			},
 			Body: []byte(`{"service_tier":"fast","stream_options":{"include_usage":true},"messages":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]}`),
 		},
+	}
+	if isV2 {
+		// 覆盖为带 metadata 的 mock body，确保 param() 能返回合法值
+		requests = []billingexpr.RequestInput{
+			{Body: []byte(`{"metadata":{"modelEdition":1}}`)},
+			{Body: []byte(`{"metadata":{"modelEdition":2}}`)},
+			{Body: []byte(`{"metadata":{"modelEdition":3}}`)},
+		}
 	}
 
 	for _, v := range vectors {

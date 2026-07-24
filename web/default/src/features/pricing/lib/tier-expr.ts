@@ -321,3 +321,241 @@ export function exprUsesExtraVars(exprStr: string): boolean {
 }
 
 export const ESTIMATOR_EXTRA_FIELDS = ESTIMATOR_VARS
+
+// ---------------------------------------------------------------------------
+// Per-call visual config (v2: prefix)
+// ---------------------------------------------------------------------------
+
+/** 按次计费的单条规则中的 param 条件：param(path) == value */
+export type PerCallParamCondition = {
+  path: string   // gjson 路径，如 "metadata.modelEdition"
+  value: string  // 等值匹配
+}
+
+/** 按次计费的单条规则（必须有至少一个条件） */
+export type PerCallRule = {
+  label: string
+  conditions: PerCallParamCondition[]
+  pricePerCall: number  // $/次
+}
+
+/**
+ * Per-call 视觉配置：
+ * - rules: 有条件的规则列表，多条命中时取价格最高的
+ * - fallbackPrice: 兜底价，始终参与竞价
+ */
+export type PerCallVisualConfig = {
+  base: 'per_call'
+  rules: PerCallRule[]
+  fallbackPrice: number
+}
+
+export function createDefaultPerCallConfig(): PerCallVisualConfig {
+  return {
+    base: 'per_call',
+    rules: [],
+    fallbackPrice: 0,
+  }
+}
+
+export function normalizePerCallRule(rule: Partial<PerCallRule>): PerCallRule {
+  return {
+    label: rule.label ?? '',
+    conditions: Array.isArray(rule.conditions) ? rule.conditions : [],
+    pricePerCall: Number(rule.pricePerCall) || 0,
+  }
+}
+
+/**
+ * 生成 v2: 按次计费表达式，多条命中取最高价（nested max）。
+ *
+ * 无规则：
+ *   v2: tier("base", 0.06)
+ *
+ * 单规则：
+ *   v2: tier("result", max(param("metadata.modelEdition") == 3 ? 0.15 : 0, 0.06))
+ *
+ * 多规则（嵌套 max）：
+ *   v2: tier("result", max(
+ *     param("metadata.modelEdition") == 3 ? 0.15 : 0,
+ *     max(param("metadata.modelEdition") == 2 ? 0.09 : 0, 0.06)
+ *   ))
+ */
+export function generateExprFromPerCallConfig(
+  config: PerCallVisualConfig | null | undefined
+): string {
+  const fallback = config?.fallbackPrice ?? 0
+  const rules = (config?.rules ?? []).filter((r) => r.conditions.length > 0)
+
+  if (rules.length === 0) {
+    return `v2: tier("base", ${fallback})`
+  }
+
+  function buildCondStr(rule: PerCallRule): string {
+    const parts = rule.conditions
+      .filter((c) => c.path.trim() !== '')
+      .map((c) => {
+        const numVal = Number(c.value)
+        // gjson 解析 JSON 数字为 float64，比较值必须带小数点避免 int/float64 类型不匹配
+        const valStr =
+          !isNaN(numVal) && c.value.trim() !== ''
+            ? (Number.isInteger(numVal) ? `${numVal}.0` : String(numVal))
+            : `"${c.value}"`
+        return `param("${c.path}") == ${valStr}`
+      })
+    return parts.join(' && ')
+  }
+
+  // 从右向左嵌套 max，最右是 fallback
+  function buildMaxChain(index: number): string {
+    const rule = rules[index]
+    const cond = buildCondStr(rule)
+    const price = rule.pricePerCall
+    const term = cond ? `${cond} ? ${price} : 0.0` : String(price)
+
+    if (index === rules.length - 1) {
+      return `max(${term}, ${fallback})`
+    }
+    return `max(${term}, ${buildMaxChain(index + 1)})`
+  }
+
+  return `v2: tier("result", ${buildMaxChain(0)})`
+}
+
+/** 反向解析 v2: 表达式回 PerCallVisualConfig，解析失败返回 null */
+export function tryParsePerCallConfig(
+  exprStr: string | null | undefined
+): PerCallVisualConfig | null {
+  if (!exprStr) return null
+  const trimmed = exprStr.trim()
+  if (!trimmed.startsWith('v2:')) return null
+
+  try {
+    const body = trimmed.slice(3).trim()
+
+    // 无规则形式: tier("base", price)
+    const baseRe = /^tier\("([^"]*)",\s*(-?[\d.eE+]+)\)$/
+    const bm = body.match(baseRe)
+    if (bm) {
+      return { base: 'per_call', rules: [], fallbackPrice: Number(bm[2]) }
+    }
+
+    // 有规则形式: tier("result", max(...))
+    const outerRe = /^tier\("result",\s*([\s\S]+)\)$/
+    const om = body.match(outerRe)
+    if (!om) return null
+
+    const rules: PerCallRule[] = []
+    let fallbackPrice = 0
+
+    // 递归解析嵌套 max
+    function parseMax(s: string): void {
+      s = s.trim()
+      // max(term, rest)
+      if (!s.startsWith('max(')) return
+      const inner = s.slice(4, -1).trim()
+
+      // 找到第一个逗号（跳过嵌套括号）
+      let depth = 0
+      let splitIdx = -1
+      for (let i = 0; i < inner.length; i++) {
+        if (inner[i] === '(') depth++
+        else if (inner[i] === ')') depth--
+        else if (inner[i] === ',' && depth === 0) {
+          splitIdx = i
+          break
+        }
+      }
+      if (splitIdx === -1) return
+
+      const termStr = inner.slice(0, splitIdx).trim()
+      const restStr = inner.slice(splitIdx + 1).trim()
+
+      // 解析 term: cond ? price : 0
+      const termRe =
+        /^((?:param\("[^"]+"\)\s*==\s*(?:"[^"]*"|-?[\d.]+)(?:\s*&&\s*param\("[^"]+"\)\s*==\s*(?:"[^"]*"|-?[\d.]+))*)\s*\?\s*(-?[\d.eE+]+)\s*:\s*0)$/
+      const tm = termStr.match(termRe)
+      if (tm) {
+        const condStr = tm[1].split('?')[0].trim()
+        const price = Number(tm[2])
+        const conditions: PerCallParamCondition[] = []
+        for (const part of condStr.split(/\s*&&\s*/)) {
+          const cm = part
+            .trim()
+            .match(
+              /^param\("([^"]+)"\)\s*==\s*(?:"([^"]*)"|([\d.eE+-]+))$/
+            )
+          if (cm) {
+            conditions.push({ path: cm[1], value: cm[2] ?? cm[3] })
+          }
+        }
+        rules.push({ label: `rule_${rules.length + 1}`, conditions, pricePerCall: price })
+      }
+
+      // rest 是下一层 max 或 fallback 数字
+      if (restStr.startsWith('max(')) {
+        parseMax(restStr)
+      } else {
+        fallbackPrice = Number(restStr) || 0
+      }
+    }
+
+    parseMax(om[1].trim())
+
+    const cfg: PerCallVisualConfig = { base: 'per_call', rules, fallbackPrice }
+    const regenerated = generateExprFromPerCallConfig(cfg)
+    if (regenerated.replace(/\s+/g, '') !== trimmed.replace(/\s+/g, '')) {
+      return null
+    }
+    return cfg
+  } catch {
+    return null
+  }
+}
+
+/** per-call 模式下的本地单次费用估算 */
+export function evalPerCallExprLocally(
+  exprStr: string,
+  paramValues: Record<string, unknown>
+): EvalResult {
+  try {
+    if (!exprStr || !exprStr.trim()) {
+      return { cost: 0, matchedTier: '', error: null }
+    }
+    let matchedTier = ''
+    const tierFn = (name: string, value: number) => {
+      matchedTier = name
+      return value
+    }
+    const paramFn = (path: string) => {
+      const parts = path.split('.')
+      let cur: unknown = paramValues
+      for (const p of parts) {
+        if (cur == null || typeof cur !== 'object') return null
+        cur = (cur as Record<string, unknown>)[p]
+      }
+      return cur ?? null
+    }
+    const env: Record<string, unknown> = {
+      tier: tierFn,
+      param: paramFn,
+      max: Math.max,
+      min: Math.min,
+      abs: Math.abs,
+      ceil: Math.ceil,
+      floor: Math.floor,
+    }
+    let body = exprStr.trim()
+    if (body.startsWith('v2:')) body = body.slice(3).trim()
+
+    const fn = new Function(
+      ...Object.keys(env),
+      `"use strict"; return (${body});`
+    )
+    const cost = Number(fn(...Object.values(env))) || 0
+    return { cost, matchedTier, error: null }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e)
+    return { cost: 0, matchedTier: '', error: message }
+  }
+}
