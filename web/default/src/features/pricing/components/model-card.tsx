@@ -64,6 +64,8 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const isDynamicPricing =
     props.model.billing_mode === 'tiered_expr' &&
     Boolean(props.model.billing_expr)
+  const isPerCallDynamic =
+    isDynamicPricing && props.model.billing_expr?.startsWith('v2:')
   const hasCachedPrice = isTokenBased && props.model.cache_ratio != null
   const dynamicSummary = isDynamicPricing
     ? getDynamicPricingSummary(props.model, {
@@ -235,9 +237,16 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
               {primaryGroup} {t('Groups')}
             </span>
           )}
-          <span className='text-muted-foreground text-xs font-medium'>
-            {isTokenBased ? t('Token-based') : t('Per Request')}
-          </span>
+          {!isDynamicPricing && (
+            <span className='text-muted-foreground text-xs font-medium'>
+              {isTokenBased ? t('Token-based') : t('Per Request')}
+            </span>
+          )}
+          {isDynamicPricing && isPerCallDynamic && (
+            <span className='text-muted-foreground text-xs font-medium'>
+              {t('Per Request')}
+            </span>
+          )}
           {isDynamicPricing && (
             <StatusBadge
               label={t('Dynamic Pricing')}
