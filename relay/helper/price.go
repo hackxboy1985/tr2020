@@ -172,7 +172,7 @@ func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types
 		return modelPriceHelperTieredPerCall(c, info, groupRatioInfo)
 	}
 
-	modelPrice, success := ratio_setting.GetModelPrice(info.OriginModelName, true)
+	modelPrice, success := ratio_setting.GetModelPrice(info.OriginModelName, false)
 	usePrice := success
 	var modelRatio float64
 

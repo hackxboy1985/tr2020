@@ -26,7 +26,6 @@
 # ──────────────────────────────────────────────
 # 配置区（必填）
 # ──────────────────────────────────────────────
-# GATEWAY="http://open.mints-id.com"          # new-api 网关地址
 GATEWAY="http://book2:3002"          # new-api 网关地址
 API_KEY="sk-BTx3kf9qRT0TCjaWHg3pL9H4DCbwFDcxbZjW1TUMU9lQJTUG"                    # 你的 new-api Token
 
