@@ -388,6 +388,13 @@ test_poster_generate() {
                 fail "任务失败  status=failed"; break
             else
                 info "状态: $status，继续等待..."
+                if [ "$i" = "12" ]; then
+                    echo ""
+                    echo -e "${YELLOW}轮询超时，任务仍在进行中。可手动继续查询：${RESET}"
+                    echo "  bash test_poster.sh task-query $TASK_ID"
+                    echo "或直接执行："
+                    echo "  curl -s \"$GATEWAY/v1/images/tasks/$TASK_ID\" -H \"Authorization: Bearer \$API_KEY\" | python3 -m json.tool"
+                fi
             fi
         done
     else
