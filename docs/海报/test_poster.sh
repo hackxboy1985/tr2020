@@ -26,7 +26,8 @@
 # ──────────────────────────────────────────────
 # 配置区（必填）
 # ──────────────────────────────────────────────
-GATEWAY="http://open.mints-id.com"          # new-api 网关地址
+# GATEWAY="http://open.mints-id.com"          # new-api 网关地址
+GATEWAY="http://book2:3002"          # new-api 网关地址
 API_KEY="sk-BTx3kf9qRT0TCjaWHg3pL9H4DCbwFDcxbZjW1TUMU9lQJTUG"                    # 你的 new-api Token
 
 # 默认测试图片（公网可访问）
@@ -69,7 +70,7 @@ parse_args() {
 call_sync() {
     local model="$1"
     local body="$2"
-    info "POST /v1/images/generations  model=$model"
+    info "POST $GATEWAY/v1/images/generations  model=$model"
     echo "── 请求报文 ──────────────────────────"
     echo "$body" | python3 -m json.tool 2>/dev/null || echo "$body"
     resp=$(curl -s -w "\n%{http_code}" -X POST "$GATEWAY/v1/images/generations" \
@@ -336,7 +337,7 @@ test_poster_generate() {
     parse_args "$@"
     local query="${ARG_QUERY:-一款高端护肤品海报，背景简洁白色，突出保湿效果}"
     sep; echo "poster-generate  异步海报生成（提交）"
-    info "POST /v1/images/tasks  query=$query"
+    info "POST $GATEWAY/v1/images/tasks  query=$query"
     local file_field=""
     if [ -n "$ARG_IMG" ]; then
         file_field=', "fileUrlList": ["'"$ARG_IMG"'"]'
@@ -406,7 +407,7 @@ test_poster_free_creation() {
     parse_args "$@"
     local query="${ARG_QUERY:-科技感十足的AI产品宣传海报，深蓝色调}"
     sep; echo "poster-free-creation  自由创作（提交）"
-    info "POST /v1/images/tasks  query=$query"
+    info "POST $GATEWAY/v1/images/tasks  query=$query"
     local img_field=""
     if [ -n "$ARG_IMG" ]; then
         img_field=', "apiImgUrlList": ["'"$ARG_IMG"'"]'
