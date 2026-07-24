@@ -2,6 +2,7 @@ package poster
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -47,12 +48,30 @@ type posterFreeCreationRequest struct {
 }
 
 // submitResponse 上游提交任务响应
+// data 字段可能是对象 {"agentGenerateTaskId":"xxx"} 或直接是字符串 "xxx"
 type submitResponse struct {
-	Code int    `json:"code"`
-	Msg  string `json:"msg"`
-	Data struct {
+	Code int             `json:"code"`
+	Msg  string          `json:"msg"`
+	Data json.RawMessage `json:"data"`
+}
+
+func (r *submitResponse) TaskID() string {
+	if len(r.Data) == 0 {
+		return ""
+	}
+	// 尝试解析为对象
+	var obj struct {
 		AgentGenerateTaskId string `json:"agentGenerateTaskId"`
-	} `json:"data"`
+	}
+	if err := common.Unmarshal(r.Data, &obj); err == nil && obj.AgentGenerateTaskId != "" {
+		return obj.AgentGenerateTaskId
+	}
+	// 尝试解析为字符串
+	var s string
+	if err := common.Unmarshal(r.Data, &s); err == nil && s != "" {
+		return s
+	}
+	return ""
 }
 
 // queryTaskResponse 上游轮询任务响应
@@ -188,7 +207,8 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		)
 		return
 	}
-	if sResp.Data.AgentGenerateTaskId == "" {
+	taskID = sResp.TaskID()
+	if taskID == "" {
 		taskErr = service.TaskErrorWrapperLocal(
 			fmt.Errorf("upstream returned empty task id"),
 			"upstream_error",
@@ -206,7 +226,7 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		"created": time.Now().Unix(),
 	})
 
-	return sResp.Data.AgentGenerateTaskId, responseBody, nil
+	return taskID, responseBody, nil
 }
 
 // FetchTask 轮询上游任务状态
