@@ -455,6 +455,32 @@ ALL_MODELS=(
 )
 
 if [ -n "$1" ] && [ "$1" != "all" ]; then
+    # 特殊命令：查询任务状态
+    if [ "$1" = "task-query" ]; then
+        if [ -z "$2" ]; then
+            echo -e "${RED}用法: bash test_poster.sh task-query <task_id>${RESET}"
+            echo "示例: bash test_poster.sh task-query task_p0ax5YZ9gpcfL5lfouRwZ6WsqkoMV3m4"
+            exit 1
+        fi
+        TASK_ID="$2"
+        sep; echo "task-query  查询任务状态"
+        info "GET $GATEWAY/v1/images/tasks/$TASK_ID"
+        resp=$(curl -s -w "\n%{http_code}" "$GATEWAY/v1/images/tasks/$TASK_ID" \
+            -H "Authorization: Bearer $API_KEY")
+        code=$(echo "$resp" | tail -1)
+        body=$(echo "$resp" | sed '$d')
+        echo ""
+        echo "── 响应报文 ──────────────────────────"
+        echo "HTTP $code"
+        echo "$body" | python3 -m json.tool 2>/dev/null || echo "$body"
+        status=$(echo "$body" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status',''))" 2>/dev/null || true)
+        if [ "$status" = "succeeded" ]; then ok "任务完成"
+        elif [ "$status" = "failed" ]; then fail "任务失败"
+        elif [ "$status" = "processing" ]; then info "任务进行中，继续轮询"
+        else fail "HTTP=$code"
+        fi
+        exit 0
+    fi
     fn="test_${1//-/_}"
     if declare -f "$fn" > /dev/null; then
         shift
@@ -474,6 +500,7 @@ elif [ "$1" = "all" ]; then
 else
     echo "用法："
     echo "  sh test_poster.sh all                             # 执行全部接口"
+    echo "  sh test_poster.sh task-query <task_id>           # 查询异步任务状态"
     echo "  sh test_poster.sh <模型名> [参数...]              # 执行单个接口"
     echo "  sh test_poster.sh <模型名> --help                 # 查看接口参数"
     echo ""
