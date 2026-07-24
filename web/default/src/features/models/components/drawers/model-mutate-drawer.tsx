@@ -131,6 +131,7 @@ export function ModelMutateDrawer({
   const [promptPrice, setPromptPrice] = useState('')
   const [completionPrice, setCompletionPrice] = useState('')
   const [oldModelName, setOldModelName] = useState<string>('')
+  const [pricingFormKey, setPricingFormKey] = useState(0)
 
   // Fetch vendors for dropdown
   const { data: vendorsData } = useQuery({
@@ -334,6 +335,7 @@ export function ModelMutateDrawer({
             ...baseModelData,
             price: price.toString(),
           })
+          setPricingFormKey(k => k + 1)
         } else {
           setPricingMode('per-token')
           if (ratio !== undefined && ratio !== null) {
@@ -353,6 +355,7 @@ export function ModelMutateDrawer({
             audioRatio: audioRatio?.toString() || '',
             audioCompletionRatio: audioCompletionRatio?.toString() || '',
           })
+          setPricingFormKey(k => k + 1)
           setAdvancedOpen(
             !!(cacheRatio || imageRatio || audioRatio || audioCompletionRatio)
           )
@@ -890,7 +893,7 @@ export function ModelMutateDrawer({
             </SideDrawerSection>
 
             {/* Pricing Configuration */}
-            <SideDrawerSection>
+            <SideDrawerSection key={pricingFormKey}>
               <h3 className='text-sm font-semibold'>
                 {t('Pricing Configuration')}
               </h3>
