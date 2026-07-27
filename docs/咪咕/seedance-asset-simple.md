@@ -1,5 +1,5 @@
-# 给用户 Seedance 素材接口文档（简化版）
-- 包含素材创建及视频生成文档，可直接给用户
+# Seedance 接口文档（简化版）
+- 包含素材创建及视频生成文档，可直接发起测试
 
 ## 概述
 
@@ -16,7 +16,7 @@ Content-Type: application/json
 
 ---
 
-## 创建素材
+## 1、创建素材
 
 ```http
 POST /api/seedance/assets
@@ -63,7 +63,7 @@ POST /api/seedance/assets
 
 ---
 
-## 查询素材状态
+## 2、查询素材状态
 
 ```http
 GET /api/seedance/assets/:id
@@ -95,7 +95,7 @@ GET /api/seedance/assets/:id
 
 ---
 
-## 删除素材
+## 3、删除素材
 
 ```http
 DELETE /api/seedance/assets/:id
@@ -105,7 +105,7 @@ DELETE /api/seedance/assets/:id
 
 ---
 
-## 在视频生成中引用素材
+## 3、生成视频及在视频中引用素材
 
 素材状态为 `Active` 后，将 `Result.AssetRef`（即 `asset://asset-xxxxxxxx`）用于视频生成。
 
@@ -139,7 +139,7 @@ POST /v1/video/generations
 {
   "model": "doubao-seedance-2-0-260128",
   "content": [
-    {"type": "text", "text": "人物自然介绍产品"},
+    {"type": "text", "text": "人物自然介绍产品（使用音频中的声音）"},
     {"type": "image_url", "image_url": {"url": "asset://asset-xxxxxxxx"}},
     {"type": "audio_url", "audio_url": {"url": "https://example.com/voice.wav"}}
   ],
@@ -152,14 +152,14 @@ POST /v1/video/generations
 
 两种格式均支持，`content[]` 中媒体类型会自动补充 `role` 字段（`image_url` → `reference_image`，`audio_url` → `reference_audio`，`video_url` → `reference_video`）。
 
-### 查询视频任务
+### 4、查询视频任务
 
 ```http
 GET /v1/videos/:task_id
 ```
 
 ```bash
-curl https://your-newapi/v1/videos/task_xxxxxxxx \
+curl http://open.mints-id.com/v1/videos/task_xxxxxxxx \
   -H "Authorization: Bearer sk-xxx"
 ```
 
@@ -169,7 +169,7 @@ curl https://your-newapi/v1/videos/task_xxxxxxxx \
 
 ```bash
 # 1. 上传素材
-ASSET=$(curl -s -X POST https://your-newapi/api/seedance/assets \
+ASSET=$(curl -s -X POST http://open.mints-id.com/api/seedance/assets \
   -H "Authorization: Bearer sk-xxx" \
   -H "Content-Type: application/json" \
   -d '{"URL":"https://example.com/photo.jpg","AssetType":"Image","Name":"photo"}')
@@ -180,7 +180,7 @@ echo "local_id=$LOCAL_ID, asset_ref=$ASSET_REF"
 
 # 2. 轮询等待 Active
 while true; do
-  STATUS=$(curl -s https://your-newapi/api/seedance/assets/$LOCAL_ID \
+  STATUS=$(curl -s http://open.mints-id.com/api/seedance/assets/$LOCAL_ID \
     -H "Authorization: Bearer sk-xxx" | jq -r '.Result.Status')
   echo "Status: $STATUS"
   [ "$STATUS" = "Active" ] && break
@@ -189,7 +189,7 @@ while true; do
 done
 
 # 3. 视频生成
-curl -X POST https://your-newapi/v1/video/generations \
+curl -X POST http://open.mints-id.com/v1/video/generations \
   -H "Authorization: Bearer sk-xxx" \
   -H "Content-Type: application/json" \
   -d "{
