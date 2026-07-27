@@ -207,78 +207,92 @@ SeedanceRelayMode bool `json:"seedance_relay_mode,omitempty"`
 ## 四、各服务配置差异
 
 > 以三层为例：服务1 → 服务2 → 服务3 → Gateway/Ark
->
-> **核心原则**：
-> - 最下层（服务3）：直连 Ark/Gateway，用默认配置
-> - 中间层/上层（服务1/2）：Base URL 指向下一层 new-api，两个路径字段必须填写
+
+渠道类型均为 **doubao-video（类型54）**，在管理后台「渠道管理」中配置。每个渠道有三个关键字段：**Base URL**、**Key**、**其他（JSON）**。
 
 ---
 
-### 服务3（现有生产，无需改动）
+### 服务3（现有生产，直连 Ark，无需改动）
 
-「其他」字段现有配置：
+**Base URL：**
+```
+https://ark.cn-beijing.volces.com
+```
 
+**Key：**
+```
+{Ark API Key}
+```
+
+**其他（JSON）：**
 ```json
 {
   "seedance_asset_base_url": "https://gateway-host:9444"
 }
 ```
 
-`doubao_video_generate_path` 和 `doubao_video_fetch_path` 不填，代码自动使用默认 Ark 路径，**现有生产配置正确，发版后无需修改渠道配置**。
-
-| 字段 | 填写值 | 说明 |
-|------|--------|------|
-| **Base URL** | `https://ark.cn-beijing.volces.com` | Ark 地址，不含 `/api/v3` |
-| **Key** | `{Ark API Key}` | 从火山引擎控制台获取的 Ark key |
-| `doubao_video_generate_path` | **留空（不填该字段）** | 不填则使用默认 Ark 路径 `/api/v3/contents/generations/tasks`。现有生产「其他」字段中无此项即正确，无需改动 |
-| `doubao_video_fetch_path` | **留空（不填该字段）** | 同上，现有生产无此项即正确 |
-| `seedance_asset_base_url` | `https://gateway-host:9444` | 真实 Seedance Gateway 地址 |
-| `seedance_relay_mode` | **不勾选（false）** | 直连 Gateway，使用 Gateway 原生路径 |
+> `doubao_video_generate_path` 和 `doubao_video_fetch_path` 不填，自动使用默认 Ark 路径，现有生产无需改动。
 
 ---
 
 ### 服务2（中间层，调服务3）
 
-在服务2管理后台创建 doubao-video 渠道，配置如下：
+**Base URL：**
+```
+https://service3-host:8443
+```
 
-| 字段 | 填写值 | 说明 |
-|------|--------|------|
-| **Base URL** | `https://service3-host:8443` | 服务3的 new-api 地址 |
-| **Key** | `sk-xxx`（在服务3上创建的 Token） | 用服务3的 Token 鉴权 |
-| `doubao_video_generate_path` | **`/v1/video/generations`** | ⚠️ 必须填，服务3视频生成接口路径 |
-| `doubao_video_fetch_path` | **`/v1/videos`** | ⚠️ 必须填，服务3视频查询接口路径 |
-| `seedance_asset_base_url` | `https://service3-host:8443` | 服务3的 new-api 地址 |
-| `seedance_relay_mode` | **勾选（true）** | 使用 new-api 路径调服务3 |
+**Key：**
+```
+sk-xxx（在服务3管理后台为服务2创建的 Token）
+```
+
+**其他（JSON）：**
+```json
+{
+  "doubao_video_generate_path": "/v1/video/generations",
+  "doubao_video_fetch_path": "/v1/videos",
+  "seedance_asset_base_url": "https://service3-host:8443",
+  "seedance_relay_mode": true
+}
+```
 
 ---
 
 ### 服务1（用户接入层，调服务2）
 
-在服务1管理后台创建 doubao-video 渠道，配置如下：
+**Base URL：**
+```
+https://service2-host:8443
+```
 
-| 字段 | 填写值 | 说明 |
-|------|--------|------|
-| **Base URL** | `https://service2-host:8443` | 服务2的 new-api 地址 |
-| **Key** | `sk-xxx`（在服务2上创建的 Token） | 用服务2的 Token 鉴权 |
-| `doubao_video_generate_path` | **`/v1/video/generations`** | ⚠️ 必须填，服务2视频生成接口路径 |
-| `doubao_video_fetch_path` | **`/v1/videos`** | ⚠️ 必须填，服务2视频查询接口路径 |
-| `seedance_asset_base_url` | `https://service2-host:8443` | 服务2的 new-api 地址 |
-| `seedance_relay_mode` | **勾选（true）** | 使用 new-api 路径调服务2 |
+**Key：**
+```
+sk-xxx（在服务2管理后台为服务1创建的 Token）
+```
+
+**其他（JSON）：**
+```json
+{
+  "doubao_video_generate_path": "/v1/video/generations",
+  "doubao_video_fetch_path": "/v1/videos",
+  "seedance_asset_base_url": "https://service2-host:8443",
+  "seedance_relay_mode": true
+}
+```
 
 ---
 
 ### 配置要点总结
 
-| 配置项 | 直连 Ark 层（服务3） | 中继层（服务1/2） |
-|--------|---------------------|-----------------|
+| 配置项 | 服务3（直连 Ark） | 服务1/2（中继层） |
+|--------|-----------------|-----------------|
 | Base URL | Ark 官方地址 | 下一层 new-api 地址 |
 | Key | Ark API Key | 下一层的 sk- Token |
-| `doubao_video_generate_path` | **留空** | **`/v1/video/generations`** |
-| `doubao_video_fetch_path` | **留空** | **`/v1/videos`** |
+| `doubao_video_generate_path` | **不填** | `/v1/video/generations` |
+| `doubao_video_fetch_path` | **不填** | `/v1/videos` |
 | `seedance_asset_base_url` | 真实 Gateway 地址 | 下一层 new-api 地址 |
-| `seedance_relay_mode` | **false** | **true** |
-
-> `doubao_video_generate_path` 和 `doubao_video_fetch_path` 是中继层的关键配置，不填则走 Ark 原生路径，中继时**必须填写**。
+| `seedance_relay_mode` | **不填（默认 false）** | `true` |
 
 ---
 
