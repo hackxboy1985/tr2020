@@ -38,8 +38,13 @@ func GetSeedanceGatewayChannel(userGroup string) (*SeedanceGatewayChannel, error
 			continue
 		}
 		settings := ch.GetOtherSettings()
-		if settings.SeedanceAssetBaseUrl == "" {
-			continue
+		gatewayURL := settings.SeedanceAssetBaseUrl
+		if gatewayURL == "" {
+			// relay 模式下允许回退到渠道 Base URL，避免重复配置相同地址
+			if !settings.SeedanceRelayMode {
+				continue
+			}
+			gatewayURL = ch.GetBaseURL()
 		}
 		// GetChannelsByType omits the key field — reload with key
 		fullCh, err := model.GetChannelById(ch.Id, true)
@@ -55,10 +60,10 @@ func GetSeedanceGatewayChannel(userGroup string) (*SeedanceGatewayChannel, error
 				return key[:10] + "..."
 			}
 			return key
-		}(), strings.TrimRight(settings.SeedanceAssetBaseUrl, "/")))
+		}(), strings.TrimRight(gatewayURL, "/")))
 		return &SeedanceGatewayChannel{
 			Channel:    fullCh,
-			GatewayURL: strings.TrimRight(settings.SeedanceAssetBaseUrl, "/"),
+			GatewayURL: strings.TrimRight(gatewayURL, "/"),
 			Key:        key,
 			RelayMode:  settings.SeedanceRelayMode,
 		}, nil
