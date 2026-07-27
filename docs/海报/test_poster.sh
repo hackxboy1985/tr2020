@@ -16,6 +16,7 @@
 #   ./test_poster.sh poster-color-change --source https://example.com/bag.jpg --prompt "换成玫瑰红"
 #   ./test_poster.sh poster-extension --img https://example.com/banner.jpg --ratio 16:9
 #   ./test_poster.sh poster-assisted --query "为保湿面霜写产品文案"
+#   ./test_poster.sh poster-assisted --query "为保湿面霜写产品文案" --type video
 #   ./test_poster.sh poster-generate-sync --query "高端护肤品海报"
 #   ./test_poster.sh poster-generate-sync --query "高端护肤品海报" --img https://example.com/product.jpg
 #   ./test_poster.sh poster-generate --query "运动鞋海报，背景户外"
@@ -52,6 +53,7 @@ parse_args() {
     ARG_QUERY=""
     ARG_TO=""
     ARG_RATIO=""
+    ARG_TYPE=""
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --img)     ARG_IMG="$2";     shift 2 ;;
@@ -61,6 +63,7 @@ parse_args() {
             --query)   ARG_QUERY="$2";   shift 2 ;;
             --to)      ARG_TO="$2";      shift 2 ;;
             --ratio)   ARG_RATIO="$2";   shift 2 ;;
+            --type)    ARG_TYPE="$2";    shift 2 ;;
             *) shift ;;
         esac
     done
@@ -275,21 +278,23 @@ test_poster_assisted() {
     if [ "$1" = "--help" ]; then
         echo "poster-assisted  AI 帮写（返回文案，在 revised_prompt 字段）"
         echo "参数："
-        echo "  --query <text>  需求描述（必填）"
-        echo "  --img <url>     参考图片URL（可选）"
+        echo "  --query <text>        需求描述（必填）"
+        echo "  --type <image|video>  生成类型（默认 image）"
+        echo "  --img <url>           参考图片URL（可选）"
         return
     fi
     parse_args "$@"
     local query="${ARG_QUERY:-为一款保湿面霜生成产品描述文案，突出天然成分和长效保湿效果}"
+    local generate_type="${ARG_TYPE:-image}"
     sep; echo "poster-assisted  AI 帮写"
-    info "query=$query"
+    info "query=$query  generateType=$generate_type"
     local file_field=""
     if [ -n "$ARG_IMG" ]; then
         file_field=', "fileUrlList": ["'"$ARG_IMG"'"]'
     fi
     call_sync "poster-assisted" '{
   "model": "poster-assisted",
-  "metadata": { "query": "'"$query"'", "generateType": "image"'"$file_field"' }
+  "metadata": { "query": "'"$query"'", "generateType": "'"$generate_type"'"'"$file_field"' }
 }'
 }
 
@@ -532,6 +537,7 @@ else
     echo "  sh test_poster.sh poster-color-change --source https://example.com/bag.jpg --prompt \"换成玫瑰红\""
     echo "  # AI 帮写（返回文案，在 revised_prompt 字段）"
     echo "  sh test_poster.sh poster-assisted --query \"为保湿面霜写产品文案\""
+    echo "  sh test_poster.sh poster-assisted --query \"为保湿面霜写产品文案\" --type video"
     echo "  # 同步海报生成（直接返回图片URL）"
     echo "  sh test_poster.sh poster-generate-sync --query \"高端护肤品海报\""
     echo "  sh test_poster.sh poster-generate-sync --query \"高端护肤品海报\" --img https://example.com/product.jpg"
