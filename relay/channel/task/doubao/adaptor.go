@@ -72,12 +72,14 @@ type responseTask struct {
 	Content struct {
 		VideoURL string `json:"video_url"`
 	} `json:"content"`
-	Seed            int    `json:"seed"`
-	Resolution      string `json:"resolution"`
-	Duration        int    `json:"duration"`
-	Ratio           string `json:"ratio"`
-	FramesPerSecond int    `json:"framespersecond"`
-	ServiceTier     string `json:"service_tier"`
+	// Metadata 兼容下游为 new-api 时返回的 OpenAIVideo 格式（metadata.url 存视频地址）
+	Metadata        map[string]interface{} `json:"metadata,omitempty"`
+	Seed            int                    `json:"seed"`
+	Resolution      string                 `json:"resolution"`
+	Duration        int                    `json:"duration"`
+	Ratio           string                 `json:"ratio"`
+	FramesPerSecond int                    `json:"framespersecond"`
+	ServiceTier     string                 `json:"service_tier"`
 	Tools           []struct {
 		Type string `json:"type"`
 	} `json:"tools"`
@@ -366,6 +368,19 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 		// 解析 usage 信息用于按倍率计费
 		taskResult.CompletionTokens = resTask.Usage.CompletionTokens
 		taskResult.TotalTokens = resTask.Usage.TotalTokens
+	// 兼容下游为 new-api 时返回的 OpenAIVideo 状态值
+	case "completed":
+		taskResult.Status = model.TaskStatusSuccess
+		taskResult.Progress = "100%"
+		taskResult.Url = resTask.Content.VideoURL
+		if taskResult.Url == "" {
+			if u, ok := resTask.Metadata["url"].(string); ok {
+				taskResult.Url = u
+			}
+		}
+	case "in_progress":
+		taskResult.Status = model.TaskStatusInProgress
+		taskResult.Progress = "50%"
 	case "failed":
 		taskResult.Status = model.TaskStatusFailure
 		taskResult.Progress = "100%"
@@ -391,6 +406,11 @@ func (a *TaskAdaptor) ConvertToOpenAIVideo(originTask *model.Task) ([]byte, erro
 	openAIVideo.Status = originTask.Status.ToVideoStatus()
 	openAIVideo.SetProgressStr(originTask.Progress)
 	openAIVideo.SetMetadata("url", dResp.Content.VideoURL)
+	if dResp.Content.VideoURL == "" {
+		if u, ok := dResp.Metadata["url"].(string); ok {
+			openAIVideo.SetMetadata("url", u)
+		}
+	}
 	openAIVideo.CreatedAt = originTask.CreatedAt
 	openAIVideo.CompletedAt = originTask.UpdatedAt
 	openAIVideo.Model = originTask.Properties.OriginModelName

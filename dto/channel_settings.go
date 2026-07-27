@@ -48,6 +48,9 @@ type ChannelOtherSettings struct {
 	DoubaoVideoFetchPath    string `json:"doubao_video_fetch_path,omitempty"`
 	// Seedance Gateway 素材库/人脸认证服务地址，例如 https://sd.dawnloadai.com:9444
 	SeedanceAssetBaseUrl string `json:"seedance_asset_base_url,omitempty"`
+	// SeedanceRelayMode 为 true 时，素材接口调用下游 new-api 路径（/api/seedance/assets 等）
+	// 为 false（默认）时，调用 Seedance Gateway 原生路径（/api/seedance/proxy/assets 等）
+	SeedanceRelayMode bool `json:"seedance_relay_mode,omitempty"`
 	// Poster 渠道路径覆盖
 	// PosterApiVersion: 替换默认路径中的版本号，如 "v2" 将 /openapi/v1/... 改为 /openapi/v2/...
 	// PosterEndpoints: 按模型精确覆盖完整路径，优先级高于 PosterApiVersion

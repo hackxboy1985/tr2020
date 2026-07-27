@@ -18,6 +18,7 @@ type SeedanceGatewayChannel struct {
 	Channel    *model.Channel
 	GatewayURL string // SeedanceAssetBaseUrl from OtherSettings
 	Key        string // upstream token (first key)
+	RelayMode  bool   // true = 下游是 new-api，使用 /api/seedance/* 路径；false = 直连 Gateway
 }
 
 // GetSeedanceGatewayChannel finds an enabled doubao-video channel for the given
@@ -59,6 +60,7 @@ func GetSeedanceGatewayChannel(userGroup string) (*SeedanceGatewayChannel, error
 			Channel:    fullCh,
 			GatewayURL: strings.TrimRight(settings.SeedanceAssetBaseUrl, "/"),
 			Key:        key,
+			RelayMode:  settings.SeedanceRelayMode,
 		}, nil
 	}
 	return nil, fmt.Errorf("no available seedance gateway channel for group %s", userGroup)
@@ -78,6 +80,22 @@ func isGroupAllowed(ch *model.Channel, userGroup string) bool {
 	return false
 }
 
+// RewritePathForRelay 在 relay 模式下将 Gateway 原生路径转换为 new-api 用户侧路径。
+//
+// Gateway 原生路径 → new-api 路径：
+//   /api/seedance/proxy/assets/groups/* → /api/seedance/asset-groups/*
+//   /api/seedance/proxy/assets/*        → /api/seedance/assets/*
+//   /api/seedance/face-verifications/*  → /api/seedance/face-verifications/*（相同，不变）
+func RewritePathForRelay(path string) string {
+	if strings.HasPrefix(path, "/api/seedance/proxy/assets/groups") {
+		return "/api/seedance/asset-groups" + path[len("/api/seedance/proxy/assets/groups"):]
+	}
+	if strings.HasPrefix(path, "/api/seedance/proxy/assets") {
+		return "/api/seedance/assets" + path[len("/api/seedance/proxy/assets"):]
+	}
+	return path
+}
+
 // SeedanceProxyRequest proxies a request to the Seedance Gateway and returns
 // the raw response body and HTTP status code.
 // upstreamPath must start with "/" e.g. "/api/seedance/proxy/assets/groups"
@@ -88,6 +106,9 @@ func SeedanceProxyRequest(
 	queryParams url.Values,
 	body []byte,
 ) (int, []byte, error) {
+	if gc.RelayMode {
+		upstreamPath = RewritePathForRelay(upstreamPath)
+	}
 	targetURL := gc.GatewayURL + upstreamPath
 	if len(queryParams) > 0 {
 		targetURL += "?" + queryParams.Encode()

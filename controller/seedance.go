@@ -117,6 +117,17 @@ func SeedanceCreateAssetGroup(c *gin.Context) {
 			RawData:         string(respBody),
 		}
 		_ = model.CreateSeedanceAssetGroup(g)
+		// 在响应里追加 LocalId（业务 ID），方便中继链路直接使用
+		var raw map[string]interface{}
+		if err2 := common.Unmarshal(respBody, &raw); err2 == nil {
+			if result, ok := raw["Result"].(map[string]interface{}); ok {
+				result["LocalId"] = resp.Result.ID
+				if merged, err3 := common.Marshal(raw); err3 == nil {
+					c.Data(http.StatusOK, "application/json; charset=utf-8", merged)
+					return
+				}
+			}
+		}
 	})
 }
 
@@ -141,8 +152,7 @@ func SeedanceGetAssetGroup(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("id")
-	localID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	g, err := model.GetSeedanceAssetGroupByID(localID, userID)
+	g, err := resolveAssetGroup(c, userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset group not found"})
 		return
@@ -166,8 +176,7 @@ func seedanceModifyAssetGroup(c *gin.Context, method string) {
 		return
 	}
 	userID := c.GetInt("id")
-	localID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	g, err := model.GetSeedanceAssetGroupByID(localID, userID)
+	g, err := resolveAssetGroup(c, userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset group not found"})
 		return
@@ -179,7 +188,7 @@ func seedanceModifyAssetGroup(c *gin.Context, method string) {
 			Description string `json:"Description"`
 		}
 		_ = common.Unmarshal(body, &req)
-		_ = model.UpdateSeedanceAssetGroupRaw(localID, req.Name, req.Description, string(respBody))
+		_ = model.UpdateSeedanceAssetGroupRaw(g.ID, req.Name, req.Description, string(respBody))
 	})
 }
 
@@ -190,14 +199,13 @@ func SeedanceDeleteAssetGroup(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("id")
-	localID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	g, err := model.GetSeedanceAssetGroupByID(localID, userID)
+	g, err := resolveAssetGroup(c, userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset group not found"})
 		return
 	}
 	proxyAndPassthrough(c, gw, http.MethodDelete, "/api/seedance/proxy/assets/groups/"+g.UpstreamGroupID, nil, nil, func(_ int, _ []byte) {
-		_ = model.SoftDeleteSeedanceAssetGroup(localID, userID)
+		_ = model.SoftDeleteSeedanceAssetGroup(g.ID, userID)
 	})
 }
 
@@ -379,8 +387,8 @@ func SeedanceCreateAsset(c *gin.Context) {
 	}
 	_ = model.CreateSeedanceAsset(a)
 
-	// 在响应里追加 local_id，方便客户端直接用于查询接口
-	resp.Result["LocalId"] = a.ID
+	// 在响应里追加 local_id（业务 ID），方便客户端直接用于查询接口
+	resp.Result["LocalId"] = a.UpstreamAssetID
 	resp.Result["AssetRef"] = "asset://" + upstreamAssetID
 	merged, mergeErr := common.Marshal(map[string]interface{}{"Result": resp.Result})
 	if mergeErr != nil {
@@ -413,6 +421,26 @@ func resolveAsset(c *gin.Context, userID int) (*model.SeedanceAsset, error) {
 	}
 	localID, _ := strconv.ParseInt(rawID, 10, 64)
 	return model.GetSeedanceAssetByID(localID, userID)
+}
+
+// resolveAssetGroup 支持本地数字 ID 或上游 group-xxxxxxxx 格式查询素材组
+func resolveAssetGroup(c *gin.Context, userID int) (*model.SeedanceAssetGroup, error) {
+	rawID := c.Param("id")
+	if strings.HasPrefix(rawID, "group-") {
+		return model.GetSeedanceAssetGroupByUpstreamID(rawID, userID)
+	}
+	localID, _ := strconv.ParseInt(rawID, 10, 64)
+	return model.GetSeedanceAssetGroupByID(localID, userID)
+}
+
+// resolveFaceVerification 支持本地数字 ID 或上游 fv_xxxxxxxxx 格式查询人脸认证任务
+func resolveFaceVerification(c *gin.Context, userID int) (*model.SeedanceFaceVerification, error) {
+	rawID := c.Param("id")
+	if strings.HasPrefix(rawID, "fv_") {
+		return model.GetSeedanceFaceVerificationByVerificationID(rawID, userID)
+	}
+	localID, _ := strconv.ParseInt(rawID, 10, 64)
+	return model.GetSeedanceFaceVerificationByID(localID, userID)
 }
 
 // GET /api/seedance/assets/:id
@@ -525,8 +553,7 @@ func SeedanceGetFaceVerification(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("id")
-	localID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	v, err := model.GetSeedanceFaceVerificationByID(localID, userID)
+	v, err := resolveFaceVerification(c, userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "face verification not found"})
 		return
@@ -537,7 +564,7 @@ func SeedanceGetFaceVerification(c *gin.Context) {
 			GroupID string `json:"group_id"`
 		}
 		if err2 := common.Unmarshal(respBody, &resp); err2 == nil && resp.Status != "" {
-			_ = model.UpdateSeedanceFaceVerificationStatus(localID, resp.Status, resp.GroupID, string(respBody))
+			_ = model.UpdateSeedanceFaceVerificationStatus(v.ID, resp.Status, resp.GroupID, string(respBody))
 		}
 	})
 }
