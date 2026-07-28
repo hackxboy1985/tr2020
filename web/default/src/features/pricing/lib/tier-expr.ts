@@ -332,22 +332,43 @@ export type PerCallParamCondition = {
   value: string  // 等值匹配
 }
 
+/** 乘数操作符 */
+export type PerCallMultiplierOp = 'none' | '*' | '+' | '-' | '/'
+
+/** 乘数来源类型 */
+export type PerCallMultiplierFieldType = 'param' | 'number'
+
+/** 乘数配置 */
+export type PerCallMultiplier = {
+  op: PerCallMultiplierOp
+  fieldType: PerCallMultiplierFieldType
+  field: string       // 请求体字段路径或自然数值
+  fallback: string    // 字段获取失败时的默认值（fieldType=param 时有效）
+}
+
+export function createDefaultMultiplier(): PerCallMultiplier {
+  return { op: 'none', fieldType: 'param', field: '', fallback: '1' }
+}
+
 /** 按次计费的单条规则（必须有至少一个条件） */
 export type PerCallRule = {
   label: string
   conditions: PerCallParamCondition[]
   pricePerCall: number  // $/次
+  multiplier: PerCallMultiplier
 }
 
 /**
  * Per-call 视觉配置：
  * - rules: 有条件的规则列表，多条命中时取价格最高的
  * - fallbackPrice: 兜底价，始终参与竞价
+ * - fallbackMultiplier: 兜底价的乘数配置
  */
 export type PerCallVisualConfig = {
   base: 'per_call'
   rules: PerCallRule[]
   fallbackPrice: number
+  fallbackMultiplier: PerCallMultiplier
 }
 
 export function createDefaultPerCallConfig(): PerCallVisualConfig {
@@ -355,6 +376,7 @@ export function createDefaultPerCallConfig(): PerCallVisualConfig {
     base: 'per_call',
     rules: [],
     fallbackPrice: 0,
+    fallbackMultiplier: createDefaultMultiplier(),
   }
 }
 
@@ -363,7 +385,25 @@ export function normalizePerCallRule(rule: Partial<PerCallRule>): PerCallRule {
     label: rule.label ?? '',
     conditions: Array.isArray(rule.conditions) ? rule.conditions : [],
     pricePerCall: Number(rule.pricePerCall) || 0,
+    multiplier: rule.multiplier ?? createDefaultMultiplier(),
   }
+}
+
+/** 构建乘数表达式片段，如 " * max(isnull(param("f"), 0.0), 1)" 或 " * 3" */
+export function buildMultiplierExpr(mul: PerCallMultiplier): string {
+  if (!mul || mul.op === 'none') return ''
+  const op = mul.op
+  if (mul.fieldType === 'number') {
+    const n = Number(mul.field)
+    if (isNaN(n) || mul.field.trim() === '') return ''
+    return ` ${op} ${n}`
+  }
+  // param 类型: max(isnull(param("field"), 0.0), fallback)
+  const field = mul.field.trim()
+  if (!field) return ''
+  const fb = Number(mul.fallback)
+  const safeFb = isNaN(fb) ? 1 : (op === '/' && fb === 0 ? 1 : fb)
+  return ` ${op} max(isnull(param("${field}"), 0.0), ${safeFb})`
 }
 
 /**
@@ -372,26 +412,25 @@ export function normalizePerCallRule(rule: Partial<PerCallRule>): PerCallRule {
  * 无规则：
  *   v2: tier("base", 0.06)
  *
- * 单规则：
- *   v2: tier("result", max(param("metadata.modelEdition") == 3 ? 0.15 : 0, 0.06))
+ * 单规则（含乘数）：
+ *   v2: tier("result", max(param("metadata.modelEdition") == 3 ? 0.15 * max(isnull(param("metadata.detailPictureNumber"), 0.0), 1) : 0.0, 0.06))
  *
- * 多规则（嵌套 max）：
- *   v2: tier("result", max(
- *     param("metadata.modelEdition") == 3 ? 0.15 : 0,
- *     max(param("metadata.modelEdition") == 2 ? 0.09 : 0, 0.06)
- *   ))
+ * 多规则（嵌套 max）
  */
 export function generateExprFromPerCallConfig(
   config: PerCallVisualConfig | null | undefined
 ): string {
   const fallback = config?.fallbackPrice ?? 0
+  const fallbackMul = config?.fallbackMultiplier ?? createDefaultMultiplier()
   const rules = (config?.rules ?? []).filter((r) => r.conditions.length > 0)
 
   // 始终输出浮点格式，避免解析时 int/float 不匹配
   const fmtNum = (n: number) => Number.isInteger(n) ? `${n}.0` : String(n)
 
+  const fallbackExpr = `${fmtNum(fallback)}${buildMultiplierExpr(fallbackMul)}`
+
   if (rules.length === 0) {
-    return `v2: tier("base", ${fmtNum(fallback)})`
+    return `v2: tier("base", ${fallbackExpr})`
   }
 
   function buildCondStr(rule: PerCallRule): string {
@@ -412,10 +451,12 @@ export function generateExprFromPerCallConfig(
     const rule = rules[index]
     const cond = buildCondStr(rule)
     const price = fmtNum(rule.pricePerCall)
-    const term = cond ? `${cond} ? ${price} : 0.0` : price
+    const mulExpr = buildMultiplierExpr(rule.multiplier ?? createDefaultMultiplier())
+    const priceWithMul = `${price}${mulExpr}`
+    const term = cond ? `${cond} ? ${priceWithMul} : 0.0` : priceWithMul
 
     if (index === rules.length - 1) {
-      return `max(${term}, ${fmtNum(fallback)})`
+      return `max(${term}, ${fallbackExpr})`
     }
     return `max(${term}, ${buildMaxChain(index + 1)})`
   }
@@ -434,11 +475,47 @@ export function tryParsePerCallConfig(
   try {
     const body = trimmed.slice(3).trim()
 
-    // 无规则形式: tier("base", price)
-    const baseRe = /^tier\("([^"]*)",\s*(-?[\d.eE+]+)\)$/
+    // 解析价格+乘数片段，如 "1.0 * max(isnull(param("f"), 0.0), 1)" 或 "1.0 + 3" 或 "1.0"
+    function parsePriceAndMul(s: string): { price: number; multiplier: PerCallMultiplier } | null {
+      s = s.trim()
+      // param 类型乘数: <price> <op> max(isnull(param("<field>"), 0.0), <fallback>)
+      const paramMulRe = /^(-?[\d.eE+]+)\s*([+\-*/])\s*max\(isnull\(param\("([^"]+)"\)\s*,\s*0\.0\)\s*,\s*([\d.eE+]+)\)$/
+      const pm = s.match(paramMulRe)
+      if (pm) {
+        return {
+          price: Number(pm[1]),
+          multiplier: { op: pm[2] as PerCallMultiplierOp, fieldType: 'param', field: pm[3], fallback: pm[4] },
+        }
+      }
+      // number 类型乘数: <price> <op> <number>
+      const numMulRe = /^(-?[\d.eE+]+)\s*([+\-*/])\s*([\d.eE+]+)$/
+      const nm = s.match(numMulRe)
+      if (nm) {
+        return {
+          price: Number(nm[1]),
+          multiplier: { op: nm[2] as PerCallMultiplierOp, fieldType: 'number', field: nm[3], fallback: '1' },
+        }
+      }
+      // 纯数字
+      const plain = s.match(/^-?[\d.eE+]+$/)
+      if (plain) {
+        return { price: Number(s), multiplier: createDefaultMultiplier() }
+      }
+      return null
+    }
+
+    // 无规则形式: tier("base", priceExpr)
+    const baseRe = /^tier\("([^"]*)",\s*([\s\S]+)\)$/
     const bm = body.match(baseRe)
     if (bm) {
-      return { base: 'per_call', rules: [], fallbackPrice: Number(bm[2]) }
+      const parsed = parsePriceAndMul(bm[2])
+      if (!parsed) return null
+      return {
+        base: 'per_call',
+        rules: [],
+        fallbackPrice: parsed.price,
+        fallbackMultiplier: parsed.multiplier,
+      }
     }
 
     // 有规则形式: tier("result", max(...))
@@ -448,11 +525,11 @@ export function tryParsePerCallConfig(
 
     const rules: PerCallRule[] = []
     let fallbackPrice = 0
+    let fallbackMultiplier: PerCallMultiplier = createDefaultMultiplier()
 
     // 递归解析嵌套 max
     function parseMax(s: string): void {
       s = s.trim()
-      // max(term, rest)
       if (!s.startsWith('max(')) return
       const inner = s.slice(4, -1).trim()
 
@@ -472,38 +549,47 @@ export function tryParsePerCallConfig(
       const termStr = inner.slice(0, splitIdx).trim()
       const restStr = inner.slice(splitIdx + 1).trim()
 
-      // 解析 term: cond ? price : 0.0
-      const termRe =
-        /^((?:param\("[^"]+"\)\s*==\s*(?:"[^"]*"|-?[\d.]+)(?:\s*&&\s*param\("[^"]+"\)\s*==\s*(?:"[^"]*"|-?[\d.]+))*)\s*\?\s*(-?[\d.eE+]+)\s*:\s*0\.0)$/
-      const tm = termStr.match(termRe)
+      // 解析 term: condStr ? priceExpr : 0.0
+      // condStr = param("x") == v1 [&& param("y") == v2 ...]
+      // priceExpr = price | price <op> max(isnull(param("f"), 0.0), fb) | price <op> n
+      const condPart = /^((?:param\("[^"]+"\)\s*==\s*(?:"[^"]*"|-?[\d.]+)(?:\s*&&\s*param\("[^"]+"\)\s*==\s*(?:"[^"]*"|-?[\d.]+))*))\s*\?\s*([\s\S]+?)\s*:\s*0\.0$/
+      const tm = termStr.match(condPart)
       if (tm) {
-        const condStr = tm[1].split('?')[0].trim()
-        const price = Number(tm[2])
-        const conditions: PerCallParamCondition[] = []
-        for (const part of condStr.split(/\s*&&\s*/)) {
-          const cm = part
-            .trim()
-            .match(
-              /^param\("([^"]+)"\)\s*==\s*(?:"([^"]*)"|([\d.eE+-]+))$/
-            )
-          if (cm) {
-            conditions.push({ path: cm[1], value: cm[2] ?? cm[3] })
+        const condStr = tm[1].trim()
+        const priceStr = tm[2].trim()
+        const parsed = parsePriceAndMul(priceStr)
+        if (parsed) {
+          const conditions: PerCallParamCondition[] = []
+          for (const part of condStr.split(/\s*&&\s*/)) {
+            const cm = part.trim().match(/^param\("([^"]+)"\)\s*==\s*(?:"([^"]*)"|([\d.eE+-]+))$/)
+            if (cm) {
+              conditions.push({ path: cm[1], value: cm[2] ?? cm[3] })
+            }
           }
+          rules.push({
+            label: `rule_${rules.length + 1}`,
+            conditions,
+            pricePerCall: parsed.price,
+            multiplier: parsed.multiplier,
+          })
         }
-        rules.push({ label: `rule_${rules.length + 1}`, conditions, pricePerCall: price })
       }
 
-      // rest 是下一层 max 或 fallback 数字
+      // rest 是下一层 max 或 fallback 数字/乘数表达式
       if (restStr.startsWith('max(')) {
         parseMax(restStr)
       } else {
-        fallbackPrice = Number(restStr) || 0
+        const parsed = parsePriceAndMul(restStr)
+        if (parsed) {
+          fallbackPrice = parsed.price
+          fallbackMultiplier = parsed.multiplier
+        }
       }
     }
 
     parseMax(om[1].trim())
 
-    const cfg: PerCallVisualConfig = { base: 'per_call', rules, fallbackPrice }
+    const cfg: PerCallVisualConfig = { base: 'per_call', rules, fallbackPrice, fallbackMultiplier }
     const regenerated = generateExprFromPerCallConfig(cfg)
     if (regenerated.replace(/\s+/g, '') !== trimmed.replace(/\s+/g, '')) {
       return null
@@ -540,6 +626,7 @@ export function evalPerCallExprLocally(
     const env: Record<string, unknown> = {
       tier: tierFn,
       param: paramFn,
+      isnull: (val: unknown, fallback: number) => val == null ? fallback : Number(val),
       max: Math.max,
       min: Math.min,
       abs: Math.abs,

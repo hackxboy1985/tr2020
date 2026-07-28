@@ -88,10 +88,14 @@ import {
   type ExtraTokenValues,
   type PerCallRule,
   type PerCallVisualConfig,
+  type PerCallMultiplier,
+  type PerCallMultiplierOp,
+  type PerCallMultiplierFieldType,
   type TierConditionInput,
   type VisualConfig,
   type VisualTier,
   createDefaultPerCallConfig,
+  createDefaultMultiplier,
   createDefaultVisualConfig,
   evalExprLocally,
   evalPerCallExprLocally,
@@ -880,6 +884,97 @@ function VisualEditor({ visualConfig, onChange }: VisualEditorProps) {
 // Per-call rule row
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Per-call multiplier row
+// ---------------------------------------------------------------------------
+
+const PER_CALL_OP_OPTIONS: { value: PerCallMultiplierOp; label: string }[] = [
+  { value: 'none', label: '无' },
+  { value: '*', label: '×（乘）' },
+  { value: '+', label: '+（加）' },
+  { value: '-', label: '-（减）' },
+  { value: '/', label: '÷（除）' },
+]
+
+type PerCallMultiplierRowProps = {
+  mul: PerCallMultiplier
+  onChange: (next: PerCallMultiplier) => void
+}
+
+function PerCallMultiplierRow({ mul, onChange }: PerCallMultiplierRowProps) {
+  const { t } = useTranslation()
+  const isNone = mul.op === 'none'
+  const isParam = mul.fieldType === 'param'
+  const isDiv = mul.op === '/'
+  const fallbackIsZero = isDiv && isParam && (mul.fallback === '0' || mul.fallback === '0.0' || Number(mul.fallback) === 0)
+
+  const handleOpChange = (op: PerCallMultiplierOp) => {
+    const next = { ...mul, op }
+    if (op === '/' && (Number(next.fallback) === 0 || next.fallback === '' || next.fallback === '0')) {
+      next.fallback = '1'
+    }
+    onChange(next)
+  }
+
+  return (
+    <div className='flex flex-wrap items-center gap-2 mt-1'>
+      <Select
+        value={mul.op}
+        onValueChange={(v) => handleOpChange(v as PerCallMultiplierOp)}
+      >
+        <SelectTrigger className='h-7 w-24 text-xs'>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {PER_CALL_OP_OPTIONS.map((o) => (
+            <SelectItem key={o.value} value={o.value} className='text-xs'>
+              {o.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {!isNone && (
+        <>
+          <Select
+            value={mul.fieldType}
+            onValueChange={(v) => onChange({ ...mul, fieldType: v as PerCallMultiplierFieldType, field: '', fallback: '1' })}
+          >
+            <SelectTrigger className='h-7 w-24 text-xs'>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value='param' className='text-xs'>{t('Request field')}</SelectItem>
+              <SelectItem value='number' className='text-xs'>{t('Number')}</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Input
+            value={mul.field}
+            onChange={(e) => onChange({ ...mul, field: e.target.value })}
+            placeholder={isParam ? 'metadata.detailPictureNumber' : '1, 2, 1.5'}
+            className='h-7 flex-1 min-w-36 font-mono text-xs'
+          />
+
+          {isParam && (
+            <div className='flex items-center gap-1'>
+              <Input
+                value={mul.fallback}
+                onChange={(e) => onChange({ ...mul, fallback: e.target.value })}
+                placeholder={isDiv ? t('Default (cannot be 0)') : t('Default value')}
+                className={`h-7 w-20 font-mono text-xs${fallbackIsZero ? ' border-destructive' : ''}`}
+              />
+              {fallbackIsZero && (
+                <span className='text-destructive text-xs'>{t('Cannot be 0 for division')}</span>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 type PerCallRuleRowProps = {
   rule: PerCallRule
   index: number
@@ -959,17 +1054,23 @@ function PerCallRuleRow({ rule, index, onChange, onRemove }: PerCallRuleRowProps
       </div>
 
       {/* 每次价格 */}
-      <div className='flex items-center gap-3'>
+      <div className='space-y-1'>
         <Label className='text-xs'>{t('Price per call')}</Label>
-        <DraftNumberInput
-          min={0}
-          step={0.001}
-          value={rule.pricePerCall}
-          onValueChange={(value) => onChange({ ...rule, pricePerCall: value })}
-          className='w-32'
-          placeholder='0.00'
-        />
-        <span className='text-muted-foreground text-xs'>$/call</span>
+        <div className='flex flex-wrap items-center gap-3'>
+          <DraftNumberInput
+            min={0}
+            step={0.001}
+            value={rule.pricePerCall}
+            onValueChange={(value) => onChange({ ...rule, pricePerCall: value })}
+            className='w-32'
+            placeholder='0.00'
+          />
+          <span className='text-muted-foreground text-xs'>$/call</span>
+          <PerCallMultiplierRow
+            mul={rule.multiplier ?? createDefaultMultiplier()}
+            onChange={(m) => onChange({ ...rule, multiplier: m })}
+          />
+        </div>
       </div>
     </div>
   )
@@ -1026,7 +1127,7 @@ function PerCallEditor({ config, onChange }: PerCallEditorProps) {
       </Button>
 
       {/* 兜底价 */}
-      <div className='flex items-center gap-3 rounded-md border p-3'>
+      <div className='flex flex-wrap items-center gap-3 rounded-md border p-3'>
         <Badge variant='secondary'>{t('Fallback price')}</Badge>
         <DraftNumberInput
           min={0}
@@ -1037,6 +1138,10 @@ function PerCallEditor({ config, onChange }: PerCallEditorProps) {
           placeholder='0.00'
         />
         <span className='text-muted-foreground text-xs'>$/call — {t('charged when no rule matches')}</span>
+        <PerCallMultiplierRow
+          mul={config.fallbackMultiplier ?? createDefaultMultiplier()}
+          onChange={(m) => onChange({ ...config, fallbackMultiplier: m })}
+        />
       </div>
     </div>
   )
