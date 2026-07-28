@@ -56,6 +56,7 @@ var compileEnvPrototypeV1 = map[string]interface{}{
 	"header":                 func(string) string { return "" },
 	"param":                  func(string) interface{} { return nil },
 	"has":                    func(interface{}, string) bool { return false },
+	"isnull":                 func(interface{}, float64) float64 { return 0 },
 	"hour":                   func(string) int { return 0 },
 	"minute":                 func(string) int { return 0 },
 	"weekday":                func(string) int { return 0 },
