@@ -919,10 +919,11 @@ function PerCallMultiplierRow({ mul, onChange }: PerCallMultiplierRowProps) {
   return (
     <div className='flex flex-wrap items-center gap-2 mt-1'>
       <Select
+        items={PER_CALL_OP_OPTIONS}
         value={mul.op}
         onValueChange={(v) => handleOpChange(v as PerCallMultiplierOp)}
       >
-        <SelectTrigger className='h-7 w-24 text-xs'>
+        <SelectTrigger className='w-24' size='sm'>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -937,10 +938,14 @@ function PerCallMultiplierRow({ mul, onChange }: PerCallMultiplierRowProps) {
       {!isNone && (
         <>
           <Select
+            items={[
+              { value: 'param', label: t('Request field') },
+              { value: 'number', label: t('Number') },
+            ]}
             value={mul.fieldType}
             onValueChange={(v) => onChange({ ...mul, fieldType: v as PerCallMultiplierFieldType, field: '', fallback: '1' })}
           >
-            <SelectTrigger className='h-7 w-24 text-xs'>
+            <SelectTrigger className='w-24' size='sm'>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
