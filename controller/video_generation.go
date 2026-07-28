@@ -181,6 +181,17 @@ func CreateVideoProject(c *gin.Context) {
 		"token_name":             c.GetString("token_name"),
 	})
 
+	// 设置上下文键，供 savePrompt 写入 prompt_logs，使通用日志详情页可查看请求/响应体
+	if req.Prompt != "" {
+		c.Set(string(constant.ContextKeyPromptToSave), req.Prompt)
+	}
+	if len(rawReq) > 0 {
+		c.Set(string(constant.ContextKeyVideoRequestBody), string(rawReq))
+	}
+	if len(rawResp) > 0 {
+		c.Set(string(constant.ContextKeyVideoResponseBody), string(rawResp))
+	}
+
 	model.RecordConsumeLog(c, userId, model.RecordConsumeLogParams{
 		ModelName: req.VideoModel,
 		TokenName: c.GetString("token_name"),
