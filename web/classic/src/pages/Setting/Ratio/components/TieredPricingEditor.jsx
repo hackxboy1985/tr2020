@@ -331,7 +331,9 @@ function buildMultiplierExpr(mul) {
   if (!field) return '';
   const fallback = Number(mul.fallback);
   const fb = Number.isNaN(fallback) ? 1 : fallback;
-  return ` ${op} max(isnull(param("${field}"), 0.0), ${fb})`;
+  // For division, fallback must not be 0 to avoid divide-by-zero
+  const safeFb = (op === PER_CALL_OP_DIV && fb === 0) ? 1 : fb;
+  return ` ${op} max(isnull(param("${field}"), 0.0), ${safeFb})`;
 }
 
 // Build a single per-call rule's price expression (without tier wrapper)
@@ -578,13 +580,28 @@ function PerCallCondRow({ cond, onChange, onRemove, t }) {
 function PerCallMultiplierRow({ mul, onChange, t }) {
   const isNone = mul.op === PER_CALL_OP_NONE;
   const isParam = mul.fieldType === PER_CALL_FIELD_TYPE_PARAM;
+  const isDiv = mul.op === PER_CALL_OP_DIV;
+  const fallbackIsZero = isDiv && isParam && (mul.fallback === '0' || mul.fallback === '0.0' || Number(mul.fallback) === 0);
+
+  const handleFallbackChange = (v) => {
+    onChange({ ...mul, fallback: v });
+  };
+
+  // When switching to div, reset fallback to '1' if it's currently 0
+  const handleOpChange = (v) => {
+    const next = { ...mul, op: v };
+    if (v === PER_CALL_OP_DIV && (Number(next.fallback) === 0 || next.fallback === '' || next.fallback === '0')) {
+      next.fallback = '1';
+    }
+    onChange(next);
+  };
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
       <Select
         size='small'
         value={mul.op}
-        onChange={(v) => onChange({ ...mul, op: v })}
+        onChange={handleOpChange}
         style={{ width: 100 }}
       >
         {PER_CALL_OP_OPTIONS.map((o) => (
@@ -614,11 +631,15 @@ function PerCallMultiplierRow({ mul, onChange, t }) {
             <Input
               size='small'
               value={mul.fallback}
-              placeholder={t('获取失败默认值')}
-              onChange={(v) => onChange({ ...mul, fallback: v })}
-              style={{ width: 120 }}
+              placeholder={isDiv ? t('默认值（不能为 0）') : t('获取失败默认值')}
+              onChange={handleFallbackChange}
+              style={{ width: 140 }}
               prefix={t('默认')}
+              validateStatus={fallbackIsZero ? 'error' : undefined}
             />
+          )}
+          {fallbackIsZero && (
+            <Text size='small' type='danger'>{t('除法默认值不能为 0')}</Text>
           )}
         </>
       )}
