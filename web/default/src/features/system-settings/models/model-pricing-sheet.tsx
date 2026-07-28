@@ -900,6 +900,7 @@ export function ModelPricingEditorPanel({
                   className='flex flex-col gap-5'
                 >
                   <TieredPricingEditor
+                    key={watchedValues.name || editData?.name || 'new'}
                     modelName={watchedValues.name}
                     billingExpr={billingExpr}
                     requestRuleExpr={requestRuleExpr}

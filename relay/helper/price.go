@@ -281,7 +281,10 @@ func modelPriceHelperTieredPerCall(c *gin.Context, info *relaycommon.RelayInfo, 
 
 	return types.PriceData{
 		FreeModel:         freeModel,
+		ModelPrice:        rawCost,
+		UsePrice:          true,
 		GroupRatioInfo:    groupRatioInfo,
+		Quota:             preConsumedQuota,
 		QuotaToPreConsume: preConsumedQuota,
 	}, nil
 }
