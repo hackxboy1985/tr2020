@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/relay/channel"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -227,6 +228,7 @@ func posterImageHandler(c *gin.Context, resp *http.Response, info *relaycommon.R
 		return nil, types.NewOpenAIError(err, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError)
 	}
 	service.CloseResponseBodyGracefully(resp)
+	c.Set(string(constant.ContextKeyVideoResponseBody), string(responseBody))
 
 	var sResp syncResponse
 	if err := common.Unmarshal(responseBody, &sResp); err != nil {
@@ -268,6 +270,7 @@ func posterExtensionHandler(c *gin.Context, resp *http.Response, info *relaycomm
 		return nil, types.NewOpenAIError(err, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError)
 	}
 	service.CloseResponseBodyGracefully(resp)
+	c.Set(string(constant.ContextKeyVideoResponseBody), string(responseBody))
 
 	var eResp extensionSyncResponse
 	if err := common.Unmarshal(responseBody, &eResp); err != nil {
@@ -305,6 +308,7 @@ func posterAssistedHandler(c *gin.Context, resp *http.Response, info *relaycommo
 		return nil, types.NewOpenAIError(err, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError)
 	}
 	service.CloseResponseBodyGracefully(resp)
+	c.Set(string(constant.ContextKeyVideoResponseBody), string(responseBody))
 
 	var aResp assistedResponse
 	if err := common.Unmarshal(responseBody, &aResp); err != nil {

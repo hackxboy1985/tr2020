@@ -157,6 +157,16 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 		logContent = append(logContent, fmt.Sprintf("生成数量 %d", imageN))
 	}
 
+	// 设置请求体 context key，供 GenerateTextOtherInfo 写入 other 及 savePrompt 写入 prompt_logs
+	if bs, bsErr := common.GetBodyStorage(c); bsErr == nil {
+		if _, seekErr := bs.Seek(0, io.SeekStart); seekErr == nil {
+			if bodyBytes, readErr := io.ReadAll(bs); readErr == nil && len(bodyBytes) > 0 {
+				c.Set(string(constant.ContextKeyVideoRequestBody), string(bodyBytes))
+				_, _ = bs.Seek(0, io.SeekStart)
+			}
+		}
+	}
+
 	service.PostTextConsumeQuota(c, info, usage.(*dto.Usage), logContent)
 	return nil
 }

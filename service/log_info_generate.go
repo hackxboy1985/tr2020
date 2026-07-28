@@ -79,6 +79,12 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 	appendBillingInfo(relayInfo, other)
 	appendParamOverrideInfo(relayInfo, other)
 	appendStreamStatus(relayInfo, other)
+	if requestBody := ctx.GetString(string(constant.ContextKeyVideoRequestBody)); requestBody != "" {
+		other["request_body"] = TruncateBody(requestBody)
+	}
+	if responseBody := ctx.GetString(string(constant.ContextKeyVideoResponseBody)); responseBody != "" {
+		other["response_body"] = TruncateBody(responseBody)
+	}
 	return other
 }
 
