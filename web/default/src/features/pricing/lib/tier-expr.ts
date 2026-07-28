@@ -504,11 +504,11 @@ export function tryParsePerCallConfig(
       return null
     }
 
-    // 无规则形式: tier("base", priceExpr)
-    const baseRe = /^tier\("([^"]*)",\s*([\s\S]+)\)$/
+    // 无规则形式: tier("base", priceExpr) — 注意不能匹配 tier("result", ...)
+    const baseRe = /^tier\("base",\s*([\s\S]+)\)$/
     const bm = body.match(baseRe)
     if (bm) {
-      const parsed = parsePriceAndMul(bm[2])
+      const parsed = parsePriceAndMul(bm[1])
       if (!parsed) return null
       return {
         base: 'per_call',
