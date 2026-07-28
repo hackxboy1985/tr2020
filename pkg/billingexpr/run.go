@@ -93,7 +93,25 @@ func runProgram(prog *vm.Program, params TokenParams, request RequestInput) (flo
 		"weekday": func(tz string) int { return int(timeInZone(tz).Weekday()) },
 		"month":   func(tz string) int { return int(timeInZone(tz).Month()) },
 		"day":     func(tz string) int { return timeInZone(tz).Day() },
-		"max":     math.Max,
+		"isnull": func(val interface{}, fallback float64) float64 {
+			if val == nil {
+				return fallback
+			}
+			switch v := val.(type) {
+			case float64:
+				return v
+			case int64:
+				return float64(v)
+			case bool:
+				if v {
+					return 1
+				}
+				return 0
+			default:
+				return fallback
+			}
+		},
+		"max":   math.Max,
 		"min":   math.Min,
 		"abs":   math.Abs,
 		"ceil":  math.Ceil,

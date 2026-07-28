@@ -270,6 +270,516 @@ function tryParseVisualConfig(exprStr) {
 }
 
 // ---------------------------------------------------------------------------
+// Per-call tiered billing (v2) — config, generation, reverse-parse
+// ---------------------------------------------------------------------------
+
+const PER_CALL_OP_NONE = 'none';
+const PER_CALL_OP_MUL = '*';
+const PER_CALL_OP_ADD = '+';
+const PER_CALL_OP_SUB = '-';
+const PER_CALL_OP_DIV = '/';
+
+const PER_CALL_OP_OPTIONS = [
+  { value: PER_CALL_OP_NONE, label: '无' },
+  { value: PER_CALL_OP_MUL, label: '×（乘）' },
+  { value: PER_CALL_OP_ADD, label: '+（加）' },
+  { value: PER_CALL_OP_SUB, label: '-（减）' },
+  { value: PER_CALL_OP_DIV, label: '÷（除）' },
+];
+
+const PER_CALL_FIELD_TYPE_PARAM = 'param';
+const PER_CALL_FIELD_TYPE_NUMBER = 'number';
+
+function createEmptyPerCallRule() {
+  return {
+    conditions: [{ path: '', op: '==', value: '' }],
+    price: '',
+    multiplier: {
+      op: PER_CALL_OP_NONE,
+      fieldType: PER_CALL_FIELD_TYPE_PARAM,
+      field: '',
+      fallback: '1',
+    },
+  };
+}
+
+function createDefaultPerCallConfig() {
+  return {
+    rules: [createEmptyPerCallRule()],
+    defaultPrice: '1',
+    multiplier: {
+      op: PER_CALL_OP_NONE,
+      fieldType: PER_CALL_FIELD_TYPE_PARAM,
+      field: '',
+      fallback: '1',
+    },
+  };
+}
+
+// Build the multiplier expr fragment: op isnull(param("field"), 0) with max fallback
+// or op <number>
+function buildMultiplierExpr(mul) {
+  if (!mul || mul.op === PER_CALL_OP_NONE) return '';
+  const op = mul.op;
+  if (mul.fieldType === PER_CALL_FIELD_TYPE_NUMBER) {
+    const n = Number(mul.field);
+    if (Number.isNaN(n) || mul.field === '') return '';
+    return ` ${op} ${n}`;
+  }
+  // param type: max(isnull(param("field"), 0.0), fallback)
+  const field = (mul.field || '').trim();
+  if (!field) return '';
+  const fallback = Number(mul.fallback);
+  const fb = Number.isNaN(fallback) ? 1 : fallback;
+  return ` ${op} max(isnull(param("${field}"), 0.0), ${fb})`;
+}
+
+// Build a single per-call rule's price expression (without tier wrapper)
+function buildPerCallPriceExpr(price, mul) {
+  const p = Number(price);
+  const priceStr = Number.isNaN(p) ? '1' : String(p);
+  const mulStr = buildMultiplierExpr(mul);
+  if (!mulStr) return priceStr;
+  return `${priceStr}${mulStr}`;
+}
+
+// Build conditions string for per-call: param("x") == "v" && ...
+function buildPerCallCondStr(conditions) {
+  if (!conditions || conditions.length === 0) return '';
+  return conditions
+    .filter((c) => c.path && c.op && c.value !== '' && c.value != null)
+    .map((c) => {
+      const val = c.value;
+      const num = Number(val);
+      const valExpr = !Number.isNaN(num) && val !== '' ? `${num}` : `"${val}"`;
+      return `param("${c.path}") ${c.op} ${valExpr}`;
+    })
+    .join(' && ');
+}
+
+// Generate the full v2: tier("result", max(...)) expression
+function generateExprFromPerCallConfig(config) {
+  if (!config || !config.rules || config.rules.length === 0) {
+    const defaultPrice = buildPerCallPriceExpr(
+      config?.defaultPrice ?? '1',
+      config?.multiplier,
+    );
+    return `v2: tier("result", ${defaultPrice})`;
+  }
+
+  const defaultPrice = buildPerCallPriceExpr(
+    config.defaultPrice ?? '1',
+    config.multiplier,
+  );
+
+  // Build nested max(cond ? price : 0, max(cond ? price : 0, ..., default))
+  let inner = defaultPrice;
+  for (let i = config.rules.length - 1; i >= 0; i--) {
+    const rule = config.rules[i];
+    const cond = buildPerCallCondStr(rule.conditions);
+    const rulePrice = buildPerCallPriceExpr(rule.price, rule.multiplier);
+    if (!cond) {
+      inner = `max(${rulePrice}, ${inner})`;
+    } else {
+      inner = `max(${cond} ? ${rulePrice} : 0.0, ${inner})`;
+    }
+  }
+
+  return `v2: tier("result", ${inner})`;
+}
+
+// Detect if an expr string is a per-call v2 expression
+function isPerCallExpr(exprStr) {
+  if (!exprStr) return false;
+  const s = exprStr.replace(/\s+/g, ' ').trim();
+  return s.startsWith('v2:') && s.includes('tier("result"');
+}
+
+// Reverse-parse a v2 per-call expression back into PerCallConfig
+// Returns null if cannot parse (falls back to raw mode)
+function tryParsePerCallExpr(exprStr) {
+  if (!isPerCallExpr(exprStr)) return null;
+  try {
+    // Strip "v2:" prefix
+    const body = exprStr.replace(/^v2:\s*/, '').trim();
+    // Must be: tier("result", <inner>)
+    const tierMatch = body.match(/^tier\("result",\s*([\s\S]+)\)$/);
+    if (!tierMatch) return null;
+    const inner = tierMatch[1].trim();
+
+    // Parse multiplier fragment: " * max(isnull(param("f"), 0.0), fb)" or " * N"
+    // We'll parse rules by splitting the nested max structure
+    const rules = [];
+
+    // Recursively unwrap max(cond ? price : 0.0, rest) or max(price, rest)
+    function unwrapMax(s) {
+      s = s.trim();
+      // Try: max(<A>, <B>)
+      if (!s.startsWith('max(')) return { price: s, rest: null };
+      // Find the balanced comma split inside max(...)
+      let depth = 0;
+      let commaIdx = -1;
+      for (let i = 4; i < s.length - 1; i++) {
+        if (s[i] === '(') depth++;
+        else if (s[i] === ')') depth--;
+        else if (s[i] === ',' && depth === 0) { commaIdx = i; break; }
+      }
+      if (commaIdx === -1) return null;
+      const a = s.slice(4, commaIdx).trim();
+      const b = s.slice(commaIdx + 1, s.length - 1).trim();
+      return { a, b };
+    }
+
+    // Parse a price+multiplier string like "2 * max(isnull(param("f"),0.0),1)" or "2 + 3" or "1"
+    function parsePriceAndMul(s) {
+      s = s.trim();
+      // Match: <number> <op> max(isnull(param("<field>"), 0.0), <fallback>)
+      const paramMulRe = /^([\d.]+)\s*([+\-*/])\s*max\(isnull\(param\("([^"]+)"\)\s*,\s*0\.0\)\s*,\s*([\d.]+)\)$/;
+      const pm = s.match(paramMulRe);
+      if (pm) {
+        return {
+          price: pm[1],
+          multiplier: { op: pm[2], fieldType: PER_CALL_FIELD_TYPE_PARAM, field: pm[3], fallback: pm[4] },
+        };
+      }
+      // Match: <number> <op> <number>
+      const numMulRe = /^([\d.]+)\s*([+\-*/])\s*([\d.]+)$/;
+      const nm = s.match(numMulRe);
+      if (nm) {
+        return {
+          price: nm[1],
+          multiplier: { op: nm[2], fieldType: PER_CALL_FIELD_TYPE_NUMBER, field: nm[3], fallback: '1' },
+        };
+      }
+      // Plain number
+      const plain = s.match(/^[\d.]+$/);
+      if (plain) {
+        return { price: s, multiplier: { op: PER_CALL_OP_NONE, fieldType: PER_CALL_FIELD_TYPE_PARAM, field: '', fallback: '1' } };
+      }
+      return null;
+    }
+
+    // Parse condition string: param("x") == 2.0 && param("y") == "z"
+    function parseConds(s) {
+      if (!s) return [];
+      const parts = s.split(/\s*&&\s*/);
+      const conds = [];
+      for (const p of parts) {
+        const m = p.trim().match(/^param\("([^"]+)"\)\s*(==|!=|<=|>=|<|>)\s*(.+)$/);
+        if (!m) return null;
+        let val = m[3].trim();
+        // strip surrounding quotes if string
+        if (val.startsWith('"') && val.endsWith('"')) val = val.slice(1, -1);
+        conds.push({ path: m[1], op: m[2], value: val });
+      }
+      return conds;
+    }
+
+    let cur = inner;
+    let defaultPriceParsed = null;
+    let defaultMul = { op: PER_CALL_OP_NONE, fieldType: PER_CALL_FIELD_TYPE_PARAM, field: '', fallback: '1' };
+
+    // Peel off max layers
+    while (cur) {
+      const parts = unwrapMax(cur);
+      if (!parts || parts.rest === undefined) {
+        // leaf: default price
+        const pp = parsePriceAndMul(cur);
+        if (!pp) return null;
+        defaultPriceParsed = pp.price;
+        defaultMul = pp.multiplier;
+        break;
+      }
+      const { a, b } = parts;
+      if (a === undefined) return null;
+
+      // a can be: "cond ? price : 0.0" or just "price"
+      const ternaryRe = /^([\s\S]+?)\s*\?\s*([\s\S]+?)\s*:\s*0\.0$/;
+      const tm = a.match(ternaryRe);
+      if (tm) {
+        const condStr = tm[1].trim();
+        const priceStr = tm[2].trim();
+        const conds = parseConds(condStr);
+        if (!conds) return null;
+        const pp = parsePriceAndMul(priceStr);
+        if (!pp) return null;
+        rules.push({ conditions: conds, price: pp.price, multiplier: pp.multiplier });
+      } else {
+        // No condition — rule with empty conditions
+        const pp = parsePriceAndMul(a);
+        if (!pp) return null;
+        rules.push({ conditions: [{ path: '', op: '==', value: '' }], price: pp.price, multiplier: pp.multiplier });
+      }
+      cur = b;
+    }
+
+    if (defaultPriceParsed === null) return null;
+    return {
+      rules,
+      defaultPrice: defaultPriceParsed,
+      multiplier: defaultMul,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Per-call rule condition row
+// ---------------------------------------------------------------------------
+
+const PER_CALL_COND_OPS = ['==', '!=', '<', '<=', '>', '>='];
+
+function PerCallCondRow({ cond, onChange, onRemove, t }) {
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: '1fr 80px 1fr auto',
+      gap: '4px 6px',
+      alignItems: 'center',
+      marginBottom: 6,
+    }}>
+      <Input
+        size='small'
+        value={cond.path}
+        placeholder={t('字段路径，如 metadata.modelEdition')}
+        onChange={(v) => onChange({ ...cond, path: v })}
+      />
+      <Select
+        size='small'
+        value={cond.op || '=='}
+        onChange={(v) => onChange({ ...cond, op: v })}
+      >
+        {PER_CALL_COND_OPS.map((op) => (
+          <Select.Option key={op} value={op}>{op}</Select.Option>
+        ))}
+      </Select>
+      <Input
+        size='small'
+        value={cond.value}
+        placeholder={t('匹配值')}
+        onChange={(v) => onChange({ ...cond, value: v })}
+      />
+      <Button
+        icon={<IconDelete />}
+        type='danger'
+        theme='borderless'
+        size='small'
+        onClick={onRemove}
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Per-call multiplier config row
+// ---------------------------------------------------------------------------
+
+function PerCallMultiplierRow({ mul, onChange, t }) {
+  const isNone = mul.op === PER_CALL_OP_NONE;
+  const isParam = mul.fieldType === PER_CALL_FIELD_TYPE_PARAM;
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+      <Select
+        size='small'
+        value={mul.op}
+        onChange={(v) => onChange({ ...mul, op: v })}
+        style={{ width: 100 }}
+      >
+        {PER_CALL_OP_OPTIONS.map((o) => (
+          <Select.Option key={o.value} value={o.value}>{o.label}</Select.Option>
+        ))}
+      </Select>
+
+      {!isNone && (
+        <>
+          <Select
+            size='small'
+            value={mul.fieldType}
+            onChange={(v) => onChange({ ...mul, fieldType: v, field: '', fallback: '1' })}
+            style={{ width: 110 }}
+          >
+            <Select.Option value={PER_CALL_FIELD_TYPE_PARAM}>{t('请求体字段')}</Select.Option>
+            <Select.Option value={PER_CALL_FIELD_TYPE_NUMBER}>{t('自然数')}</Select.Option>
+          </Select>
+          <Input
+            size='small'
+            value={mul.field}
+            placeholder={isParam ? t('如 metadata.detailPictureNumber') : t('如 1, 2, 1.5')}
+            onChange={(v) => onChange({ ...mul, field: v })}
+            style={{ flex: 1, minWidth: 160 }}
+          />
+          {isParam && (
+            <Input
+              size='small'
+              value={mul.fallback}
+              placeholder={t('获取失败默认值')}
+              onChange={(v) => onChange({ ...mul, fallback: v })}
+              style={{ width: 120 }}
+              prefix={t('默认')}
+            />
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Per-call rule card
+// ---------------------------------------------------------------------------
+
+function PerCallRuleCard({ rule, index, isOnly, onChange, onRemove, t }) {
+  const conditions = rule.conditions || [];
+
+  const updateCond = (ci, newCond) => {
+    const next = conditions.map((c, i) => (i === ci ? newCond : c));
+    onChange({ ...rule, conditions: next });
+  };
+  const removeCond = (ci) => {
+    const next = conditions.filter((_, i) => i !== ci);
+    onChange({ ...rule, conditions: next.length > 0 ? next : [{ path: '', op: '==', value: '' }] });
+  };
+  const addCond = () => {
+    onChange({ ...rule, conditions: [...conditions, { path: '', op: '==', value: '' }] });
+  };
+
+  return (
+    <div style={{
+      padding: '12px 16px',
+      borderRadius: 8,
+      border: '1px solid var(--semi-color-border)',
+      background: 'var(--semi-color-bg-2)',
+      marginBottom: 8,
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <Tag color='blue' size='small'>{t('规则 {{n}}', { n: index + 1 })}</Tag>
+        {!isOnly && (
+          <Button icon={<IconDelete />} type='danger' theme='borderless' size='small' onClick={onRemove} />
+        )}
+      </div>
+
+      {/* Conditions */}
+      <div style={{ marginBottom: 8 }}>
+        <Text size='small' style={{ color: 'var(--semi-color-text-2)', display: 'block', marginBottom: 4 }}>
+          {t('条件（且）')}
+        </Text>
+        {conditions.map((cond, ci) => (
+          <PerCallCondRow
+            key={ci}
+            cond={cond}
+            onChange={(nc) => updateCond(ci, nc)}
+            onRemove={() => removeCond(ci)}
+            t={t}
+          />
+        ))}
+        <Button icon={<IconPlus />} size='small' theme='borderless' onClick={addCond}>
+          {t('新增条件')}
+        </Button>
+      </div>
+
+      {/* Price */}
+      <div>
+        <Text size='small' style={{ color: 'var(--semi-color-text-2)', display: 'block', marginBottom: 2 }}>
+          {t('每次价格')}
+        </Text>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Input
+            size='small'
+            value={rule.price}
+            placeholder='1'
+            suffix='$/call'
+            onChange={(v) => onChange({ ...rule, price: v })}
+            style={{ width: 160 }}
+          />
+          <PerCallMultiplierRow
+            mul={rule.multiplier || { op: PER_CALL_OP_NONE, fieldType: PER_CALL_FIELD_TYPE_PARAM, field: '', fallback: '1' }}
+            onChange={(m) => onChange({ ...rule, multiplier: m })}
+            t={t}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Per-call visual editor
+// ---------------------------------------------------------------------------
+
+function PerCallVisualEditor({ config, onChange, t }) {
+  const cfg = config || createDefaultPerCallConfig();
+  const rules = cfg.rules || [];
+
+  const updateRule = (i, newRule) => {
+    const next = rules.map((r, ri) => (ri === i ? newRule : r));
+    onChange({ ...cfg, rules: next });
+  };
+  const removeRule = (i) => {
+    const next = rules.filter((_, ri) => ri !== i);
+    onChange({ ...cfg, rules: next.length > 0 ? next : [] });
+  };
+  const addRule = () => {
+    onChange({ ...cfg, rules: [...rules, createEmptyPerCallRule()] });
+  };
+
+  return (
+    <div>
+      <Banner
+        type='info'
+        description={t('每条规则包含条件和每次价格。多条规则同时命中时，取最高价格计费。')}
+        style={{ marginBottom: 12 }}
+      />
+
+      {rules.map((rule, i) => (
+        <PerCallRuleCard
+          key={i}
+          rule={rule}
+          index={i}
+          isOnly={rules.length === 1}
+          onChange={(nr) => updateRule(i, nr)}
+          onRemove={() => removeRule(i)}
+          t={t}
+        />
+      ))}
+
+      <Button icon={<IconPlus />} size='small' theme='light' onClick={addRule} style={{ marginTop: 4 }}>
+        {t('新增规则')}
+      </Button>
+
+      {/* Default price */}
+      <div style={{
+        marginTop: 16,
+        padding: '12px 16px',
+        borderRadius: 8,
+        border: '1px solid var(--semi-color-border)',
+        background: 'var(--semi-color-fill-0)',
+      }}>
+        <Text size='small' style={{ color: 'var(--semi-color-text-2)', display: 'block', marginBottom: 6 }}>
+          {t('兜底价格（无规则命中时）')}
+        </Text>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Input
+            size='small'
+            value={cfg.defaultPrice}
+            placeholder='1'
+            suffix='$/call'
+            onChange={(v) => onChange({ ...cfg, defaultPrice: v })}
+            style={{ width: 160 }}
+          />
+          <PerCallMultiplierRow
+            mul={cfg.multiplier || { op: PER_CALL_OP_NONE, fieldType: PER_CALL_FIELD_TYPE_PARAM, field: '', fallback: '1' }}
+            onChange={(m) => onChange({ ...cfg, multiplier: m })}
+            t={t}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Condition editor row
 // ---------------------------------------------------------------------------
 
@@ -1376,6 +1886,7 @@ export default function TieredPricingEditor({ model, onExprChange, requestRuleEx
 
   const [editorMode, setEditorMode] = useState('visual');
   const [visualConfig, setVisualConfig] = useState(null);
+  const [perCallConfig, setPerCallConfig] = useState(null);
   const [rawExpr, setRawExpr] = useState('');
   const [promptTokens, setPromptTokens] = useState(200000);
   const [completionTokens, setCompletionTokens] = useState(10000);
@@ -1386,6 +1897,9 @@ export default function TieredPricingEditor({ model, onExprChange, requestRuleEx
   const [imageOutputTokens, setImageOutputTokens] = useState(0);
   const [audioInputTokens, setAudioInputTokens] = useState(0);
   const [audioOutputTokens, setAudioOutputTokens] = useState(0);
+
+  // visual sub-mode: 'token' or 'per-call'
+  const [visualSubMode, setVisualSubMode] = useState('token');
 
   const currentRequestRuleExpr = requestRuleExpr || '';
   const parsedRequestRuleGroups = useMemo(
@@ -1409,29 +1923,46 @@ export default function TieredPricingEditor({ model, onExprChange, requestRuleEx
   }, [onRequestRuleExprChange]);
 
   useEffect(() => {
+    const parsedPerCall = tryParsePerCallExpr(currentExpr);
+    if (parsedPerCall) {
+      setEditorMode('visual');
+      setVisualSubMode('per-call');
+      setPerCallConfig(parsedPerCall);
+      setVisualConfig(null);
+      setRawExpr(currentExpr);
+      return;
+    }
     const parsed = tryParseVisualConfig(currentExpr);
     if (parsed) {
       setEditorMode('visual');
+      setVisualSubMode('token');
       setVisualConfig(parsed);
+      setPerCallConfig(null);
       setRawExpr(currentExpr);
     } else if (currentExpr) {
       setEditorMode('raw');
       setRawExpr(currentExpr);
       setVisualConfig(null);
+      setPerCallConfig(null);
     } else {
       setEditorMode('visual');
+      setVisualSubMode('token');
       setVisualConfig(createDefaultVisualConfig());
+      setPerCallConfig(null);
       setRawExpr('');
     }
   }, [model?.name]);
 
   const effectiveExpr = useMemo(() => {
     if (editorMode === 'visual') {
+      if (visualSubMode === 'per-call') {
+        return generateExprFromPerCallConfig(perCallConfig);
+      }
       return generateExprFromVisualConfig(visualConfig);
     }
     const { billingExpr } = splitBillingExprAndRequestRules(rawExpr);
     return billingExpr;
-  }, [editorMode, visualConfig, rawExpr]);
+  }, [editorMode, visualSubMode, visualConfig, perCallConfig, rawExpr]);
 
   useEffect(() => {
     if (effectiveExpr !== currentExpr) {
@@ -1441,6 +1972,10 @@ export default function TieredPricingEditor({ model, onExprChange, requestRuleEx
 
   const handleVisualChange = useCallback((newConfig) => {
     setVisualConfig(newConfig);
+  }, []);
+
+  const handlePerCallChange = useCallback((newConfig) => {
+    setPerCallConfig(newConfig);
   }, []);
 
   const handleRawChange = useCallback((val) => {
@@ -1454,24 +1989,43 @@ export default function TieredPricingEditor({ model, onExprChange, requestRuleEx
       const newMode = e.target.value;
       if (newMode === 'visual') {
         const { billingExpr, requestRuleExpr: ruleStr } = splitBillingExprAndRequestRules(rawExpr);
-        const parsed = tryParseVisualConfig(billingExpr);
-        if (parsed) {
-          setVisualConfig(parsed);
+        const parsedPerCall = tryParsePerCallExpr(billingExpr);
+        if (parsedPerCall) {
+          setVisualSubMode('per-call');
+          setPerCallConfig(parsedPerCall);
+          setVisualConfig(null);
         } else {
-          setVisualConfig(createDefaultVisualConfig());
+          const parsed = tryParseVisualConfig(billingExpr);
+          setVisualSubMode('token');
+          setVisualConfig(parsed || createDefaultVisualConfig());
+          setPerCallConfig(null);
         }
         const parsedGroups = tryParseRequestRuleExpr(ruleStr);
         setRequestRuleGroups(parsedGroups || []);
         onRequestRuleExprChange(ruleStr);
       } else {
-        const expr = generateExprFromVisualConfig(visualConfig);
+        const expr = visualSubMode === 'per-call'
+          ? generateExprFromPerCallConfig(perCallConfig)
+          : generateExprFromVisualConfig(visualConfig);
         const ruleExpr = buildRequestRuleExpr(requestRuleGroups);
         setRawExpr(combineBillingExpr(expr, ruleExpr) || expr);
       }
       setEditorMode(newMode);
     },
-    [rawExpr, visualConfig, requestRuleGroups, onRequestRuleExprChange],
+    [rawExpr, visualConfig, perCallConfig, visualSubMode, requestRuleGroups, onRequestRuleExprChange],
   );
+
+  const handleVisualSubModeSwitch = useCallback((e) => {
+    const newSub = e.target.value;
+    if (newSub === 'per-call') {
+      setPerCallConfig(createDefaultPerCallConfig());
+      setVisualConfig(null);
+    } else {
+      setVisualConfig(createDefaultVisualConfig());
+      setPerCallConfig(null);
+    }
+    setVisualSubMode(newSub);
+  }, []);
 
   const applyPreset = useCallback(
     (preset) => {
@@ -1529,6 +2083,20 @@ export default function TieredPricingEditor({ model, onExprChange, requestRuleEx
         </RadioGroup>
       </div>
 
+      {editorMode === 'visual' && (
+        <div style={{ marginBottom: 12 }}>
+          <RadioGroup
+            type='button'
+            size='small'
+            value={visualSubMode}
+            onChange={handleVisualSubModeSwitch}
+          >
+            <Radio value='token'>{t('按量计费')}</Radio>
+            <Radio value='per-call'>{t('按次计费')}</Radio>
+          </RadioGroup>
+        </div>
+      )}
+
       <PresetSection applyPreset={applyPreset} t={t} />
 
       <Card
@@ -1536,16 +2104,24 @@ export default function TieredPricingEditor({ model, onExprChange, requestRuleEx
         style={{ marginBottom: 12, background: 'var(--semi-color-fill-0)' }}
       >
         {editorMode === 'visual' ? (
-          <VisualEditor
-            visualConfig={visualConfig}
-            onChange={handleVisualChange}
-            t={t}
-          />
+          visualSubMode === 'per-call' ? (
+            <PerCallVisualEditor
+              config={perCallConfig}
+              onChange={handlePerCallChange}
+              t={t}
+            />
+          ) : (
+            <VisualEditor
+              visualConfig={visualConfig}
+              onChange={handleVisualChange}
+              t={t}
+            />
+          )
         ) : (
           <RawExprEditor exprString={rawExpr} onChange={handleRawChange} t={t} />
         )}
 
-        {editorMode === 'visual' && (
+        {editorMode === 'visual' && visualSubMode === 'token' && (
           <>
             <div style={{ borderTop: '1px solid var(--semi-color-border)', margin: '16px 0' }} />
 
