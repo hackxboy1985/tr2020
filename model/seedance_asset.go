@@ -127,12 +127,18 @@ func GetSeedanceAssetBySourceURL(sourceURL string, userID int) (*SeedanceAsset, 
 	return &a, err
 }
 
-func ListSeedanceAssets(userID int, groupID string, page, pageSize int) ([]*SeedanceAsset, int64, error) {
+func ListSeedanceAssets(userID int, groupID string, id int64, upstreamAssetID string, page, pageSize int) ([]*SeedanceAsset, int64, error) {
 	var assets []*SeedanceAsset
 	var total int64
 	query := DB.Model(&SeedanceAsset{}).Where("user_id = ? AND deleted_at = 0", userID)
 	if groupID != "" {
 		query = query.Where("upstream_group_id = ?", groupID)
+	}
+	if id > 0 {
+		query = query.Where("id = ?", id)
+	}
+	if upstreamAssetID != "" {
+		query = query.Where("upstream_asset_id = ?", upstreamAssetID)
 	}
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -167,7 +173,7 @@ func ListAllSeedanceAssetGroups(page, pageSize int, userID int) ([]*SeedanceAsse
 }
 
 // ListAllSeedanceAssets 管理员用，不过滤 userID
-func ListAllSeedanceAssets(page, pageSize int, userID int, groupID string) ([]*SeedanceAsset, int64, error) {
+func ListAllSeedanceAssets(page, pageSize int, userID int, groupID string, id int64, upstreamAssetID string) ([]*SeedanceAsset, int64, error) {
 	var assets []*SeedanceAsset
 	var total int64
 	query := DB.Model(&SeedanceAsset{}).Where("deleted_at = 0")
@@ -176,6 +182,12 @@ func ListAllSeedanceAssets(page, pageSize int, userID int, groupID string) ([]*S
 	}
 	if groupID != "" {
 		query = query.Where("upstream_group_id = ?", groupID)
+	}
+	if id > 0 {
+		query = query.Where("id = ?", id)
+	}
+	if upstreamAssetID != "" {
+		query = query.Where("upstream_asset_id = ?", upstreamAssetID)
 	}
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err

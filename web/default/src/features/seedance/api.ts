@@ -33,6 +33,8 @@ export async function adminListAssets(params: {
   page_size?: number
   user_id?: number
   group_id?: string
+  id?: number
+  upstream_asset_id?: string
 }): Promise<PagedResponse<SeedanceAsset>> {
   const res = await api.get<ApiResponse<PagedResponse<SeedanceAsset>>>(
     '/api/admin/seedance/assets',
@@ -60,6 +62,8 @@ export async function userListAssets(params: {
   p?: number
   page_size?: number
   group_id?: string
+  id?: number
+  upstream_asset_id?: string
 }): Promise<PagedResponse<SeedanceAsset>> {
   const res = await api.get<ApiResponse<PagedResponse<SeedanceAsset>>>(
     '/api/seedance/assets',

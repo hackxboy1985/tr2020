@@ -403,7 +403,9 @@ func SeedanceListAssets(c *gin.Context) {
 	userID := c.GetInt("id")
 	pageInfo := common.GetPageQuery(c)
 	groupID := c.Query("group_id")
-	assets, total, err := model.ListAllSeedanceAssets(pageInfo.GetPage(), pageInfo.GetPageSize(), userID, groupID)
+	assetID, _ := strconv.ParseInt(c.Query("id"), 10, 64)
+	upstreamAssetID := strings.TrimSpace(c.Query("upstream_asset_id"))
+	assets, total, err := model.ListSeedanceAssets(userID, groupID, assetID, upstreamAssetID, pageInfo.GetPage(), pageInfo.GetPageSize())
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -592,7 +594,9 @@ func SeedanceAdminListAssets(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	userIDFilter, _ := strconv.Atoi(c.Query("user_id"))
 	groupID := c.Query("group_id")
-	assets, total, err := model.ListAllSeedanceAssets(pageInfo.GetPage(), pageInfo.GetPageSize(), userIDFilter, groupID)
+	assetID, _ := strconv.ParseInt(c.Query("id"), 10, 64)
+	upstreamAssetID := strings.TrimSpace(c.Query("upstream_asset_id"))
+	assets, total, err := model.ListAllSeedanceAssets(pageInfo.GetPage(), pageInfo.GetPageSize(), userIDFilter, groupID, assetID, upstreamAssetID)
 	if err != nil {
 		common.ApiError(c, err)
 		return

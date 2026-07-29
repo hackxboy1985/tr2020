@@ -10,6 +10,7 @@ import {
 import { SectionPageLayout } from '@/components/layout'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   Popover,
   PopoverContent,
@@ -119,15 +120,19 @@ const assetColHelper = createColumnHelper<SeedanceAsset>()
 function AssetsTab() {
   const { t } = useTranslation()
   const [page, setPage] = useState(1)
+  const [idInput, setIdInput] = useState('')
+  const [upstreamAssetIdInput, setUpstreamAssetIdInput] = useState('')
+  const [filters, setFilters] = useState<{ id?: number; upstream_asset_id?: string }>({})
   const pageSize = 20
   const isAdmin = (useAuthStore.getState().auth.user?.role ?? 0) >= ROLE.ADMIN
+  const queryParams = { p: page, page_size: pageSize, ...filters }
 
   const { data, isLoading } = useQuery({
-    queryKey: seedanceQueryKeys.assets({ p: page, page_size: pageSize }),
+    queryKey: seedanceQueryKeys.assets(queryParams),
     queryFn: () =>
       isAdmin
-        ? adminListAssets({ p: page, page_size: pageSize })
-        : userListAssets({ p: page, page_size: pageSize }),
+        ? adminListAssets(queryParams)
+        : userListAssets(queryParams),
   })
 
   const columns = [
@@ -225,8 +230,43 @@ function AssetsTab() {
   const total = data?.total ?? 0
   const totalPages = Math.ceil(total / pageSize)
 
+  const handleSearch = () => {
+    const nextFilters: { id?: number; upstream_asset_id?: string } = {}
+    const id = Number(idInput.trim())
+    if (Number.isInteger(id) && id > 0) {
+      nextFilters.id = id
+    }
+    const upstreamAssetId = upstreamAssetIdInput.trim()
+    if (upstreamAssetId) {
+      nextFilters.upstream_asset_id = upstreamAssetId
+    }
+    setFilters(nextFilters)
+    setPage(1)
+  }
+
   return (
     <div className='space-y-3'>
+      <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
+        <Input
+          value={idInput}
+          onChange={(event) => setIdInput(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') handleSearch()
+          }}
+          placeholder={t('Asset ID')}
+          className='sm:w-40'
+        />
+        <Input
+          value={upstreamAssetIdInput}
+          onChange={(event) => setUpstreamAssetIdInput(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') handleSearch()
+          }}
+          placeholder={t('Upstream Asset ID')}
+          className='sm:w-72'
+        />
+        <Button onClick={handleSearch}>{t('Search')}</Button>
+      </div>
       <DataTable table={table} columns={columns} isLoading={isLoading} />
       <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={total} />
     </div>
