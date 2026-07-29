@@ -179,6 +179,7 @@ export interface LogOtherData {
   reject_reason?: string
   // Task-related fields (for refund logs, type=6)
   is_task?: boolean
+  task_log_source?: string
   task_id?: string
   upstream_task_id?: string
   reason?: string

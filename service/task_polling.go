@@ -542,9 +542,7 @@ func recordTaskCompletionLog(task *model.Task, responseBody []byte) {
 	}
 	other := taskBillingOther(task)
 	other["task_id"] = task.TaskID
-	if task.Platform == constant.TaskPlatform(fmt.Sprint(constant.ChannelTypePoster)) {
-		other["request_path"] = "/openapi/v1/poster/queryTaskResult"
-	}
+	other["task_log_source"] = "polling_result"
 	if upstreamTaskID := task.GetUpstreamTaskID(); upstreamTaskID != "" {
 		other["upstream_task_id"] = upstreamTaskID
 	}

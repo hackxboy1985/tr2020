@@ -478,6 +478,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
   const showConversion =
     props.isAdmin &&
     props.log.type !== 6 &&
+    other?.task_log_source !== 'polling_result' &&
     (other?.request_path || conversionChain.length > 0)
 
   const useChannel = other?.admin_info?.use_channel
@@ -570,6 +571,10 @@ export function DetailsDialog(props: DetailsDialogProps) {
                   value={props.log.group || other?.group || ''}
                   mono
                 />
+              )}
+
+              {other?.task_log_source === 'polling_result' && (
+                <DetailRow label='日志来源' value='后台轮询结果' mono />
               )}
 
               {showAdminIp && (

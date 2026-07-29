@@ -130,7 +130,7 @@ function buildDetailSegments(
 
   if (!other) return []
 
-  if (log.quota === 0 && other.upstream_task_id && other.response_body) {
+  if (log.quota === 0 && other.is_task && other.response_body) {
     return [{ text: t('Query Result') }]
   }
 
