@@ -193,6 +193,7 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		return
 	}
 	defer resp.Body.Close()
+	c.Set(string(constant.ContextKeyVideoResponseBody), string(responseBody))
 
 	var sResp submitResponse
 	if err := common.Unmarshal(responseBody, &sResp); err != nil {

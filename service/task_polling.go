@@ -493,6 +493,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 
 	if shouldSettle {
 		settleTaskBillingOnComplete(ctx, adaptor, task, taskResult)
+		recordTaskCompletionLog(task, responseBody)
 	}
 	if shouldRefund {
 		RefundTaskQuota(ctx, task, task.FailReason)
@@ -533,6 +534,32 @@ func truncateBase64(s string) string {
 		return s
 	}
 	return s[:maxKeep] + "..."
+}
+
+func recordTaskCompletionLog(task *model.Task, responseBody []byte) {
+	if task == nil {
+		return
+	}
+	other := taskBillingOther(task)
+	other["task_id"] = task.TaskID
+	if upstreamTaskID := task.GetUpstreamTaskID(); upstreamTaskID != "" {
+		other["upstream_task_id"] = upstreamTaskID
+	}
+	if len(responseBody) > 0 {
+		other["response_body"] = TruncateBody(string(responseBody))
+	}
+	model.RecordTaskBillingLog(model.RecordTaskBillingLogParams{
+		UserId:    task.UserId,
+		LogType:   model.LogTypeConsume,
+		Content:   "任务完成",
+		ChannelId: task.ChannelId,
+		ModelName: taskModelName(task),
+		Quota:     0,
+		TokenId:   task.PrivateData.TokenId,
+		Group:     task.Group,
+		Other:     other,
+		TaskId:    task.TaskID,
+	})
 }
 
 // settleTaskBillingOnComplete 任务完成时的统一计费调整。
