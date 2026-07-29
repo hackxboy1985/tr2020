@@ -139,6 +139,14 @@ function buildDetailSegments(
 
   const segments: DetailSegment[] = []
 
+  const recalculationSuffix =
+    log.quota > 0 &&
+    other.task_id &&
+    other.actual_quota != null &&
+    other.pre_consumed_quota != null
+      ? '（重算补扣）'
+      : ''
+
   const priceOpts = { digitsLarge: 4, digitsSmall: 6, abbreviate: false }
   const formatPrice = (price: number) =>
     `${formatBillingCurrencyFromUSD(price, priceOpts)}/M`
@@ -217,7 +225,7 @@ function buildDetailSegments(
         )
       }
       segments.push({
-        text: `${t('Standard')} · ${formatPriceList(baseEntries, true)}`,
+        text: `${t('Standard')} · ${formatPriceList(baseEntries, true)}${recalculationSuffix}`,
       })
 
       if (hasAnyCacheTokens(other)) {

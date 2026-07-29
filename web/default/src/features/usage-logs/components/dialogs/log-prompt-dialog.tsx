@@ -113,7 +113,7 @@ export function LogPromptDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className='flex-1 overflow-hidden'>
+        <div className='min-h-0 flex-1 overflow-hidden'>
           {loading ? (
             <div className='flex items-center justify-center py-12'>
               <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary' />
@@ -124,8 +124,8 @@ export function LogPromptDialog({
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           ) : (
-            <div className='space-y-4 h-full flex flex-col'>
-              <ScrollArea className='flex-1'>
+            <div className='min-h-0 h-full space-y-4 flex flex-col'>
+              <ScrollArea className='min-h-0 flex-1'>
                 <div className='space-y-4'>
                   <div className='bg-muted/50 rounded-md border p-4 relative'>
                     <div className='text-xs font-semibold text-muted-foreground mb-2'>{t('Prompt')}</div>

@@ -357,8 +357,8 @@ test_poster_generate() {
     "posterType": 6,
     "platformType": "天猫",
     "languageType": "中文",
-    "detailPictureNumber": 2,
-    "modelEdition": 3,
+    "detailPictureNumber": 1,
+    "modelEdition": 2,
     "needText": true,
     "aspectRatio": "1:1"'"$file_field"'
   }
