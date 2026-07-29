@@ -1179,6 +1179,17 @@ export function processTokenChartData(
             },
           ],
         },
+        dimension: {
+          updateContent: (array: TooltipLineItem[]) => {
+            array.forEach((item) => {
+              const rawQuota = item.datum
+                ? Number(item.datum.rawQuota) || 0
+                : Number(item.value) || 0
+              item.value = (rawQuota / quotaPerUnit).toFixed(4)
+            })
+            return array
+          },
+        },
       },
       color: { specified: tokenColorMap },
       background: { fill: 'transparent' },

@@ -254,6 +254,9 @@ func migrateDB() error {
 	if err := migrateTokenModelLimitsToText(); err != nil {
 		return err
 	}
+	if err := ensureTokenSavePromptColumn(); err != nil {
+		return err
+	}
 
 	err := DB.AutoMigrate(
 		&Channel{},
@@ -304,6 +307,9 @@ func migrateDB() error {
 }
 
 func migrateDBFast() error {
+	if err := ensureTokenSavePromptColumn(); err != nil {
+		return err
+	}
 
 	var wg sync.WaitGroup
 
@@ -456,6 +462,19 @@ PRIMARY KEY (` + "`id`" + `)
 		if err := DB.Exec("ALTER TABLE `" + tableName + "` ADD COLUMN " + col.DDL).Error; err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// ensureTokenSavePromptColumn adds tokens.save_prompt for instances upgraded from older schemas.
+func ensureTokenSavePromptColumn() error {
+	tableName := "tokens"
+	columnName := "save_prompt"
+	if !DB.Migrator().HasTable(tableName) || DB.Migrator().HasColumn(&Token{}, columnName) {
+		return nil
+	}
+	if err := DB.Migrator().AddColumn(&Token{}, "SavePrompt"); err != nil {
+		return fmt.Errorf("failed to add %s.%s column: %w", tableName, columnName, err)
 	}
 	return nil
 }
