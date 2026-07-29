@@ -1181,11 +1181,17 @@ export function processTokenChartData(
         },
         dimension: {
           updateContent: (array: TooltipLineItem[]) => {
+            let totalQuota = 0
             array.forEach((item) => {
               const rawQuota = item.datum
                 ? Number(item.datum.rawQuota) || 0
                 : Number(item.value) || 0
+              totalQuota += rawQuota
               item.value = (rawQuota / quotaPerUnit).toFixed(4)
+            })
+            array.unshift({
+              key: tt('Total Consumption'),
+              value: (totalQuota / quotaPerUnit).toFixed(4),
             })
             return array
           },
