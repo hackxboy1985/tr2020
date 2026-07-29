@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 
@@ -29,8 +30,8 @@ const (
 )
 
 var (
-	promptLogChan     chan *PromptLog
-	promptLogOnce     sync.Once
+	promptLogChan      chan *PromptLog
+	promptLogOnce      sync.Once
 	promptLogFlushOnce sync.Once
 )
 
@@ -81,11 +82,10 @@ func truncateText(text string, maxBytes int) string {
 	if len(text) <= maxBytes {
 		return text
 	}
-	truncated := text[:maxBytes]
-	for len(truncated) > 0 && truncated[len(truncated)-1]&0xC0 == 0x80 {
-		truncated = truncated[:len(truncated)-1]
+	for maxBytes > 0 && !utf8.ValidString(text[:maxBytes]) {
+		maxBytes--
 	}
-	return truncated
+	return text[:maxBytes]
 }
 
 func truncatePromptText(text string) string {
