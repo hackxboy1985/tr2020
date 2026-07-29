@@ -95,16 +95,6 @@ GET /api/seedance/assets/:id
 
 ---
 
-## 3、删除素材
-
-```http
-DELETE /api/seedance/assets/:id
-```
-
-`:id` 同样支持本地 ID（数字）或上游 `asset-xxxxxxxx` 格式。
-
----
-
 ## 3、生成视频及在视频中引用素材
 
 素材状态为 `Active` 后，将 `Result.AssetRef`（即 `asset://asset-xxxxxxxx`）用于视频生成。
@@ -114,6 +104,39 @@ DELETE /api/seedance/assets/:id
 ```http
 POST /v1/video/generations
 ```
+
+**请求参数：**
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `model` | string | 是 | 模型名称，见下方模型列表 |
+| `prompt` | string | 是 | 文本描述 |
+| `seconds` | string | 否 | 视频时长（秒），字符串形式，如 `"5"` |
+| `duration` | int | 否 | 视频时长（秒），整数形式，与 `seconds` 二选一，`seconds` 优先 |
+| `images` | string[] | 否 | 参考图/参考视频 URL 列表，支持 `asset://asset-xxxxxxxx` 格式 |
+| `metadata` | object | 否 | 扩展参数，见下方 metadata 说明 |
+
+**metadata 可选参数：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `resolution` | string | 分辨率，如 `"720p"`、`"1080p"` |
+| `ratio` | string | 宽高比，如 `"16:9"`、`"9:16"`、`"1:1"` |
+| `generate_audio` | bool | 是否生成音频，默认 `false` |
+| `return_last_frame` | bool | 是否返回最后一帧 |
+| `seed` | int | 随机种子 |
+| `camera_fixed` | bool | 是否固定镜头 |
+| `watermark` | bool | 是否添加水印 |
+| `content` | array | Ark 原生 content 数组（音频/视频引用），与 `images` 配合使用 |
+
+**支持的模型：**
+
+| 模型名 | 说明 |
+|--------|------|
+| `doubao-seedance-2-0-260128` | Seedance 2.0 |
+| `doubao-seedance-2-0-fast-260128` | Seedance 2.0 Fast |
+| `doubao-seedance-2-0-mini-260615` | Seedance 2.0 Mini |
+
 
 ```json
 {
@@ -128,6 +151,32 @@ POST /v1/video/generations
   }
 }
 ```
+
+**提交成功响应：**
+
+```json
+{
+  "id": "task_xxxxxxxxxxxxxxxx",
+  "task_id": "task_xxxxxxxxxxxxxxxx",
+  "object": "video",
+  "model": "doubao-seedance-2-0-260128",
+  "status": "queued",
+  "progress": 0,
+  "created_at": 1700000000
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | string | 任务 ID，查询时使用 |
+| `task_id` | string | 同 `id`，兼容旧接口 |
+| `object` | string | 固定为 `"video"` |
+| `model` | string | 使用的模型名称 |
+| `status` | string | 任务状态，见状态说明 |
+| `progress` | int | 进度百分比（0-100） |
+| `created_at` | int64 | 创建时间（Unix 时间戳，秒） |
+
+---
 
 ### 格式二：Ark 原生格式
 
@@ -152,7 +201,7 @@ POST /v1/video/generations
 
 两种格式均支持，`content[]` 中媒体类型会自动补充 `role` 字段（`image_url` → `reference_image`，`audio_url` → `reference_audio`，`video_url` → `reference_video`）。
 
-### 4、查询视频任务
+## 4、查询视频任务
 
 ```http
 GET /v1/videos/:task_id
@@ -162,6 +211,83 @@ GET /v1/videos/:task_id
 curl http://open.mints-id.com/v1/videos/task_xxxxxxxx \
   -H "Authorization: Bearer sk-xxx"
 ```
+
+**响应示例（处理中）：**
+
+```json
+{
+  "id": "task_xxxxxxxxxxxxxxxx",
+  "task_id": "task_xxxxxxxxxxxxxxxx",
+  "object": "video",
+  "model": "doubao-seedance-2-0-260128",
+  "status": "in_progress",
+  "progress": 50,
+  "created_at": 1700000000
+}
+```
+
+**响应示例（完成）：**
+
+```json
+{
+  "id": "task_xxxxxxxxxxxxxxxx",
+  "task_id": "task_xxxxxxxxxxxxxxxx",
+  "object": "video",
+  "model": "doubao-seedance-2-0-260128",
+  "status": "completed",
+  "progress": 100,
+  "created_at": 1700000000,
+  "completed_at": 1700000120,
+  "metadata": {
+    "url": "https://cdn.example.com/output.mp4"
+  }
+}
+```
+
+**响应示例（失败）：**
+
+```json
+{
+  "id": "task_xxxxxxxxxxxxxxxx",
+  "object": "video",
+  "model": "doubao-seedance-2-0-260128",
+  "status": "failed",
+  "progress": 100,
+  "created_at": 1700000000,
+  "error": {
+    "code": "content_policy_violation",
+    "message": "内容违反使用政策"
+  }
+}
+```
+
+**响应字段说明：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | string | 任务 ID |
+| `task_id` | string | 同 `id`，兼容旧接口 |
+| `object` | string | 固定为 `"video"` |
+| `model` | string | 使用的模型名称 |
+| `status` | string | 任务状态，见下方状态说明 |
+| `progress` | int | 进度百分比（0-100） |
+| `created_at` | int64 | 创建时间（Unix 时间戳，秒） |
+| `completed_at` | int64 | 完成时间，仅完成后返回 |
+| `expires_at` | int64 | 过期时间，按需返回 |
+| `metadata.url` | string | 视频下载地址，`status=completed` 后可用 |
+| `error.code` | string | 错误码，`status=failed` 时返回 |
+| `error.message` | string | 错误信息，`status=failed` 时返回 |
+
+**任务状态说明：**
+
+| status | 说明 | 进度 |
+|--------|------|------|
+| `queued` | 排队中 | 0% |
+| `in_progress` | 生成中 | 50% |
+| `completed` | 已完成，`metadata.url` 可用 | 100% |
+| `failed` | 失败，`error` 字段有详情 | 100% |
+
+轮询直到 `status` 变为 `completed` 或 `failed`，建议间隔 5 秒。
 
 ---
 
