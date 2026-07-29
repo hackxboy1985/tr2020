@@ -422,5 +422,12 @@ func (a *TaskAdaptor) ConvertToOpenAIVideo(originTask *model.Task) ([]byte, erro
 		}
 	}
 
+	if dResp.Usage.TotalTokens > 0 {
+		openAIVideo.Usage = &dto.OpenAIVideoUsage{
+			CompletionTokens: dResp.Usage.CompletionTokens,
+			TotalTokens:      dResp.Usage.TotalTokens,
+		}
+	}
+
 	return common.Marshal(openAIVideo)
 }

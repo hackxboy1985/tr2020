@@ -14,20 +14,26 @@ const (
 )
 
 type OpenAIVideo struct {
-	ID                 string            `json:"id"`
-	TaskID             string            `json:"task_id,omitempty"` //兼容旧接口 待废弃
-	Object             string            `json:"object"`
-	Model              string            `json:"model"`
-	Status             string            `json:"status"` // Should use VideoStatus constants: VideoStatusQueued, VideoStatusInProgress, VideoStatusCompleted, VideoStatusFailed
-	Progress           int               `json:"progress"`
-	CreatedAt          int64             `json:"created_at"`
-	CompletedAt        int64             `json:"completed_at,omitempty"`
-	ExpiresAt          int64             `json:"expires_at,omitempty"`
-	Seconds            string            `json:"seconds,omitempty"`
-	Size               string            `json:"size,omitempty"`
-	RemixedFromVideoID string            `json:"remixed_from_video_id,omitempty"`
-	Error              *OpenAIVideoError `json:"error,omitempty"`
-	Metadata           map[string]any    `json:"metadata,omitempty"`
+	ID                 string             `json:"id"`
+	TaskID             string             `json:"task_id,omitempty"` //兼容旧接口 待废弃
+	Object             string             `json:"object"`
+	Model              string             `json:"model"`
+	Status             string             `json:"status"` // Should use VideoStatus constants: VideoStatusQueued, VideoStatusInProgress, VideoStatusCompleted, VideoStatusFailed
+	Progress           int                `json:"progress"`
+	CreatedAt          int64              `json:"created_at"`
+	CompletedAt        int64              `json:"completed_at,omitempty"`
+	ExpiresAt          int64              `json:"expires_at,omitempty"`
+	Seconds            string             `json:"seconds,omitempty"`
+	Size               string             `json:"size,omitempty"`
+	RemixedFromVideoID string             `json:"remixed_from_video_id,omitempty"`
+	Error              *OpenAIVideoError  `json:"error,omitempty"`
+	Metadata           map[string]any     `json:"metadata,omitempty"`
+	Usage              *OpenAIVideoUsage  `json:"usage,omitempty"`
+}
+
+type OpenAIVideoUsage struct {
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
 }
 
 func (m *OpenAIVideo) SetProgressStr(progress string) {
