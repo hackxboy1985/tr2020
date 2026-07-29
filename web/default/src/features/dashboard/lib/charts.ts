@@ -1180,18 +1180,23 @@ export function processTokenChartData(
           ],
         },
         dimension: {
+          title: {
+            value: (datumList: { Time?: string; rawQuota?: number }[]) => {
+              const list = Array.isArray(datumList) ? datumList : [datumList]
+              const time = list[0]?.Time ?? ''
+              const totalQuota = list.reduce(
+                (sum, item) => sum + (Number(item.rawQuota) || 0),
+                0
+              )
+              return `${time} ${(totalQuota / quotaPerUnit).toFixed(4)}`
+            },
+          },
           updateContent: (array: TooltipLineItem[]) => {
-            let totalQuota = 0
             array.forEach((item) => {
               const rawQuota = item.datum
                 ? Number(item.datum.rawQuota) || 0
                 : Number(item.value) || 0
-              totalQuota += rawQuota
               item.value = (rawQuota / quotaPerUnit).toFixed(4)
-            })
-            array.unshift({
-              key: tt('Total Consumption'),
-              value: (totalQuota / quotaPerUnit).toFixed(4),
             })
             return array
           },
