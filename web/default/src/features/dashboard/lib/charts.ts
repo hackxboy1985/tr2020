@@ -1180,16 +1180,36 @@ export function processTokenChartData(
           ],
         },
         dimension: {
-          title: {
-            value: (datumList: { Time?: string; rawQuota?: number }[]) => {
-              const list = Array.isArray(datumList) ? datumList : [datumList]
-              const time = list[0]?.Time ?? ''
-              const totalQuota = list.reduce(
-                (sum, item) => sum + (Number(item.rawQuota) || 0),
-                0
-              )
-              return `${time} ${(totalQuota / quotaPerUnit).toFixed(4)}`
-            },
+          updateTitle: (title, data?: unknown) => {
+            const dimensionInfo = Array.isArray(data)
+              ? (data[0] as {
+                  value?: string | number
+                  data?: Array<{
+                    datum?: { rawQuota?: number } | { rawQuota?: number }[]
+                  }>
+                })
+              : undefined
+            const totalQuota =
+              dimensionInfo?.data?.reduce((sum, item) => {
+                const datumList = Array.isArray(item.datum)
+                  ? item.datum
+                  : item.datum
+                    ? [item.datum]
+                    : []
+                return (
+                  sum +
+                  datumList.reduce(
+                    (itemSum, datum) =>
+                      itemSum + (Number(datum.rawQuota) || 0),
+                    0
+                  )
+                )
+              }, 0) || 0
+            const time = dimensionInfo?.value ?? title?.value ?? ''
+            return {
+              ...title,
+              value: `<span style="display:flex;justify-content:space-between;gap:24px;min-width:220px"><span>${time}</span><span style="text-align:right">${(totalQuota / quotaPerUnit).toFixed(4)}</span></span>`,
+            }
           },
           updateContent: (array: TooltipLineItem[]) => {
             array.forEach((item) => {
