@@ -123,9 +123,12 @@ func taskAdjustTokenQuota(ctx context.Context, task *model.Task, delta int) {
 	}
 }
 
-// TruncateBody 截断请求/响应体，超过 2046 字节时截断并追加省略标记。
+// TruncateBody 截断请求/响应体，超过 SavePromptBodyMaxBytes 字节时截断并追加省略标记。
 func TruncateBody(s string) string {
-	const maxLen = 2046
+	maxLen := common.SavePromptBodyMaxBytes
+	if maxLen <= 0 {
+		maxLen = 2046
+	}
 	if len(s) <= maxLen {
 		return s
 	}
