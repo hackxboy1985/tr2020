@@ -171,7 +171,7 @@ func taskModelName(task *model.Task) string {
 
 // RefundTaskQuota 统一的任务失败退款逻辑。
 // 当异步任务失败时，将预扣的 quota 退还给用户（支持钱包和订阅），并退还令牌额度。
-func RefundTaskQuota(ctx context.Context, task *model.Task, reason string) {
+func RefundTaskQuota(ctx context.Context, task *model.Task, reason string, finalResponseBody ...[]byte) {
 	quota := task.Quota
 	if quota == 0 {
 		return
@@ -188,6 +188,9 @@ func RefundTaskQuota(ctx context.Context, task *model.Task, reason string) {
 
 	// 3. 记录日志
 	other := taskBillingOther(task)
+	if len(finalResponseBody) > 0 && len(finalResponseBody[0]) > 0 {
+		other["response_body"] = TruncateBody(string(finalResponseBody[0]))
+	}
 	other["task_id"] = task.TaskID
 	other["reason"] = reason
 	if upstreamTaskID := task.GetUpstreamTaskID(); upstreamTaskID != "" {
@@ -210,7 +213,7 @@ func RefundTaskQuota(ctx context.Context, task *model.Task, reason string) {
 // RecalculateTaskQuota 通用的异步差额结算。
 // actualQuota 是任务完成后的实际应扣额度，与预扣额度 (task.Quota) 做差额结算。
 // reason 用于日志记录（例如 "token重算" 或 "adaptor调整"）。
-func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int, reason string) {
+func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int, reason string, finalResponseBody ...[]byte) {
 	if actualQuota <= 0 {
 		return
 	}
@@ -254,6 +257,9 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 		logQuota = quotaDelta // 负数，sum(quota) 时自动相减，避免用量统计双计
 	}
 	other := taskBillingOther(task)
+	if len(finalResponseBody) > 0 && len(finalResponseBody[0]) > 0 {
+		other["response_body"] = TruncateBody(string(finalResponseBody[0]))
+	}
 	other["task_id"] = task.TaskID
 	other["pre_consumed_quota"] = preConsumedQuota
 	other["actual_quota"] = actualQuota
@@ -277,7 +283,7 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 // RecalculateTaskQuotaByTokens 根据实际 token 消耗重新计费（异步差额结算）。
 // 当任务成功且返回了 totalTokens 时，根据模型倍率和分组倍率重新计算实际扣费额度，
 // 与预扣费的差额进行补扣或退还。支持钱包和订阅计费来源。
-func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTokens int) {
+func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTokens int, finalResponseBody ...[]byte) {
 	if totalTokens <= 0 {
 		return
 	}
@@ -327,5 +333,5 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 	actualQuota := int(float64(totalTokens) * modelRatio * finalGroupRatio * otherMultiplier)
 
 	reason := fmt.Sprintf("token重算：tokens=%d, modelRatio=%.2f, groupRatio=%.2f, otherMultiplier=%.4f", totalTokens, modelRatio, finalGroupRatio, otherMultiplier)
-	RecalculateTaskQuota(ctx, task, actualQuota, reason)
+	RecalculateTaskQuota(ctx, task, actualQuota, reason, finalResponseBody...)
 }

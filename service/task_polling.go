@@ -492,11 +492,10 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 	}
 
 	if shouldSettle {
-		settleTaskBillingOnComplete(ctx, adaptor, task, taskResult)
-		recordTaskCompletionLog(task, responseBody)
+		settleTaskBillingOnComplete(ctx, adaptor, task, taskResult, responseBody)
 	}
 	if shouldRefund {
-		RefundTaskQuota(ctx, task, task.FailReason)
+		RefundTaskQuota(ctx, task, task.FailReason, responseBody)
 	}
 
 	return nil
@@ -568,21 +567,31 @@ func recordTaskCompletionLog(task *model.Task, responseBody []byte) {
 //
 //  2. taskResult.TotalTokens > 0 → 按 token 重算
 //  3. 都不满足 → 保持预扣额度不变
-func settleTaskBillingOnComplete(ctx context.Context, adaptor TaskPollingAdaptor, task *model.Task, taskResult *relaycommon.TaskInfo) {
-	// 0. 按次计费的任务不做差额结算
+func settleTaskBillingOnComplete(ctx context.Context, adaptor TaskPollingAdaptor, task *model.Task, taskResult *relaycommon.TaskInfo, responseBody []byte) {
+	// 0. 按次计费的任务不做差额结算，仍记录最终查询结果
 	if bc := task.PrivateData.BillingContext; bc != nil && bc.PerCallBilling {
 		logger.LogInfo(ctx, fmt.Sprintf("任务 %s 按次计费，跳过差额结算", task.TaskID))
+		recordTaskCompletionLog(task, responseBody)
 		return
 	}
+
+	preQuota := task.Quota
 	// 1. 优先让 adaptor 决定最终额度
 	if actualQuota := adaptor.AdjustBillingOnComplete(task, taskResult); actualQuota > 0 {
-		RecalculateTaskQuota(ctx, task, actualQuota, "adaptor计费调整")
+		RecalculateTaskQuota(ctx, task, actualQuota, "adaptor计费调整", responseBody)
+		if task.Quota == preQuota {
+			recordTaskCompletionLog(task, responseBody)
+		}
 		return
 	}
 	// 2. 回退到 token 重算
 	if taskResult.TotalTokens > 0 {
-		RecalculateTaskQuotaByTokens(ctx, task, taskResult.TotalTokens)
+		RecalculateTaskQuotaByTokens(ctx, task, taskResult.TotalTokens, responseBody)
+		if task.Quota == preQuota {
+			recordTaskCompletionLog(task, responseBody)
+		}
 		return
 	}
-	// 3. 无调整，保持预扣额度
+	// 3. 无调整，保持预扣额度，记录最终查询结果
+	recordTaskCompletionLog(task, responseBody)
 }
