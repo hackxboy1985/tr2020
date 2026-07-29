@@ -42,6 +42,7 @@ import {
   createChannelColumn,
   createProgressColumn,
 } from './column-helpers'
+import { getChannelTypeLabel } from '@/features/channels/lib/channel-utils'
 
 function parseTaskData(data: unknown): unknown[] {
   if (Array.isArray(data)) return data
@@ -199,7 +200,16 @@ export function useTaskLogsColumns(isAdmin: boolean): ColumnDef<TaskLog>[] {
               </Link>
             </div>
             <span className='text-muted-foreground/60 truncate text-[11px]'>
-              {t(log.platform)} · {t(taskActionMapper.getLabel(log.action))}
+              {(() => {
+                const platformNum = parseInt(log.platform, 10)
+                const platformLabel = !isNaN(platformNum)
+                  ? getChannelTypeLabel(platformNum)
+                  : t(log.platform)
+                const actionLabel = !isNaN(platformNum)
+                  ? t('Task')
+                  : t(taskActionMapper.getLabel(log.action))
+                return `${platformLabel} · ${actionLabel}`
+              })()}
             </span>
           </div>
         )
