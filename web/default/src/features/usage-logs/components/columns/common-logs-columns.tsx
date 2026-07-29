@@ -130,7 +130,10 @@ function buildDetailSegments(
 
   if (!other) return []
 
-  if (log.quota === 0 && other.is_task && other.response_body) {
+  if (
+    other.task_log_source === 'polling_result' ||
+    (log.quota === 0 && other.task_id && other.response_body)
+  ) {
     return [{ text: t('Query Result') }]
   }
 
