@@ -542,6 +542,9 @@ func recordTaskCompletionLog(task *model.Task, responseBody []byte) {
 	}
 	other := taskBillingOther(task)
 	other["task_id"] = task.TaskID
+	if task.Platform == constant.TaskPlatform(fmt.Sprint(constant.ChannelTypePoster)) {
+		other["request_path"] = "/openapi/v1/poster/queryTaskResult"
+	}
 	if upstreamTaskID := task.GetUpstreamTaskID(); upstreamTaskID != "" {
 		other["upstream_task_id"] = upstreamTaskID
 	}
@@ -551,7 +554,7 @@ func recordTaskCompletionLog(task *model.Task, responseBody []byte) {
 	model.RecordTaskBillingLog(model.RecordTaskBillingLogParams{
 		UserId:    task.UserId,
 		LogType:   model.LogTypeConsume,
-		Content:   "任务完成",
+		Content:   "查询结果",
 		ChannelId: task.ChannelId,
 		ModelName: taskModelName(task),
 		Quota:     0,

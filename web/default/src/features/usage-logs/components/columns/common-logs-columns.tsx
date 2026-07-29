@@ -130,6 +130,10 @@ function buildDetailSegments(
 
   if (!other) return []
 
+  if (log.quota === 0 && other.upstream_task_id && other.response_body) {
+    return [{ text: t('Query Result') }]
+  }
+
   const segments: DetailSegment[] = []
 
   const priceOpts = { digitsLarge: 4, digitsSmall: 6, abbreviate: false }
