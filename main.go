@@ -99,6 +99,8 @@ func main() {
 
 	// 热更新配置
 	go model.SyncOptions(common.SyncFrequency)
+	// 日志文件自动清理（保留 30 天）
+	logger.StartLogCleaner(30)
 
 	// 数据看板
 	go model.UpdateQuotaData()

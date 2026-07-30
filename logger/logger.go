@@ -175,6 +175,44 @@ func logHelper(ctx context.Context, level string, msg string) {
 	}
 }
 
+// StartLogCleaner 每天凌晨清理超过 retentionDays 天的日志文件。
+// 应在程序启动时调用一次（go StartLogCleaner(30)）。
+func StartLogCleaner(retentionDays int) {
+	if *common.LogDir == "" || retentionDays <= 0 {
+		return
+	}
+	cleanOldLogs(retentionDays)
+	go func() {
+		for {
+			now := time.Now()
+			next := time.Date(now.Year(), now.Month(), now.Day()+1, 3, 0, 0, 0, now.Location())
+			time.Sleep(time.Until(next))
+			cleanOldLogs(retentionDays)
+		}
+	}()
+}
+
+func cleanOldLogs(retentionDays int) {
+	dir := *common.LogDir
+	cutoff := time.Now().AddDate(0, 0, -retentionDays)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().Before(cutoff) {
+			_ = os.Remove(filepath.Join(dir, entry.Name()))
+		}
+	}
+}
+
 func LogQuota(quota int) string {
 	// 新逻辑：根据额度展示类型输出
 	q := float64(quota)
