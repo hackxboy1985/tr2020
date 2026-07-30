@@ -265,7 +265,7 @@ func updateOptionMap(key string, value string) (err error) {
 	}
 
 	// 处理传统配置项...
-	if strings.HasSuffix(key, "Permission") {
+	if strings.HasSuffix(key, "Permission") || key == "SavePromptBodyMaxBytes" {
 		intValue, _ := strconv.Atoi(value)
 		switch key {
 		case "FileUploadPermission":
@@ -276,6 +276,10 @@ func updateOptionMap(key string, value string) (err error) {
 			common.ImageUploadPermission = intValue
 		case "ImageDownloadPermission":
 			common.ImageDownloadPermission = intValue
+		case "SavePromptBodyMaxBytes":
+			if intValue > 0 {
+				common.SavePromptBodyMaxBytes = intValue
+			}
 		}
 	}
 	if strings.HasSuffix(key, "Enabled") || key == "DefaultCollapseSidebar" || key == "DefaultUseAutoGroup" || key == "SMTPForceAuthLogin" {
@@ -313,10 +317,6 @@ func updateOptionMap(key string, value string) (err error) {
 			common.SavePromptEnabled = boolValue
 		case "SavePromptUserVisible":
 			common.SavePromptUserVisible = boolValue
-		case "SavePromptBodyMaxBytes":
-			if intVal, err := strconv.Atoi(value); err == nil && intVal > 0 {
-				common.SavePromptBodyMaxBytes = intVal
-			}
 		case "DisplayInCurrencyEnabled":
 			// 兼容旧字段：同步到新配置 general_setting.quota_display_type（运行时生效）
 			// true -> USD, false -> TOKENS

@@ -527,6 +527,13 @@ export function DetailsDialog(props: DetailsDialogProps) {
                   mono
                 />
               )}
+              {other?.task_id && !isRefund && (
+                <DetailRow
+                  label={t('Task ID')}
+                  value={other.task_id}
+                  mono
+                />
+              )}
               {!isRefund && other?.upstream_task_id && (
                 <DetailRow
                   label={t('Upstream Task ID')}
