@@ -405,16 +405,6 @@ function PriceSection(props: {
   ]
 
   if (dynamicSummary) {
-    // v2: 按次计费 — 直接用 DynamicPricingBreakdown 渲染，它已内置 per-call 支持
-    if ((props.model.billing_expr || '').trim().startsWith('v2:')) {
-      return (
-        <section>
-          <SectionTitle>{t('Base Price')}</SectionTitle>
-          <DynamicPricingBreakdown billingExpr={props.model.billing_expr} />
-        </section>
-      )
-    }
-
     if (dynamicSummary.isSpecialExpression) {
       return (
         <section>
