@@ -480,6 +480,58 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
           )
         },
         meta: { label: t('User') },
+      },
+      {
+        accessorKey: 'ip',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title={t('IP Address')} />
+        ),
+        cell: function IpCell({ row }) {
+          const { sensitiveVisible } = useUsageLogsContext()
+          const ip = row.original.ip
+          if (!ip) return <span className='text-muted-foreground/40'>—</span>
+
+          return (
+            <span className='text-muted-foreground font-mono text-xs'>
+              {sensitiveVisible ? ip : '••••'}
+            </span>
+          )
+        },
+        meta: { label: t('IP Address') },
+        size: 120,
+      },
+      {
+        id: 'retry_chain',
+        accessorFn: (row) => parseLogOther(row.other)?.admin_info?.use_channel?.join(' → ') || '',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title={t('Retry Chain')} />
+        ),
+        cell: function RetryChainCell({ row }) {
+          const other = parseLogOther(row.original.other)
+          const useChannel = other?.admin_info?.use_channel
+          const channelChain =
+            useChannel && useChannel.length > 0 ? useChannel.join(' → ') : ''
+          if (!channelChain) return <span className='text-muted-foreground/40'>—</span>
+
+          return (
+            <TooltipProvider delay={300}>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className='text-muted-foreground max-w-[160px] truncate font-mono text-xs' />
+                  }
+                >
+                  {channelChain}
+                </TooltipTrigger>
+                <TooltipContent side='top' className='max-w-xs break-all font-mono'>
+                  {channelChain}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )
+        },
+        meta: { label: t('Retry Chain') },
+        size: 160,
       }
     )
   }
