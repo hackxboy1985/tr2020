@@ -64,7 +64,7 @@ import { parseTags } from '../lib/filters'
 import { getAvailableGroups, isTokenBasedModel } from '../lib/model-helpers'
 import { inferModelMetadata } from '../lib/model-metadata'
 import { formatFixedPrice, formatGroupPrice } from '../lib/price'
-import { tryParsePerCallConfig } from '../lib/tier-expr'
+import { tryParsePerCallConfig, type PerCallMultiplier } from '../lib/tier-expr'
 import type {
   Modality,
   ModelCapability,
@@ -405,6 +405,16 @@ function PriceSection(props: {
   ]
 
   if (dynamicSummary) {
+    // v2: 按次计费 — 直接用 DynamicPricingBreakdown 渲染，它已内置 per-call 支持
+    if ((props.model.billing_expr || '').trim().startsWith('v2:')) {
+      return (
+        <section>
+          <SectionTitle>{t('Base Price')}</SectionTitle>
+          <DynamicPricingBreakdown billingExpr={props.model.billing_expr} />
+        </section>
+      )
+    }
+
     if (dynamicSummary.isSpecialExpression) {
       return (
         <section>
@@ -634,6 +644,14 @@ function GroupPricingSection(props: {
     return types
   }, [props.model, t])
 
+  const mulSuffix = (mul: PerCallMultiplier | undefined): string => {
+    if (!mul || mul.op === 'none') return ''
+    const opSym = mul.op === '*' ? '×' : mul.op === '/' ? '÷' : mul.op
+    if (mul.fieldType === 'number') return ` ${opSym}${mul.field}`
+    const short = mul.field.split('.').pop() || mul.field
+    return ` ${opSym}${short}`
+  }
+
   if (availableGroups.length === 0) {
     return (
       <section>
@@ -686,7 +704,7 @@ function GroupPricingSection(props: {
                                 priceRate: props.priceRate,
                                 usdExchangeRate: props.usdExchangeRate,
                                 groupRatioMultiplier: 1,
-                              })}/call
+                              })}{mulSuffix(rule.multiplier)}/call
                             </span>
                           </div>
                         ))}
@@ -699,7 +717,7 @@ function GroupPricingSection(props: {
                               priceRate: props.priceRate,
                               usdExchangeRate: props.usdExchangeRate,
                               groupRatioMultiplier: 1,
-                            })}/call
+                            })}{mulSuffix(perCallConfig.fallbackMultiplier)}/call
                           </span>
                         </div>
                       </>

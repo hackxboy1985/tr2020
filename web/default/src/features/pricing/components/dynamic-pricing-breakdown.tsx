@@ -48,7 +48,17 @@ import {
   type RequestRuleGroup,
   type TierCondition,
 } from '../lib/billing-expr'
-import { tryParsePerCallConfig } from '../lib/tier-expr'
+import { tryParsePerCallConfig, type PerCallMultiplier } from '../lib/tier-expr'
+
+/** 将乘数配置渲染为简短后缀，如 "× N" */
+function mulSuffix(mul: PerCallMultiplier | undefined): string {
+  if (!mul || mul.op === 'none') return ''
+  const opSym = mul.op === '*' ? '×' : mul.op === '/' ? '÷' : mul.op
+  if (mul.fieldType === 'number') return ` ${opSym}${mul.field}`
+  // param 类型：取路径最后一段
+  const short = mul.field.split('.').pop() || mul.field
+  return ` ${opSym}${short}`
+}
 
 type DynamicPricingBreakdownProps = {
   billingExpr: string | null | undefined
@@ -210,7 +220,7 @@ export function DynamicPricingBreakdown({
                 </div>
               </div>
               <Badge variant='secondary' className='shrink-0 bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300 font-mono'>
-                {symbol}{(rule.pricePerCall * rate).toFixed(4)}/call
+                {symbol}{(rule.pricePerCall * rate).toFixed(4)}{mulSuffix(rule.multiplier)}/call
               </Badge>
             </div>
           ))}
@@ -218,7 +228,7 @@ export function DynamicPricingBreakdown({
           <div className='flex items-center justify-between gap-3 rounded-md border px-3 py-2'>
             <span className='text-muted-foreground text-xs'>{t('Fallback price')} — {t('charged when no rule matches')}</span>
             <Badge variant='outline' className='shrink-0 font-mono'>
-              {symbol}{(perCallConfig.fallbackPrice * rate).toFixed(4)}/call
+              {symbol}{(perCallConfig.fallbackPrice * rate).toFixed(4)}{mulSuffix(perCallConfig.fallbackMultiplier)}/call
             </Badge>
           </div>
         </div>

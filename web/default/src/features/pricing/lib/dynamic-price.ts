@@ -176,7 +176,10 @@ export function getDynamicPricingSummary(
     tier,
     tierCount: tiers.length,
     hasRequestRules: hasDynamicRequestRules(model),
-    isSpecialExpression: rawExpression.trim().length > 0 && tiers.length === 0,
+    isSpecialExpression:
+      rawExpression.trim().length > 0 &&
+      tiers.length === 0 &&
+      !rawExpression.trim().startsWith('v2:'),
     rawExpression,
     entries,
     primaryEntries: entries.filter((entry) =>
