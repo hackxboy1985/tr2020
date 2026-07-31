@@ -292,6 +292,8 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 					model.RecordLogWithQuota(project.UserId, model.LogTypeConsume, delta, project.VideoModel, project.ChannelId, project.TokenId, project.TokenName,
 						fmt.Sprintf("广告任务 %d 结算补扣积分 %d（预扣 %.2f元，实扣 %.2f元，上游 moneyNet=%.2f）",
 							project.Id, delta, common.QuotaToYuan(project.PreDeductedQuota), common.QuotaToYuan(realQuota), moneyNet))
+					model.UpdateUserUsedQuota(project.UserId, delta)
+					model.UpdateChannelUsedQuota(project.ChannelId, delta)
 				}
 			} else if delta < 0 {
 				// 退款：上游实际消耗 < 预扣
@@ -302,6 +304,8 @@ func GetProject(ctx context.Context, projectId int64, userId int, isAdmin bool) 
 					model.RecordLogWithQuota(project.UserId, model.LogTypeRefund, -refundQuota, project.VideoModel, project.ChannelId, project.TokenId, project.TokenName,
 						fmt.Sprintf("广告任务 %d 结算退还积分 %d（预扣 %.2f元，实扣 %.2f元，上游 moneyNet=%.2f）",
 							project.Id, refundQuota, common.QuotaToYuan(project.PreDeductedQuota), common.QuotaToYuan(realQuota), moneyNet))
+					model.UpdateUserUsedQuota(project.UserId, -refundQuota)
+					model.UpdateChannelUsedQuota(project.ChannelId, -refundQuota)
 				}
 			} else {
 				// 零差额：实际消耗 = 预扣，无需调整积分，仅记录结算日志

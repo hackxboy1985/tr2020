@@ -207,6 +207,10 @@ func CreateVideoProject(c *gin.Context) {
 			"response_body":          string(rawResp),
 		},
 	})
+	if preDeductQuota > 0 {
+		model.UpdateUserUsedQuotaAndRequestCount(userId, preDeductQuota)
+		model.UpdateChannelUsedQuota(project.ChannelId, preDeductQuota)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"code": 200,
