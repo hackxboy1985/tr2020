@@ -215,7 +215,7 @@ func TestRefundTaskQuota_Wallet(t *testing.T) {
 	log := getLastLog(t)
 	require.NotNil(t, log)
 	assert.Equal(t, model.LogTypeRefund, log.Type)
-	assert.Equal(t, preConsumed, log.Quota)
+	assert.Equal(t, -preConsumed, log.Quota)
 	assert.Equal(t, "test-model", log.ModelName)
 }
 
@@ -356,7 +356,7 @@ func TestRecalculate_NegativeDelta(t *testing.T) {
 	log := getLastLog(t)
 	require.NotNil(t, log)
 	assert.Equal(t, model.LogTypeRefund, log.Type)
-	assert.Equal(t, preConsumed-actualQuota, log.Quota)
+	assert.Equal(t, actualQuota-preConsumed, log.Quota)
 }
 
 func TestRecalculate_ZeroDelta(t *testing.T) {

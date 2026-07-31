@@ -189,7 +189,11 @@ func RefundTaskQuota(ctx context.Context, task *model.Task, reason string, final
 	// 2. 退还令牌额度
 	taskAdjustTokenQuota(ctx, task, -quota)
 
-	// 3. 记录日志
+	// 3. 减少用户已用配额、渠道已用配额
+	model.UpdateUserUsedQuota(task.UserId, -quota)
+	model.UpdateChannelUsedQuota(task.ChannelId, -quota)
+
+	// 4. 记录日志
 	other := taskBillingOther(task)
 	if len(finalResponseBody) > 0 && len(finalResponseBody[0]) > 0 {
 		other["response_body"] = TruncateBody(string(finalResponseBody[0]))
@@ -253,11 +257,13 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 	if quotaDelta > 0 {
 		logType = model.LogTypeConsume
 		logQuota = quotaDelta
-		model.UpdateUserUsedQuotaAndRequestCount(task.UserId, quotaDelta)
+		model.UpdateUserUsedQuota(task.UserId, quotaDelta)
 		model.UpdateChannelUsedQuota(task.ChannelId, quotaDelta)
 	} else {
 		logType = model.LogTypeRefund
 		logQuota = quotaDelta // 负数，sum(quota) 时自动相减，避免用量统计双计
+		model.UpdateUserUsedQuota(task.UserId, quotaDelta)
+		model.UpdateChannelUsedQuota(task.ChannelId, quotaDelta)
 	}
 	other := taskBillingOther(task)
 	if len(finalResponseBody) > 0 && len(finalResponseBody[0]) > 0 {
