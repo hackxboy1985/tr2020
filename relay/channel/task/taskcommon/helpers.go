@@ -95,3 +95,7 @@ func (BaseBilling) AdjustBillingOnSubmit(_ *relaycommon.RelayInfo, _ []byte) map
 func (BaseBilling) AdjustBillingOnComplete(_ *model.Task, _ *relaycommon.TaskInfo) int {
 	return 0
 }
+
+// InjectBillingParams is a no-op. Override in adaptors that need to inject
+// transformed parameters into BillingRequestInput before price calculation.
+func (BaseBilling) InjectBillingParams(_ *gin.Context, _ *relaycommon.RelayInfo) {}

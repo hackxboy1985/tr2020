@@ -11,6 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
@@ -26,6 +27,11 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 	imageReq, ok := info.Request.(*dto.ImageRequest)
 	if !ok {
 		return types.NewErrorWithStatusCode(fmt.Errorf("invalid request type, expected dto.ImageRequest, got %T", info.Request), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+	}
+
+	// RR is an async image channel: hand off to the task submit pipeline.
+	if info.ChannelType == constant.ChannelTypeRR {
+		return handleRRImageTask(c, info, imageReq)
 	}
 
 	request, err := common.DeepCopy(imageReq)
@@ -168,5 +174,95 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 	}
 
 	service.PostTextConsumeQuota(c, info, usage.(*dto.Usage), logContent)
+	return nil
+}
+
+// convertImageRequestToTaskSubmitReq converts an OpenAI ImageRequest to a TaskSubmitReq
+// so that the async task pipeline can process it.
+func convertImageRequestToTaskSubmitReq(req *dto.ImageRequest) relaycommon.TaskSubmitReq {
+	taskReq := relaycommon.TaskSubmitReq{
+		Prompt: req.Prompt,
+		Size:   req.Size,
+		Mode:   req.Quality, // quality maps to Mode field; RR adaptor reads it via req.Mode
+	}
+	// Extract image URLs for image-to-image requests (user passes "images": [...])
+	if len(req.Images) > 0 {
+		var imgs []string
+		if err := common.Unmarshal(req.Images, &imgs); err == nil {
+			taskReq.Images = imgs
+		}
+	}
+	return taskReq
+}
+
+// handleRRImageTask handles image generation for the RR async channel.
+// It refunds the sync pre-consume done by Relay, then runs the full async task pipeline.
+func handleRRImageTask(c *gin.Context, info *relaycommon.RelayInfo, imageReq *dto.ImageRequest) *types.NewAPIError {
+	// Refund the pre-consume that Relay's sync billing path already charged.
+	// RelayTaskSubmit will perform its own billing (ModelPriceHelperPerCall path).
+	if info.Billing != nil {
+		info.Billing.Refund(c)
+		info.Billing = nil
+	}
+
+	// Convert and store task request in context so ValidateBasicTaskRequest (inside
+	// RelayTaskSubmit → ValidateRequestAndSetAction) can read it.
+	taskReq := convertImageRequestToTaskSubmitReq(imageReq)
+	c.Set("task_request", taskReq)
+
+	result, taskErr := RelayTaskSubmit(c, info)
+	if taskErr != nil {
+		return types.NewErrorWithStatusCode(taskErr.Error, types.ErrorCodeBadResponseStatusCode, taskErr.StatusCode)
+	}
+
+	// Settle billing and log consumption (mirrors RelayTask controller).
+	if settleErr := service.SettleBilling(c, info, result.Quota); settleErr != nil {
+		common.SysError("settle RR image task billing error: " + settleErr.Error())
+	}
+
+	// Store request body for logging.
+	if bs, bsErr := common.GetBodyStorage(c); bsErr == nil {
+		if _, seekErr := bs.Seek(0, io.SeekStart); seekErr == nil {
+			if bodyBytes, readErr := io.ReadAll(bs); readErr == nil && len(bodyBytes) > 0 {
+				c.Set(string(constant.ContextKeyVideoRequestBody), string(bodyBytes))
+			}
+		}
+	}
+	if taskReq.Prompt != "" {
+		c.Set(string(constant.ContextKeyPromptToSave), taskReq.Prompt)
+	}
+
+	service.LogTaskConsumption(c, info)
+
+	task := model.InitTask(result.Platform, info)
+	task.PrivateData.UpstreamTaskID = result.UpstreamTaskID
+	task.PrivateData.BillingSource = info.BillingSource
+	task.PrivateData.SubscriptionId = info.SubscriptionId
+	task.PrivateData.TokenId = info.TokenId
+	task.PrivateData.BillingContext = &model.TaskBillingContext{
+		ModelPrice:      info.PriceData.ModelPrice,
+		GroupRatio:      info.PriceData.GroupRatioInfo.GroupRatio,
+		ModelRatio:      info.PriceData.ModelRatio,
+		OtherRatios:     info.PriceData.OtherRatios,
+		OriginModelName: info.OriginModelName,
+		PerCallBilling:  info.PriceData.UsePrice,
+	}
+	task.Quota = result.Quota
+	task.Data = result.TaskData
+	task.Action = info.Action
+	task.Properties.Input = taskReq.Prompt
+	if rb := c.GetString(string(constant.ContextKeyVideoRequestBody)); rb != "" {
+		task.PrivateData.RequestBody = service.TruncateBody(rb)
+	}
+	if len(result.TaskData) > 0 {
+		task.PrivateData.SubmitRespBody = service.TruncateBody(string(result.TaskData))
+	}
+	if insertErr := task.Insert(); insertErr != nil {
+		common.SysError("insert RR image task error: " + insertErr.Error())
+	}
+
+	logger.LogInfo(c, fmt.Sprintf("RR image task submitted: taskId=%s upstreamId=%s quota=%d",
+		info.PublicTaskID, result.UpstreamTaskID, result.Quota))
+
 	return nil
 }

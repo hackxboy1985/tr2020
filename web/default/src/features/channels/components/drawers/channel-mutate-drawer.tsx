@@ -101,6 +101,7 @@ import {
 } from '@/components/drawer-layout'
 import { JsonEditor } from '@/components/json-editor'
 import { PosterPathConfigEditor } from '../poster-path-config-editor'
+import { RRPathConfigEditor } from '../rr-path-config-editor'
 import { MultiSelect } from '@/components/multi-select'
 import {
   SecureVerificationDialog,
@@ -1850,6 +1851,26 @@ export function ChannelMutateDrawer({
                             <FormLabel>{t('Upstream Path Config')}</FormLabel>
                             <FormControl>
                               <PosterPathConfigEditor
+                                value={field.value ?? ''}
+                                onChange={field.onChange}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+
+                    {/* RR (type 59) - upstream path + TTL config */}
+                    {currentType === 59 && (
+                      <FormField
+                        control={form.control}
+                        name='other'
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('Upstream Path Config')}</FormLabel>
+                            <FormControl>
+                              <RRPathConfigEditor
                                 value={field.value ?? ''}
                                 onChange={field.onChange}
                               />

@@ -176,6 +176,9 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 		info.PublicTaskID = model.GenerateTaskID()
 	}
 
+	// 3.5 允许适配器在价格计算前注入转换后的参数（供计费表达式 param() 使用）
+	adaptor.InjectBillingParams(c, info)
+
 	// 4. 价格计算：基础模型价格
 	info.OriginModelName = modelName
 	priceData, err := helper.ModelPriceHelperPerCall(c, info)

@@ -449,6 +449,12 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 			// No URL from adaptor — construct proxy URL using public task ID
 			task.PrivateData.ResultURL = taskcommon.BuildProxyURL(task.TaskID)
 		}
+		// 计算 URL 有效期（仅对设置了 TTL 的渠道类型）
+		if task.PrivateData.ExpireAt == 0 {
+			if ttlHours := ch.GetOtherSettings().RRUrlTTLHours; ttlHours > 0 {
+				task.PrivateData.ExpireAt = now + int64(ttlHours)*3600
+			}
+		}
 		shouldSettle = true
 	case model.TaskStatusFailure:
 		logger.LogJson(ctx, fmt.Sprintf("Task %s failed", taskId), task)

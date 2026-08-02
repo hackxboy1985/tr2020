@@ -38,8 +38,14 @@ type TaskAdaptor interface {
 
 	// ── Billing ──────────────────────────────────────────────────────
 
+	// InjectBillingParams is called before price calculation to allow the adaptor
+	// to inject transformed parameters (e.g. size→resolution) into
+	// info.BillingRequestInput, making them available to billing expressions via param().
+	// BaseBilling provides a no-op default; override only when needed.
+	InjectBillingParams(c *gin.Context, info *relaycommon.RelayInfo)
+
 	// EstimateBilling returns OtherRatios for pre-charge based on user request.
-	// Called after ValidateRequestAndSetAction, before price calculation.
+	// Called after price calculation (ModelPriceHelperPerCall).
 	// Adaptors should extract duration, resolution, etc. from the parsed request
 	// and return them as ratio multipliers (e.g. {"seconds": 5, "size": 1.666}).
 	// Return nil to use the base model price without extra ratios.

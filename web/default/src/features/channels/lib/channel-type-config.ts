@@ -147,6 +147,18 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
         '可选，覆盖上游接口路径。\n\n场景一：批量替换版本号\n{"poster_api_version":"v2"}\n所有 /v1/ 自动替换为 /v2/\n\n场景二：精确覆盖某个模型路径\n{"poster_endpoints":{"poster-matting":"/openapi/v2/ai/matting_pro"}}\n\n场景三：两者组合（endpoints 优先级更高）\n{"poster_api_version":"v2","poster_endpoints":{"poster-matting":"/openapi/v2/ai/matting_pro"}}\n\n默认路径：\nposter-extension        → /openapi/v1/ai/extension\nposter-translate        → /openapi/v1/ai/translate\nposter-enlarge          → /openapi/v1/ai/enlarge\nposter-matting          → /openapi/v1/ai/matting\nposter-enhance          → /openapi/v1/ai/enhance\nposter-partial-redraw   → /openapi/v1/ai/partialRedrawing\nposter-scene-replace    → /openapi/v1/ai/sceneReplace\nposter-product-replace  → /openapi/v1/ai/productReplace\nposter-color-change     → /openapi/v1/ai/colorChange\nposter-assisted         → /openapi/v1/ai/assisted\nposter-generate         → /openapi/v1/poster/generateAsync\nposter-free-creation    → /openapi/v1/poster/allAroundCreation',
     },
   },
+  59: {
+    id: 59,
+    name: CHANNEL_TYPES[59],
+    icon: 'openai',
+    hints: {
+      baseUrl: 'Default: https://www.runninghub.ai',
+      key: 'RR API Key (Authorization: Bearer <key>)',
+      models: 'rhart-image-g-2-official',
+      other:
+        '可选，配置上游接口路径和 URL 有效期。\n\n示例：\n{"rr_endpoints":{"rhart-image-g-2-official":"/openapi/v2/rhart-image-g-2-official/text-to-image"},"rr_url_ttl_hours":24}\n\n字段说明：\nrr_endpoints   — 模型→完整路径映射（留空使用默认路径）\nrr_url_ttl_hours — 上游图片 URL 有效期（小时），默认 24\n\n默认路径：\n{model} → /openapi/v2/{model}/text-to-image',
+    },
+  },
 }
 
 /**

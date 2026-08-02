@@ -109,6 +109,14 @@ func VideoProxy(c *gin.Context) {
 	case constant.ChannelTypeOpenAI, constant.ChannelTypeSora:
 		videoURL = fmt.Sprintf("%s/v1/videos/%s/content", baseURL, task.GetUpstreamTaskID())
 		req.Header.Set("Authorization", "Bearer "+channel.Key)
+	case constant.ChannelTypeRR:
+		// Check URL expiry before proxying
+		if expireAt := task.PrivateData.ExpireAt; expireAt > 0 && time.Now().Unix() > expireAt {
+			videoProxyError(c, http.StatusGone, "url_expired",
+				"Image URL has expired. Please regenerate the image.")
+			return
+		}
+		videoURL = task.GetResultURL()
 	default:
 		// Video URL is stored in PrivateData.ResultURL (fallback to FailReason for old data)
 		videoURL = task.GetResultURL()

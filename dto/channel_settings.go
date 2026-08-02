@@ -57,6 +57,12 @@ type ChannelOtherSettings struct {
 	//   示例: {"poster-matting": "/openapi/v2/ai/matting_pro"}
 	PosterApiVersion string            `json:"poster_api_version,omitempty"`
 	PosterEndpoints  map[string]string `json:"poster_endpoints,omitempty"`
+	// RR 渠道配置
+	// RREndpoints: 按模型配置完整上游路径，key 为模型名，value 为完整路径
+	//   示例: {"rhart-image-g-2-official": "/openapi/v2/rhart-image-g-2-official/text-to-image"}
+	// RRUrlTTLHours: 上游图片 URL 有效期（小时），默认 24
+	RREndpoints   map[string]string `json:"rr_endpoints,omitempty"`
+	RRUrlTTLHours int               `json:"rr_url_ttl_hours,omitempty"`
 }
 
 func (s *ChannelOtherSettings) IsOpenRouterEnterprise() bool {
