@@ -24,7 +24,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Textarea } from '@/components/ui/textarea'
 
 const RR_MODELS = ['rhart-image-g-2-official']
@@ -263,22 +263,17 @@ export function RRPathConfigEditor(props: RRPathConfigEditorProps) {
                       disabled={props.disabled}
                       list='rr-model-list'
                     />
-                    <Select
+                    <NativeSelect
                       value={row.condition}
-                      onValueChange={(v) => handleRowChange(row.id, 'condition', v)}
+                      onChange={(e) => handleRowChange(row.id, 'condition', e.target.value)}
                       disabled={props.disabled}
                     >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CONDITION_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {t(opt.label)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      {CONDITION_OPTIONS.map((opt) => (
+                        <NativeSelectOption key={opt.value} value={opt.value}>
+                          {t(opt.label)}
+                        </NativeSelectOption>
+                      ))}
+                    </NativeSelect>
                     <Input
                       value={row.path}
                       onChange={(e) =>
