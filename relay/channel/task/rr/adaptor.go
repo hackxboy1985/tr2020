@@ -101,16 +101,27 @@ func (a *TaskAdaptor) InjectBillingParams(c *gin.Context, info *relaycommon.Rela
 func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	if a.taskReq != nil {
 		if path := a.resolveEndpointPath(info.UpstreamModelName, *a.taskReq); path != "" {
-			return fmt.Sprintf("%s%s", a.baseURL, path), nil
+			url := fmt.Sprintf("%s%s", a.baseURL, path)
+			common.SysLog(fmt.Sprintf("RR upstream request URL: model=%s, path=%s, url=%s", info.UpstreamModelName, path, url))
+			return url, nil
 		}
 	}
-	return fmt.Sprintf("%s"+DefaultSubmitPath, a.baseURL, info.UpstreamModelName), nil
+	url := fmt.Sprintf("%s"+DefaultSubmitPath, a.baseURL, info.UpstreamModelName)
+	common.SysLog(fmt.Sprintf("RR upstream request URL: model=%s, path=%s, url=%s", info.UpstreamModelName, DefaultSubmitPath, url))
+	return url, nil
 }
 
 func (a *TaskAdaptor) BuildRequestHeader(c *gin.Context, req *http.Request, info *relaycommon.RelayInfo) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+a.apiKey)
+	maskedKey := ""
+	if len(a.apiKey) <= 8 {
+		maskedKey = "***"
+	} else {
+		maskedKey = a.apiKey[:4] + "***" + a.apiKey[len(a.apiKey)-4:]
+	}
+	common.SysLog(fmt.Sprintf("RR upstream request headers: content-type=%s, accept=%s, authorization=Bearer %s", req.Header.Get("Content-Type"), req.Header.Get("Accept"), maskedKey))
 	return nil
 }
 
@@ -139,6 +150,7 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	if err != nil {
 		return nil, err
 	}
+	common.SysLog(fmt.Sprintf("RR upstream request body: %s", string(data)))
 	return bytes.NewReader(data), nil
 }
 
