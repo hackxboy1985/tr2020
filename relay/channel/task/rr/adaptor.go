@@ -173,7 +173,7 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		return
 	}
 	common.SysLog(fmt.Sprintf("RR upstream submit response: status=%d, body=%s", resp.StatusCode, string(responseBody)))
-	if sResp.Code != 200 {
+	if sResp.Code != 0 && sResp.Code != 200 {
 		taskErr = service.TaskErrorWrapperLocal(
 			fmt.Errorf("%s", sResp.Msg),
 			"upstream_error",
@@ -181,7 +181,10 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		)
 		return
 	}
-	taskID = sResp.Data.TaskID
+	taskID = sResp.TaskID
+	if taskID == "" {
+		taskID = sResp.Data.TaskID
+	}
 	if taskID == "" {
 		taskErr = service.TaskErrorWrapperLocal(
 			fmt.Errorf("upstream returned empty task id"),
@@ -237,24 +240,39 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 
 	info := &relaycommon.TaskInfo{}
 
-	if qResp.Code != 200 {
+	if qResp.Code != 0 && qResp.Code != 200 {
 		info.Status = string(model.TaskStatusFailure)
 		info.Reason = qResp.Msg
 		info.Progress = taskcommon.ProgressComplete
 		return info, nil
 	}
 
-	switch qResp.Data.Status {
+	status := qResp.Status
+	results := qResp.Results
+	if status == "" {
+		status = qResp.Data.Status
+		results = qResp.Data.Results
+	}
+	errorMessage := qResp.ErrorMessage
+	if errorMessage == "" {
+		errorMessage = qResp.Msg
+	}
+
+	switch status {
 	case StatusSuccess:
 		info.Status = string(model.TaskStatusSuccess)
 		info.Progress = taskcommon.ProgressComplete
-		if len(qResp.Data.Results) > 0 {
-			info.Url = qResp.Data.Results[0].URL
+		if len(results) > 0 {
+			info.Url = results[0].URL
 		}
 	case StatusFailed:
 		info.Status = string(model.TaskStatusFailure)
 		info.Progress = taskcommon.ProgressComplete
-		info.Reason = "upstream task failed"
+		if errorMessage != "" {
+			info.Reason = errorMessage
+		} else {
+			info.Reason = "upstream task failed"
+		}
 	case StatusRunning:
 		info.Status = string(model.TaskStatusInProgress)
 		info.Progress = "50%"

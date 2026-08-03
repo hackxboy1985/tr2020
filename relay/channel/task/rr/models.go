@@ -9,11 +9,14 @@ type submitRequest struct {
 	ImageUrls   []string `json:"imageUrls,omitempty"`
 }
 
-// submitResponse 上游提交任务响应
+// submitResponse 上游提交任务响应，兼容顶层响应和旧包装响应。
 type submitResponse struct {
-	Code int    `json:"code"`
-	Msg  string `json:"msg"`
-	Data struct {
+	Code         int    `json:"code"`
+	Msg          string `json:"msg"`
+	TaskID       string `json:"taskId"`
+	Status       string `json:"status"`
+	ErrorMessage string `json:"errorMessage"`
+	Data         struct {
 		TaskID string `json:"taskId"`
 	} `json:"data"`
 }
@@ -31,11 +34,15 @@ type queryResult struct {
 	Text       string `json:"text"`
 }
 
-// queryResponse 上游轮询任务响应
+// queryResponse 上游轮询任务响应，兼容顶层响应和旧包装响应。
 type queryResponse struct {
-	Code int    `json:"code"`
-	Msg  string `json:"msg"`
-	Data struct {
+	Code         int           `json:"code"`
+	Msg          string        `json:"msg"`
+	TaskID       string        `json:"taskId"`
+	Status       string        `json:"status"`
+	ErrorMessage string        `json:"errorMessage"`
+	Results      []queryResult `json:"results"`
+	Data         struct {
 		TaskID  string        `json:"taskId"`
 		Status  string        `json:"status"`
 		Results []queryResult `json:"results"`
