@@ -30,6 +30,7 @@ DEFAULT_IMG="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800"
 # 轮询配置
 POLL_MAX=24        # 最多轮询次数
 POLL_INTERVAL=5    # 每次间隔秒数
+OUTPUT_DIR="./rr_outputs"
 
 # ──────────────────────────────────────────────
 # 工具函数
@@ -111,6 +112,42 @@ print('yes' if data and (data[0].get('url') or data[0].get('b64_json')) else 'no
     poll_task "$TASK_ID"
 }
 
+download_task_result() {
+    local task_id="$1"
+    local poll_body="$2"
+
+    local content_url
+    content_url=$(echo "$poll_body" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    data = ((d.get('result') or {}).get('data') or [])
+    print(data[0].get('url') if data and data[0].get('url') else '')
+except Exception:
+    print('')
+" 2>/dev/null || true)
+
+    if [ -z "$content_url" ]; then
+        content_url="$GATEWAY/v1/videos/$task_id/content"
+    elif [[ "$content_url" == /v1/* ]]; then
+        content_url="$GATEWAY$content_url"
+    fi
+
+    mkdir -p "$OUTPUT_DIR"
+    local output_file="$OUTPUT_DIR/${task_id}.png"
+    info "下载图片... GET $content_url"
+    download_resp=$(curl -L -s -w "\n%{http_code}" "$content_url" \
+        -H "Authorization: Bearer $API_KEY" \
+        -o "$output_file")
+    download_code=$(echo "$download_resp" | tail -1)
+    if [ "$download_code" = "200" ]; then
+        ok "图片已保存: $output_file"
+    else
+        rm -f "$output_file"
+        fail "图片下载失败 HTTP=$download_code"
+    fi
+}
+
 # 轮询任务直到完成或超时
 poll_task() {
     local task_id="$1"
@@ -135,6 +172,7 @@ print(d.get('status',''))
         case "$status" in
             succeeded|SUCCESS|success)
                 ok "任务完成  status=$status"
+                download_task_result "$task_id" "$poll_body"
                 return ;;
             failed|FAILED|fail)
                 fail "任务失败  status=$status"

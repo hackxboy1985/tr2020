@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -598,6 +599,11 @@ func imageTaskFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskRes
 	switch originTask.Status {
 	case model.TaskStatusSuccess:
 		resultURL := originTask.GetResultURL()
+		if originTask.ChannelId > 0 {
+			if ch, err := model.CacheGetChannel(originTask.ChannelId); err == nil && ch.Type == constant.ChannelTypeRR {
+				resultURL = rewriteRRResultURL(resultURL, ch.GetOtherSettings().RRUrlProxyBaseURL)
+			}
+		}
 		var imageData []map[string]string
 		for _, u := range strings.Split(resultURL, ",") {
 			u = strings.TrimSpace(u)
@@ -618,6 +624,32 @@ func imageTaskFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskRes
 		taskResp = service.TaskErrorWrapper(err, "marshal_response_failed", http.StatusInternalServerError)
 	}
 	return
+}
+
+func rewriteRRResultURL(resultURL, proxyBaseURL string) string {
+	proxyBaseURL = strings.TrimSpace(proxyBaseURL)
+	if resultURL == "" || proxyBaseURL == "" {
+		return resultURL
+	}
+	proxyBase, err := url.Parse(proxyBaseURL)
+	if err != nil || proxyBase.Scheme == "" || proxyBase.Host == "" {
+		return resultURL
+	}
+	proxyBasePath := strings.TrimRight(proxyBase.Path, "/")
+	urls := strings.Split(resultURL, ",")
+	for i, raw := range urls {
+		u, err := url.Parse(strings.TrimSpace(raw))
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			continue
+		}
+		u.Scheme = proxyBase.Scheme
+		u.Host = proxyBase.Host
+		if proxyBasePath != "" {
+			u.Path = proxyBasePath + "/" + strings.TrimLeft(u.Path, "/")
+		}
+		urls[i] = u.String()
+	}
+	return strings.Join(urls, ",")
 }
 
 // mapTaskStatusToImageStatus maps internal TaskStatus to image task status string

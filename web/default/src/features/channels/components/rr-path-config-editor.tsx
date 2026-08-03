@@ -55,6 +55,7 @@ type EndpointRow = {
 type RRPathConfig = {
   rr_endpoints?: Record<string, string>
   rr_url_ttl_hours?: number
+  rr_url_proxy_base_url?: string
 }
 
 type RRPathConfigEditorProps = {
@@ -68,6 +69,7 @@ export function RRPathConfigEditor(props: RRPathConfigEditorProps) {
   const [mode, setMode] = useState<'visual' | 'json'>('visual')
   const [rows, setRows] = useState<EndpointRow[]>([])
   const [ttlHours, setTtlHours] = useState<number>(24)
+  const [proxyBaseUrl, setProxyBaseUrl] = useState('')
   const [jsonValue, setJsonValue] = useState(props.value)
   const [jsonError, setJsonError] = useState<string | null>(null)
   const nextRowIdRef = useRef(0)
@@ -79,7 +81,8 @@ export function RRPathConfigEditor(props: RRPathConfigEditorProps) {
 
   const buildJson = (
     endpointRows: EndpointRow[],
-    ttl: number
+    ttl: number,
+    proxyUrl: string
   ): string => {
     const config: RRPathConfig = {}
     const endpoints: Record<string, string> = {}
@@ -94,6 +97,9 @@ export function RRPathConfigEditor(props: RRPathConfigEditorProps) {
     if (ttl > 0) {
       config.rr_url_ttl_hours = ttl
     }
+    if (proxyUrl.trim()) {
+      config.rr_url_proxy_base_url = proxyUrl.trim()
+    }
     if (Object.keys(config).length === 0) {
       return ''
     }
@@ -105,6 +111,7 @@ export function RRPathConfigEditor(props: RRPathConfigEditorProps) {
       if (!json.trim()) {
         setRows([])
         setTtlHours(24)
+        setProxyBaseUrl('')
         setJsonError(null)
         return true
       }
@@ -126,6 +133,7 @@ export function RRPathConfigEditor(props: RRPathConfigEditorProps) {
         })
       )
       setTtlHours(parsed.rr_url_ttl_hours ?? 24)
+      setProxyBaseUrl(parsed.rr_url_proxy_base_url ?? '')
       setJsonError(null)
       return true
     } catch (_e) {
@@ -139,8 +147,8 @@ export function RRPathConfigEditor(props: RRPathConfigEditorProps) {
     parseJson(props.value)
   }, [props.value])
 
-  const syncVisual = (endpointRows: EndpointRow[], ttl: number) => {
-    const json = buildJson(endpointRows, ttl)
+  const syncVisual = (endpointRows: EndpointRow[], ttl: number, proxyUrl: string) => {
+    const json = buildJson(endpointRows, ttl, proxyUrl)
     setJsonValue(json)
     setJsonError(null)
     props.onChange(json)
@@ -149,19 +157,24 @@ export function RRPathConfigEditor(props: RRPathConfigEditorProps) {
   const handleTtlChange = (v: number) => {
     const ttl = v > 0 ? v : 1
     setTtlHours(ttl)
-    syncVisual(rows, ttl)
+    syncVisual(rows, ttl, proxyBaseUrl)
+  }
+
+  const handleProxyBaseUrlChange = (value: string) => {
+    setProxyBaseUrl(value)
+    syncVisual(rows, ttlHours, value)
   }
 
   const handleAddRow = () => {
     const newRows = [...rows, { id: createRowId(), model: '', condition: '', path: '' }]
     setRows(newRows)
-    syncVisual(newRows, ttlHours)
+    syncVisual(newRows, ttlHours, proxyBaseUrl)
   }
 
   const handleDeleteRow = (id: string) => {
     const newRows = rows.filter((r) => r.id !== id)
     setRows(newRows)
-    syncVisual(newRows, ttlHours)
+    syncVisual(newRows, ttlHours, proxyBaseUrl)
   }
 
   const handleRowChange = (
@@ -173,7 +186,7 @@ export function RRPathConfigEditor(props: RRPathConfigEditorProps) {
       r.id === id ? { ...r, [field]: value } : r
     )
     setRows(newRows)
-    syncVisual(newRows, ttlHours)
+    syncVisual(newRows, ttlHours, proxyBaseUrl)
   }
 
   const handleJsonChange = (newJson: string) => {
@@ -185,7 +198,7 @@ export function RRPathConfigEditor(props: RRPathConfigEditorProps) {
   const handleModeChange = (nextMode: string) => {
     if (nextMode !== 'visual' && nextMode !== 'json') return
     if (nextMode === 'json') {
-      const json = buildJson(rows, ttlHours)
+      const json = buildJson(rows, ttlHours, proxyBaseUrl)
       setJsonValue(json)
       props.onChange(json)
     } else {
@@ -229,6 +242,22 @@ export function RRPathConfigEditor(props: RRPathConfigEditorProps) {
             <p className='text-muted-foreground text-xs'>
               {t(
                 'Upstream image URL expiry in hours. Requests after expiry return 410 Gone. Default: 24.'
+              )}
+            </p>
+          </div>
+
+          {/* URL Proxy Base URL */}
+          <div className='space-y-1'>
+            <div className='text-sm font-medium'>{t('URL Proxy Base URL')}</div>
+            <Input
+              value={proxyBaseUrl}
+              onChange={(e) => handleProxyBaseUrlChange(e.target.value)}
+              placeholder='https://img.example.com/oss'
+              disabled={props.disabled}
+            />
+            <p className='text-muted-foreground text-xs'>
+              {t(
+                'Optional. Replaces upstream image URL scheme and host for RR result URLs. If the proxy URL includes a path, it is prepended to the upstream path. Query is kept unchanged.'
               )}
             </p>
           </div>
@@ -320,7 +349,7 @@ export function RRPathConfigEditor(props: RRPathConfigEditorProps) {
             value={jsonValue}
             onChange={(e) => handleJsonChange(e.target.value)}
             placeholder={
-              '{\n  "rr_endpoints": {\n    "rhart-image-g-2-official": "/openapi/v2/rhart-image-g-2-official/text-to-image"\n  },\n  "rr_url_ttl_hours": 24\n}'
+              '{\n  "rr_endpoints": {\n    "rhart-image-g-2-official": "/openapi/v2/rhart-image-g-2-official/text-to-image"\n  },\n  "rr_url_ttl_hours": 24,\n  "rr_url_proxy_base_url": "https://img.example.com/oss"\n}'
             }
             disabled={props.disabled}
             rows={8}

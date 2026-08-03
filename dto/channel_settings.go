@@ -61,8 +61,10 @@ type ChannelOtherSettings struct {
 	// RREndpoints: 按模型配置完整上游路径，key 为模型名，value 为完整路径
 	//   示例: {"rhart-image-g-2-official": "/openapi/v2/rhart-image-g-2-official/text-to-image"}
 	// RRUrlTTLHours: 上游图片 URL 有效期（小时），默认 24
-	RREndpoints   map[string]string `json:"rr_endpoints,omitempty"`
-	RRUrlTTLHours int               `json:"rr_url_ttl_hours,omitempty"`
+	// RRUrlProxyBaseURL: 对外图片代理基础地址，如 https://img.example.com/oss。配置后替换上游 URL 的 scheme/host，并将配置路径作为前缀，原路径和 query 保持不变。
+	RREndpoints       map[string]string `json:"rr_endpoints,omitempty"`
+	RRUrlTTLHours     int               `json:"rr_url_ttl_hours,omitempty"`
+	RRUrlProxyBaseURL string            `json:"rr_url_proxy_base_url,omitempty"`
 }
 
 func (s *ChannelOtherSettings) IsOpenRouterEnterprise() bool {
