@@ -16,14 +16,14 @@
 # ──────────────────────────────────────────────
 # 配置区（必填）
 # ──────────────────────────────────────────────
-GATEWAY="http://ai.passorico.com"
+GATEWAY="http://api.luluai.cc"
 API_KEY="sk-TmnBitxnzFMupKgxalfkQA34jJwGpXynfIwYfoxe8OVgqEOc"
 
-MODEL="image-g2"
+MODEL="g-image-2"
 
 # 默认参数
 DEFAULT_PROMPT="A serene mountain landscape at sunrise, photorealistic, 8k"
-DEFAULT_SIZE="1024x1024"
+DEFAULT_SIZE="1792x1024"
 DEFAULT_QUALITY="standard"
 DEFAULT_IMG="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800"
 
