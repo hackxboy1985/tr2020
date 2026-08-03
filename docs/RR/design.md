@@ -51,7 +51,7 @@ DoResponse 提取 taskId，框架存入 task.PrivateData.UpstreamTaskID
 
 ```
 constant/channel.go                          — 新增渠道类型常量 ChannelTypeRR = 59
-dto/channel_settings.go                      — ChannelOtherSettings 新增 RREndpoints / RRUrlTTLHours
+dto/channel_settings.go                      — ChannelOtherSettings 新增 RREndpoints / RRUrlTTLHours / RRUrlProxyBaseURL
 relay/channel/task/rr/
     adaptor.go                               — 实现 TaskAdaptor 接口（含 InjectBillingParams）
     mapping.go                               — size/quality 映射表（可直接编辑）
@@ -298,8 +298,11 @@ URL 为 Tencent COS 对象链接，存在有效期（默认约 1 天），到期
 - 轮询框架存入 `task.PrivateData.ResultURL`
 - 同时计算并存入 `task.PrivateData.ExpireAt`：`完成时间 + TTL（秒）`
 - TTL 从渠道配置读取：`channel.GetOtherSettings().RRUrlTTLHours`，默认 24 小时
+- 用户查询 `GET /v1/images/tasks/{taskId}` 时，RR 渠道不会直接暴露原始上游域名：
+  - 未配置 `RRUrlProxyBaseURL`：返回原始 `ResultURL`（兼容旧配置）
+  - 已配置 `RRUrlProxyBaseURL`：仅对 RR 渠道将上游 URL 的 `scheme/host` 替换为配置值；若配置值包含路径（如 `http://a.c.com/oss`），该路径会作为前缀拼到原始 path 前，query 保持不变
 - 用户访问 `/v1/videos/{taskId}/content` → `VideoProxy` 先检查 `ExpireAt`：
-  - 未过期：从 `ResultURL` 实时拉流，附带 `Cache-Control: public, max-age=86400`
+  - 未过期：从内部 `ResultURL` 实时拉流，附带 `Cache-Control: public, max-age=86400`
   - 已过期：返回 410 Gone + 错误信息，不发出无效请求
 
 ### 有效期配置
@@ -311,7 +314,8 @@ URL 为 Tencent COS 对象链接，存在有效期（默认约 1 天），到期
   "rr_endpoints": {
     "rhart-image-g-2-official": "/openapi/v2/rhart-image-g-2-official/text-to-image"
   },
-  "rr_url_ttl_hours": 24
+  "rr_url_ttl_hours": 24,
+  "rr_url_proxy_base_url": "http://a.c.com/oss"
 }
 ```
 
@@ -319,9 +323,11 @@ URL 为 Tencent COS 对象链接，存在有效期（默认约 1 天），到期
 
 ```go
 // RR 渠道：模型→接口路径映射
-RREndpoints   map[string]string `json:"rr_endpoints,omitempty"`
+RREndpoints       map[string]string `json:"rr_endpoints,omitempty"`
 // RR 渠道：上游图片 URL 有效期（小时），默认 24
-RRUrlTTLHours int               `json:"rr_url_ttl_hours,omitempty"`
+RRUrlTTLHours     int               `json:"rr_url_ttl_hours,omitempty"`
+// RR 渠道：对外图片代理基础地址，例如 http://a.c.com/oss；仅影响 RR 任务查询响应中的 URL 展示
+RRUrlProxyBaseURL string            `json:"rr_url_proxy_base_url,omitempty"`
 ```
 
 `VideoProxy` 中针对 RR 渠道新增过期检查（在 default 分支之前）：
@@ -336,6 +342,35 @@ case constant.ChannelTypeRR:
     }
 ```
 
+### RR 结果 URL 代理域名
+
+`rr_url_proxy_base_url` 只在 `imageTaskFetchByIDRespBodyBuilder` 中针对 `ChannelTypeRR` 生效，不影响其他渠道或其他任务类型。
+
+示例配置：
+
+```json
+{
+  "rr_url_proxy_base_url": "http://a.c.com/oss"
+}
+```
+
+替换规则：
+
+```text
+上游 URL:
+https://rh-hk-images-1252422369.cos.ap-hongkong.myqcloud.com/fe7d/output/a.png?x=1
+
+返回给用户:
+http://a.c.com/oss/fe7d/output/a.png?x=1
+```
+
+说明：
+
+- 替换 `scheme` 和 `host`
+- 如果代理配置包含路径，则该路径作为前缀拼到原始 path 前
+- 原始 path 后半段和 query 保留
+- 内部仍保存原始 `ResultURL`，`/v1/videos/{taskId}/content` 仍通过服务端代理拉流
+
 ---
 
 ## 渠道配置（前端编辑器）
@@ -347,13 +382,15 @@ case constant.ChannelTypeRR:
 - 去掉 "API Version" 输入框（RR 路径中模型名即区分版本，无统一版本号）
 - 保留 "Endpoint Overrides" 表格（模型 → 完整路径）
 - 新增 "URL TTL（小时）" 数字输入框，默认 `24`，最小值 `1`
+- 新增 "URL Proxy Base URL" 输入框，配置 RR 结果 URL 的对外代理基础地址（可带路径，如 `http://a.c.com/oss`）
 
 JSON 结构（写入 `other` 字段）：
 
 ```json
 {
   "rr_endpoints": { "model-name": "/openapi/v2/model-name/text-to-image" },
-  "rr_url_ttl_hours": 24
+  "rr_url_ttl_hours": 24,
+  "rr_url_proxy_base_url": "http://a.c.com/oss"
 }
 ```
 
