@@ -210,6 +210,12 @@ func handleRRImageTask(c *gin.Context, info *relaycommon.RelayInfo, imageReq *dt
 	taskReq := convertImageRequestToTaskSubmitReq(imageReq)
 	c.Set("task_request", taskReq)
 
+	// RelayTaskSubmit expects info.TaskRelayInfo to be non-nil (it stores Action there).
+	// The image relay path does not initialise TaskRelayInfo, so we do it here.
+	if info.TaskRelayInfo == nil {
+		info.TaskRelayInfo = &relaycommon.TaskRelayInfo{}
+	}
+
 	result, taskErr := RelayTaskSubmit(c, info)
 	if taskErr != nil {
 		return types.NewErrorWithStatusCode(taskErr.Error, types.ErrorCodeBadResponseStatusCode, taskErr.StatusCode)
