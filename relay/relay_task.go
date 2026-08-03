@@ -226,6 +226,7 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	}
 	if resp != nil && resp.StatusCode != http.StatusOK {
 		responseBody, _ := io.ReadAll(resp.Body)
+		common.SysLog(fmt.Sprintf("task upstream non-200 response: status=%d, body=%s", resp.StatusCode, string(responseBody)))
 		return nil, service.TaskErrorWrapper(fmt.Errorf("%s", string(responseBody)), "fail_to_fetch_task", resp.StatusCode)
 	}
 
@@ -282,10 +283,10 @@ func recalcQuotaFromRatios(info *relaycommon.RelayInfo, ratios map[string]float6
 }
 
 var fetchRespBuilders = map[int]func(c *gin.Context) (respBody []byte, taskResp *dto.TaskError){
-	relayconstant.RelayModeSunoFetchByID:        sunoFetchByIDRespBodyBuilder,
-	relayconstant.RelayModeSunoFetch:            sunoFetchRespBodyBuilder,
-	relayconstant.RelayModeVideoFetchByID:       videoFetchByIDRespBodyBuilder,
-	relayconstant.RelayModeImageTaskFetchByID:   imageTaskFetchByIDRespBodyBuilder,
+	relayconstant.RelayModeSunoFetchByID:      sunoFetchByIDRespBodyBuilder,
+	relayconstant.RelayModeSunoFetch:          sunoFetchRespBodyBuilder,
+	relayconstant.RelayModeVideoFetchByID:     videoFetchByIDRespBodyBuilder,
+	relayconstant.RelayModeImageTaskFetchByID: imageTaskFetchByIDRespBodyBuilder,
 }
 
 func RelayTaskFetch(c *gin.Context, relayMode int) (taskResp *dto.TaskError) {

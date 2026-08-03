@@ -168,9 +168,11 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 
 	var sResp submitResponse
 	if err := common.Unmarshal(responseBody, &sResp); err != nil {
+		common.SysLog(fmt.Sprintf("RR upstream submit response: status=%d, body=%s", resp.StatusCode, string(responseBody)))
 		taskErr = service.TaskErrorWrapper(err, "unmarshal_response_failed", http.StatusInternalServerError)
 		return
 	}
+	common.SysLog(fmt.Sprintf("RR upstream submit response: status=%d, body=%s", resp.StatusCode, string(responseBody)))
 	if sResp.Code != 200 {
 		taskErr = service.TaskErrorWrapperLocal(
 			fmt.Errorf("%s", sResp.Msg),
