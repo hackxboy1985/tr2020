@@ -1,15 +1,19 @@
 package billingexpr
 
-// quotaConversion converts raw expression output to quota based on the
+// QuotaConversion converts raw expression output to quota based on the
 // expression version. This is the central dispatch point for future versions
 // that may use a different conversion formula.
-func quotaConversion(exprOutput float64, snap *BillingSnapshot) float64 {
+func QuotaConversion(exprOutput float64, snap *BillingSnapshot) float64 {
 	switch snap.ExprVersion {
 	case 2: // v2: coefficients are $/call prices (not per 1M tokens)
 		return exprOutput * snap.QuotaPerUnit
 	default: // v1: coefficients are $/1M tokens prices
 		return exprOutput / 1_000_000 * snap.QuotaPerUnit
 	}
+}
+
+func quotaConversion(exprOutput float64, snap *BillingSnapshot) float64 {
+	return QuotaConversion(exprOutput, snap)
 }
 
 // ComputeTieredQuota runs the Expr from a frozen BillingSnapshot against

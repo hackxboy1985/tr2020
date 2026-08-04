@@ -328,9 +328,23 @@ func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptT
 		return types.PriceData{}, fmt.Errorf("model %s tiered expr run failed: %w", info.OriginModelName, err)
 	}
 
-	// Expression coefficients are $/1M tokens prices; convert to quota the same way per-call billing does.
-	quotaBeforeGroup := rawCost / 1_000_000 * common.QuotaPerUnit
+	exprVersion := billingexpr.ExprVersion(exprStr)
+	snapshot := &billingexpr.BillingSnapshot{
+		BillingMode:               billing_setting.BillingModeTieredExpr,
+		ModelName:                 info.OriginModelName,
+		ExprString:                exprStr,
+		ExprHash:                  billingexpr.ExprHashString(exprStr),
+		GroupRatio:                groupRatioInfo.GroupRatio,
+		EstimatedPromptTokens:     promptTokens,
+		EstimatedCompletionTokens: estimatedCompletionTokens,
+		EstimatedTier:             trace.MatchedTier,
+		QuotaPerUnit:              common.QuotaPerUnit,
+		ExprVersion:               exprVersion,
+	}
+	quotaBeforeGroup := billingexpr.QuotaConversion(rawCost, snapshot)
 	preConsumedQuota := billingexpr.QuotaRound(quotaBeforeGroup * groupRatioInfo.GroupRatio)
+	snapshot.EstimatedQuotaBeforeGroup = quotaBeforeGroup
+	snapshot.EstimatedQuotaAfterGroup = preConsumedQuota
 
 	freeModel := false
 	if !operation_setting.GetQuotaSetting().EnableFreeModelPreConsume {
@@ -340,21 +354,6 @@ func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptT
 		}
 	}
 
-	exprHash := billingexpr.ExprHashString(exprStr)
-	snapshot := &billingexpr.BillingSnapshot{
-		BillingMode:               billing_setting.BillingModeTieredExpr,
-		ModelName:                 info.OriginModelName,
-		ExprString:                exprStr,
-		ExprHash:                  exprHash,
-		GroupRatio:                groupRatioInfo.GroupRatio,
-		EstimatedPromptTokens:     promptTokens,
-		EstimatedCompletionTokens: estimatedCompletionTokens,
-		EstimatedQuotaBeforeGroup: quotaBeforeGroup,
-		EstimatedQuotaAfterGroup:  preConsumedQuota,
-		EstimatedTier:             trace.MatchedTier,
-		QuotaPerUnit:              common.QuotaPerUnit,
-		ExprVersion:               billingexpr.ExprVersion(exprStr),
-	}
 	info.TieredBillingSnapshot = snapshot
 	info.BillingRequestInput = &requestInput
 
