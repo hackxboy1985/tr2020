@@ -530,7 +530,7 @@ export function tryParsePerCallConfig(
     }
 
     function parseRuleChain(s: string): void {
-      const match = s.match(/^([\s\S]+?)\s*\?\s*tier\("([^"]*)",\s*([\s\S]+)\)\s*:\s*([\s\S]+)$/)
+      const match = s.match(/^([\s\S]+?)\s*\?\s*tier\("((?:\\.|[^"\\])*)",\s*([\s\S]+)\)\s*:\s*([\s\S]+)$/)
       if (!match) {
         const fallback = s.match(/^tier\("fallback",\s*([\s\S]+)\)$/)
         const parsed = parsePriceAndMul(fallback ? fallback[1] : s)
@@ -606,6 +606,18 @@ export function tryParsePerCallConfig(
     }
 
     parseLegacyMax(om[1].trim())
+    // The legacy expression uses nested max() and leaves the fallback as the
+    // final numeric argument. The recursive parser above handles normal
+    // nesting; this fallback extraction also handles whitespace/parenthesis
+    // variations emitted by older editor versions.
+    if (fallbackPrice === 0) {
+      const fallbackMatch = om[1].match(/,\s*(-?[\d.eE+]+)\s*\)\s*\)$/)
+      const parsed = fallbackMatch ? parsePriceAndMul(fallbackMatch[1]) : null
+      if (parsed) {
+        fallbackPrice = parsed.price
+        fallbackMultiplier = parsed.multiplier
+      }
+    }
     if (rules.length === 0) return null
     return { base: 'per_call', rules, fallbackPrice, fallbackMultiplier }
   } catch {
