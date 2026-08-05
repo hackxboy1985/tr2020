@@ -2007,6 +2007,7 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
   const [perCallConfig, setPerCallConfig] = useState<PerCallVisualConfig>(() =>
     tryParsePerCallConfig(currentExpr) ?? createDefaultPerCallConfig()
   )
+  const [perCallConfigDirty, setPerCallConfigDirty] = useState(false)
   const [rawExpr, setRawExpr] = useState(() =>
     combineBillingExpr(currentExpr || '', currentRequestRuleExpr || '')
   )
@@ -2024,6 +2025,9 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
       const parsedPerCallConfig = tryParsePerCallConfig(currentExpr)
       if (parsedPerCallConfig) {
         setPerCallConfig(parsedPerCallConfig)
+        // Migrate the old `tier("result", max(...))` form on save so a
+        // matched rule is checked before the fallback price.
+        setPerCallConfigDirty(/tier\("result"\s*,\s*max\(/.test(currentExpr))
       }
       setEditorMode('visual')
     } else {
@@ -2056,14 +2060,16 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
 
   const effectiveExpr = useMemo(() => {
     if (billingBase === 'per_call') {
-      return generateExprFromPerCallConfig(perCallConfig)
+      return perCallConfigDirty
+        ? generateExprFromPerCallConfig(perCallConfig)
+        : currentExpr
     }
     if (editorMode === 'visual') {
       return generateExprFromVisualConfig(visualConfig)
     }
     const { billingExpr } = splitBillingExprAndRequestRules(rawExpr)
     return billingExpr
-  }, [billingBase, perCallConfig, editorMode, visualConfig, rawExpr])
+  }, [billingBase, perCallConfig, perCallConfigDirty, editorMode, visualConfig, rawExpr])
 
   useEffect(() => {
     if (effectiveExpr !== currentExpr) {
@@ -2108,6 +2114,7 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
 
   const handlePerCallChange = useCallback((next: PerCallVisualConfig) => {
     setPerCallConfig(next)
+    setPerCallConfigDirty(true)
   }, [])
 
   const handleRawChange = useCallback(
