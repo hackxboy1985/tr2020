@@ -53,18 +53,20 @@ func runProgram(prog *vm.Program, params TokenParams, request RequestInput) (flo
 	headers := normalizeHeaders(request.Headers)
 
 	env := map[string]interface{}{
-		"p":    params.P,
-		"c":    params.C,
-		"len":  params.Len,
-		"cr":   params.CR,
-		"cc":   params.CC,
-		"cc1h": params.CC1h,
-		"img":  params.Img,
+		"p":     params.P,
+		"c":     params.C,
+		"len":   params.Len,
+		"cr":    params.CR,
+		"cc":    params.CC,
+		"cc1h":  params.CC1h,
+		"img":   params.Img,
 		"img_o": params.ImgO,
-		"ai":   params.AI,
-		"ao":   params.AO,
+		"ai":    params.AI,
+		"ao":    params.AO,
 		"tier": func(name string, value float64) float64 {
+			trace.Candidates = append(trace.Candidates, TraceCandidate{Name: name, Value: value})
 			trace.MatchedTier = name
+			trace.MatchedPrice = value
 			trace.Cost = value
 			return value
 		},

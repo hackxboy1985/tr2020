@@ -68,6 +68,7 @@ type DynamicPricingBreakdownProps = {
    * the usage-log details dialog to show which tier the engine selected.
    */
   matchedTierLabel?: string | null
+  matchedPrice?: number | null
   /**
    * Hide cache-pricing columns regardless of the per-tier values. The log
    * details dialog passes this when the actual request did not consume any
@@ -167,6 +168,7 @@ function describeGroup(
 export function DynamicPricingBreakdown({
   billingExpr,
   matchedTierLabel,
+  matchedPrice,
   hideCacheColumns = false,
 }: DynamicPricingBreakdownProps) {
   const { t } = useTranslation()
@@ -209,7 +211,24 @@ export function DynamicPricingBreakdown({
           </div>
         </div>
 
-        <div className='space-y-2'>
+        {perCallConfig && matchedTierLabel && matchedPrice != null && (
+        <div className='bg-emerald-50/70 mb-3 grid gap-1 rounded-md border border-emerald-500/40 px-3 py-2 text-sm dark:bg-emerald-500/10 sm:grid-cols-2'>
+          <div>
+            <span className='text-muted-foreground'>{t('Matched rule')}: </span>
+            <span className='font-medium'>
+              {matchedTierLabel === 'fallback' ? t('Fallback') : matchedTierLabel}
+            </span>
+          </div>
+          <div>
+            <span className='text-muted-foreground'>{t('Matched price')}: </span>
+            <span className='font-mono font-semibold'>
+              {symbol}{(matchedPrice * rate).toFixed(4)}/call
+            </span>
+          </div>
+        </div>
+      )}
+
+      <div className='space-y-2'>
           {perCallConfig.rules.map((rule, i) => (
             <div key={i} className='bg-muted/40 flex items-center justify-between gap-3 rounded-md border px-3 py-2'>
               <div className='min-w-0 flex-1'>

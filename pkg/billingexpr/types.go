@@ -30,8 +30,15 @@ type TokenParams struct {
 // during Expr execution. This replaces the old Breakdown mechanism —
 // the Expr itself is the single source of truth for billing logic.
 type TraceResult struct {
-	MatchedTier string  `json:"matched_tier"`
-	Cost        float64 `json:"cost"`
+	MatchedTier  string           `json:"matched_tier"`
+	Cost         float64          `json:"cost"`
+	MatchedPrice float64          `json:"matched_price"`
+	Candidates   []TraceCandidate `json:"-"`
+}
+
+type TraceCandidate struct {
+	Name  string
+	Value float64
 }
 
 // BillingSnapshot captures the billing rule state frozen at pre-consume time.
@@ -56,6 +63,7 @@ type TieredResult struct {
 	ActualQuotaBeforeGroup float64 `json:"actual_quota_before_group"`
 	ActualQuotaAfterGroup  int     `json:"actual_quota_after_group"`
 	MatchedTier            string  `json:"matched_tier"`
+	MatchedPrice           float64 `json:"matched_price"`
 	CrossedTier            bool    `json:"crossed_tier"`
 }
 

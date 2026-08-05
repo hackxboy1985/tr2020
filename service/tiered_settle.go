@@ -1,6 +1,9 @@
 package service
 
 import (
+	"fmt"
+
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -110,6 +113,9 @@ func TryTieredSettle(relayInfo *relaycommon.RelayInfo, params billingexpr.TokenP
 			quota = snap.EstimatedQuotaAfterGroup
 		}
 		return true, quota, nil
+	}
+	if tr.MatchedTier != "" {
+		common.SysLog(fmt.Sprintf("tiered billing matched rule: %s, price=%g", tr.MatchedTier, tr.MatchedPrice))
 	}
 
 	return true, tr.ActualQuotaAfterGroup, &tr

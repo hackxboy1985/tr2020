@@ -144,6 +144,7 @@ export interface LogOtherData {
   billing_mode?: string
   expr_b64?: string
   matched_tier?: string
+  matched_price?: number
   reasoning_effort?: string
   image?: boolean
   image_ratio?: number

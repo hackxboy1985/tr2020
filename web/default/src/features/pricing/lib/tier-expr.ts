@@ -447,21 +447,21 @@ export function generateExprFromPerCallConfig(
     return parts.join(' && ')
   }
 
-  function buildMaxChain(index: number): string {
+  function buildRuleExpr(index: number): string {
     const rule = rules[index]
     const cond = buildCondStr(rule)
     const price = fmtNum(rule.pricePerCall)
     const mulExpr = buildMultiplierExpr(rule.multiplier ?? createDefaultMultiplier())
     const priceWithMul = `${price}${mulExpr}`
-    const term = cond ? `${cond} ? ${priceWithMul} : 0.0` : priceWithMul
-
+    const ruleLabel = cond.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+    const matched = `tier("${ruleLabel}", ${priceWithMul})`
     if (index === rules.length - 1) {
-      return `max(${term}, ${fallbackExpr})`
+      return `${cond} ? ${matched} : tier("fallback", ${fallbackExpr})`
     }
-    return `max(${term}, ${buildMaxChain(index + 1)})`
+    return `${cond} ? ${matched} : ${buildRuleExpr(index + 1)}`
   }
 
-  return `v2: tier("result", ${buildMaxChain(0)})`
+  return `v2: ${buildRuleExpr(0)}`
 }
 
 /** 反向解析 v2: 表达式回 PerCallVisualConfig，解析失败返回 null */
@@ -518,68 +518,86 @@ export function tryParsePerCallConfig(
       }
     }
 
-    // 有规则形式: tier("result", max(...))
-    const outerRe = /^tier\("result",\s*([\s\S]+)\)$/
-    const om = body.match(outerRe)
-    if (!om) return null
-
     const rules: PerCallRule[] = []
     let fallbackPrice = 0
     let fallbackMultiplier: PerCallMultiplier = createDefaultMultiplier()
 
-    // 递归解析嵌套 max
-    function parseMax(s: string): void {
-      s = s.trim()
-      if (!s.startsWith('max(')) return
-      const inner = s.slice(4, -1).trim()
+    function parseConditionText(condStr: string): PerCallParamCondition[] {
+      return condStr.split(/\s*&&\s*/).flatMap((part) => {
+        const cm = part.trim().match(/^param\("([^"]+)"\)\s*==\s*(?:"([^"]*)"|([\d.eE+-]+))$/)
+        return cm ? [{ path: cm[1], value: cm[2] ?? cm[3] }] : []
+      })
+    }
 
-      // 找到第一个逗号（跳过嵌套括号）
+    function parseRuleChain(s: string): void {
+      const match = s.match(/^([\s\S]+?)\s*\?\s*tier\("([^"]*)",\s*([\s\S]+)\)\s*:\s*([\s\S]+)$/)
+      if (!match) {
+        const fallback = s.match(/^tier\("fallback",\s*([\s\S]+)\)$/)
+        const parsed = parsePriceAndMul(fallback ? fallback[1] : s)
+        if (parsed) {
+          fallbackPrice = parsed.price
+          fallbackMultiplier = parsed.multiplier
+        }
+        return
+      }
+      const parsed = parsePriceAndMul(match[3].trim())
+      if (!parsed) return
+      rules.push({
+        label: match[2] || `rule_${rules.length + 1}`,
+        conditions: parseConditionText(match[1].trim()),
+        pricePerCall: parsed.price,
+        multiplier: parsed.multiplier,
+      })
+      parseRuleChain(match[4].trim())
+    }
+
+    const chainPrefix = 'v2: '
+    if (trimmed.startsWith(chainPrefix) && !body.startsWith('tier("result"')) {
+      parseRuleChain(body)
+      if (rules.length === 0) return null
+      return { base: 'per_call', rules, fallbackPrice, fallbackMultiplier }
+    }
+
+    // Backward-compatible old form: tier("result", max(...)).
+    // Keep parsing it for existing saved expressions; new saves use the
+    // conditional chain above so fallback is only evaluated when needed.
+    const outerRe = /^tier\("result",\s*([\s\S]+)\)$/
+    const om = body.match(outerRe)
+    if (!om) return null
+
+    function splitTopLevelComma(s: string): [string, string] | null {
       let depth = 0
-      let splitIdx = -1
-      for (let i = 0; i < inner.length; i++) {
-        if (inner[i] === '(') depth++
-        else if (inner[i] === ')') depth--
-        else if (inner[i] === ',' && depth === 0) {
-          splitIdx = i
-          break
+      for (let i = 0; i < s.length; i++) {
+        if (s[i] === '(') depth++
+        else if (s[i] === ')') depth--
+        else if (s[i] === ',' && depth === 0) {
+          return [s.slice(0, i).trim(), s.slice(i + 1).trim()]
         }
       }
-      if (splitIdx === -1) return
+      return null
+    }
 
-      const termStr = inner.slice(0, splitIdx).trim()
-      const restStr = inner.slice(splitIdx + 1).trim()
-
-      // 解析 term: condStr ? priceExpr : 0.0
-      // condStr = param("x") == v1 [&& param("y") == v2 ...]
-      // priceExpr = price | price <op> max(isnull(param("f"), 0.0), fb) | price <op> n
-      const condPart = /^((?:param\("[^"]+"\)\s*==\s*(?:"[^"]*"|-?[\d.]+)(?:\s*&&\s*param\("[^"]+"\)\s*==\s*(?:"[^"]*"|-?[\d.]+))*))\s*\?\s*([\s\S]+?)\s*:\s*0\.0$/
-      const tm = termStr.match(condPart)
-      if (tm) {
-        const condStr = tm[1].trim()
-        const priceStr = tm[2].trim()
-        const parsed = parsePriceAndMul(priceStr)
+    function parseLegacyMax(s: string): void {
+      if (!s.startsWith('max(') || !s.endsWith(')')) return
+      const pair = splitTopLevelComma(s.slice(4, -1).trim())
+      if (!pair) return
+      const [term, rest] = pair
+      const conditional = term.match(/^([\s\S]+?)\s*\?\s*([\s\S]+?)\s*:\s*0\.0$/)
+      if (conditional) {
+        const parsed = parsePriceAndMul(conditional[2])
         if (parsed) {
-          const conditions: PerCallParamCondition[] = []
-          for (const part of condStr.split(/\s*&&\s*/)) {
-            const cm = part.trim().match(/^param\("([^"]+)"\)\s*==\s*(?:"([^"]*)"|([\d.eE+-]+))$/)
-            if (cm) {
-              conditions.push({ path: cm[1], value: cm[2] ?? cm[3] })
-            }
-          }
           rules.push({
             label: `rule_${rules.length + 1}`,
-            conditions,
+            conditions: parseConditionText(conditional[1].trim()),
             pricePerCall: parsed.price,
             multiplier: parsed.multiplier,
           })
         }
       }
-
-      // rest 是下一层 max 或 fallback 数字/乘数表达式
-      if (restStr.startsWith('max(')) {
-        parseMax(restStr)
+      if (rest.startsWith('max(')) {
+        parseLegacyMax(rest)
       } else {
-        const parsed = parsePriceAndMul(restStr)
+        const parsed = parsePriceAndMul(rest)
         if (parsed) {
           fallbackPrice = parsed.price
           fallbackMultiplier = parsed.multiplier
@@ -587,14 +605,9 @@ export function tryParsePerCallConfig(
       }
     }
 
-    parseMax(om[1].trim())
-
-    const cfg: PerCallVisualConfig = { base: 'per_call', rules, fallbackPrice, fallbackMultiplier }
-    const regenerated = generateExprFromPerCallConfig(cfg)
-    if (regenerated.replace(/\s+/g, '') !== trimmed.replace(/\s+/g, '')) {
-      return null
-    }
-    return cfg
+    parseLegacyMax(om[1].trim())
+    if (rules.length === 0) return null
+    return { base: 'per_call', rules, fallbackPrice, fallbackMultiplier }
   } catch {
     return null
   }

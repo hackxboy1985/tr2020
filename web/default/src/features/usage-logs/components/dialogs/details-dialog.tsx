@@ -890,6 +890,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
                 <DynamicPricingBreakdown
                   billingExpr={decodeBillingExprB64(other.expr_b64)}
                   matchedTierLabel={other.matched_tier}
+                  matchedPrice={other.matched_price}
                   hideCacheColumns={!hasAnyCacheTokens(other)}
                 />
               </div>
