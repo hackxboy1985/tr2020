@@ -1008,7 +1008,7 @@ function PerCallRuleRow({ rule, index, onChange, onRemove }: PerCallRuleRowProps
     <div className='space-y-2 rounded-lg border p-3'>
       <div className='flex items-center justify-between gap-2'>
         <Badge variant='outline'>{t('Rule')} {index + 1}</Badge>
-        <Button variant='ghost' size='icon' onClick={onRemove} aria-label={t('Remove rule')}>
+        <Button type='button' variant='ghost' size='icon' onClick={onRemove} aria-label={t('Remove rule')}>
           <Trash2 className='text-destructive h-4 w-4' />
         </Button>
       </div>
@@ -1018,6 +1018,7 @@ function PerCallRuleRow({ rule, index, onChange, onRemove }: PerCallRuleRowProps
         <div className='flex items-center justify-between'>
           <Label className='text-xs font-medium'>{t('Conditions')} ({t('AND')})</Label>
           <Button
+            type='button'
             variant='ghost'
             size='sm'
             className='h-7 px-2 text-xs'
@@ -1046,6 +1047,7 @@ function PerCallRuleRow({ rule, index, onChange, onRemove }: PerCallRuleRowProps
                 className='h-7 w-24 font-mono text-xs'
               />
               <Button
+                type='button'
                 variant='ghost'
                 size='icon'
                 className='h-7 w-7'
@@ -1126,7 +1128,7 @@ function PerCallEditor({ config, onChange }: PerCallEditorProps) {
         />
       ))}
 
-      <Button variant='outline' size='sm' className='h-9 w-36 justify-center' onClick={handleAddRule}>
+      <Button type='button' variant='outline' size='sm' className='h-9 w-36 justify-center' onClick={handleAddRule}>
         <Plus className='mr-2 h-4 w-4' />
         {t('Add rule')}
       </Button>
@@ -2019,7 +2021,10 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
 
     if (currentExpr?.trim().startsWith('v2:')) {
       setBillingBase('per_call')
-      setPerCallConfig(tryParsePerCallConfig(currentExpr) ?? createDefaultPerCallConfig())
+      const parsedPerCallConfig = tryParsePerCallConfig(currentExpr)
+      if (parsedPerCallConfig) {
+        setPerCallConfig(parsedPerCallConfig)
+      }
       setEditorMode('visual')
     } else {
       setBillingBase('token')

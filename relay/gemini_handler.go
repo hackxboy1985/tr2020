@@ -142,6 +142,10 @@ func GeminiHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 			return types.NewErrorWithStatusCode(err, types.ErrorCodeReadRequestBodyFailed, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 		}
 		requestBody = common.ReaderOnly(storage)
+		if body, err := storage.Bytes(); err == nil {
+			c.Set(string(constant.ContextKeyVideoRequestBody), string(body))
+			common.SysLog(fmt.Sprintf("Gemini upstream request body: %s", string(body)))
+		}
 	} else {
 		// 使用 ConvertGeminiRequest 转换请求格式
 		convertedRequest, err := adaptor.ConvertGeminiRequest(c, info, request)
@@ -163,6 +167,8 @@ func GeminiHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 		}
 
 		logger.LogDebug(c, "Gemini request body: %s", jsonData)
+		c.Set(string(constant.ContextKeyVideoRequestBody), string(jsonData))
+		common.SysLog(fmt.Sprintf("Gemini upstream request body: %s", string(jsonData)))
 
 		body, size, closer, err := relaycommon.NewOutboundJSONBody(jsonData)
 		if err != nil {
