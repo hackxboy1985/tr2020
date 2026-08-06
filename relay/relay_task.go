@@ -600,8 +600,13 @@ func imageTaskFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskRes
 	case model.TaskStatusSuccess:
 		resultURL := originTask.GetResultURL()
 		if originTask.ChannelId > 0 {
-			if ch, err := model.CacheGetChannel(originTask.ChannelId); err == nil && ch.Type == constant.ChannelTypeRR {
-				resultURL = rewriteRRResultURL(resultURL, ch.GetOtherSettings().RRUrlProxyBaseURL)
+			if ch, err := model.CacheGetChannel(originTask.ChannelId); err == nil {
+				switch ch.Type {
+				case constant.ChannelTypeRR:
+					resultURL = rewriteRRResultURL(resultURL, ch.GetOtherSettings().RRUrlProxyBaseURL)
+				case constant.ChannelTypeTudou:
+					resultURL = rewriteRRResultURL(resultURL, ch.GetOtherSettings().TdUrlProxyBaseURL)
+				}
 			}
 		}
 		var imageData []map[string]string

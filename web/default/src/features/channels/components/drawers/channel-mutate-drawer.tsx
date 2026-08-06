@@ -102,6 +102,7 @@ import {
 import { JsonEditor } from '@/components/json-editor'
 import { PosterPathConfigEditor } from '../poster-path-config-editor'
 import { RRPathConfigEditor } from '../rr-path-config-editor'
+import { TdConfigEditor } from '../td-config-editor'
 import { MultiSelect } from '@/components/multi-select'
 import {
   SecureVerificationDialog,
@@ -1871,6 +1872,26 @@ export function ChannelMutateDrawer({
                             <FormLabel>{t('Upstream Path Config')}</FormLabel>
                             <FormControl>
                               <RRPathConfigEditor
+                                value={field.value ?? ''}
+                                onChange={field.onChange}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+
+                    {/* Td (type 60) - URL TTL + proxy base URL config */}
+                    {currentType === 60 && (
+                      <FormField
+                        control={form.control}
+                        name='other'
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('URL Config')}</FormLabel>
+                            <FormControl>
+                              <TdConfigEditor
                                 value={field.value ?? ''}
                                 onChange={field.onChange}
                               />

@@ -451,7 +451,15 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		}
 		// 计算 URL 有效期（仅对设置了 TTL 的渠道类型）
 		if task.PrivateData.ExpireAt == 0 {
-			if ttlHours := ch.GetOtherSettings().RRUrlTTLHours; ttlHours > 0 {
+			otherSettings := ch.GetOtherSettings()
+			var ttlHours int
+			switch ch.Type {
+			case constant.ChannelTypeRR:
+				ttlHours = otherSettings.RRUrlTTLHours
+			case constant.ChannelTypeTudou:
+				ttlHours = otherSettings.TdUrlTTLHours
+			}
+			if ttlHours > 0 {
 				task.PrivateData.ExpireAt = now + int64(ttlHours)*3600
 			}
 		}
