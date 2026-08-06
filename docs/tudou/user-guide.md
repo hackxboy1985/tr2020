@@ -9,7 +9,7 @@
 ### 提交图像生成任务
 
 ```
-POST /v1/images/generations
+POST https://your-new-api-domain/v1/images/generations
 ```
 
 **请求头：**
@@ -52,7 +52,7 @@ Content-Type: application/json
 #### 文生图（基础）
 
 ```bash
-curl -X POST "/v1/images/generations" \
+curl -X POST "https://your-new-api-domain/v1/images/generations" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -69,7 +69,7 @@ curl -X POST "/v1/images/generations" \
 #### 文生图（4K高质量）
 
 ```bash
-curl -X POST "/v1/images/generations" \
+curl -X POST "https://your-new-api-domain/v1/images/generations" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -86,7 +86,7 @@ curl -X POST "/v1/images/generations" \
 #### 图生图（单张参考图 URL）
 
 ```bash
-curl -X POST "/v1/images/generations" \
+curl -X POST "https://your-new-api-domain/v1/images/generations" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -104,7 +104,7 @@ curl -X POST "/v1/images/generations" \
 #### 图生图（多张参考图融合）
 
 ```bash
-curl -X POST "/v1/images/generations" \
+curl -X POST "https://your-new-api-domain/v1/images/generations" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -125,7 +125,7 @@ curl -X POST "/v1/images/generations" \
 #### 图生图（base64 格式）
 
 ```bash
-curl -X POST "/v1/images/generations" \
+curl -X POST "https://your-new-api-domain/v1/images/generations" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -171,7 +171,7 @@ curl -X POST "/v1/images/generations" \
 ### 查询单个任务
 
 ```
-GET /v1/tasks/{task_id}
+GET https://your-new-api-domain/v1/tasks/{task_id}
 ```
 
 **请求头：**
@@ -187,7 +187,7 @@ Authorization: Bearer YOUR_API_KEY
 ### 查询示例
 
 ```bash
-curl "/v1/tasks/task_bSPHAaYDWZIUXM0YkfXgtiWUlPnGnare" \
+curl "https://your-new-api-domain/v1/tasks/task_bSPHAaYDWZIUXM0YkfXgtiWUlPnGnare" \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
@@ -263,7 +263,7 @@ import time
 
 def generate_image_and_wait(prompt, resolution="2k", quality="high"):
     # 1. 提交任务
-    submit_url = "/v1/images/generations"
+    submit_url = "https://your-new-api-domain/v1/images/generations"
     headers = {
         "Authorization": "Bearer YOUR_API_KEY",
         "Content-Type": "application/json"
@@ -287,7 +287,7 @@ def generate_image_and_wait(prompt, resolution="2k", quality="high"):
     time.sleep(15)
     
     # 3. 轮询查询结果
-    query_url = f"/v1/tasks/{task_id}"
+    query_url = f"https://your-new-api-domain/v1/tasks/{task_id}"
     max_attempts = 60  # 最多尝试 60 次（5 分钟）
     
     for i in range(max_attempts):
