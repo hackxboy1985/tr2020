@@ -530,8 +530,8 @@ export function tryParsePerCallConfig(
     }
 
     function parseRuleChain(s: string): void {
-      const match = s.match(/^([\s\S]+?)\s*\?\s*tier\("((?:\\.|[^"\\])*)",\s*([\s\S]+)\)\s*:\s*([\s\S]+)$/)
-      if (!match) {
+      const question = s.indexOf('?')
+      if (question < 0) {
         const fallback = s.match(/^tier\("fallback",\s*([\s\S]+)\)$/)
         const parsed = parsePriceAndMul(fallback ? fallback[1] : s)
         if (parsed) {
@@ -540,15 +540,48 @@ export function tryParsePerCallConfig(
         }
         return
       }
-      const parsed = parsePriceAndMul(match[3].trim())
+
+      const condition = s.slice(0, question).trim()
+      const tierStart = s.indexOf('tier("', question)
+      if (tierStart < 0) return
+      const labelStart = tierStart + 6
+      let labelEnd = labelStart
+      let escaped = false
+      for (; labelEnd < s.length; labelEnd++) {
+        const ch = s[labelEnd]
+        if (escaped) {
+          escaped = false
+        } else if (ch === '\\') {
+          escaped = true
+        } else if (ch === '"') {
+          break
+        }
+      }
+      if (labelEnd >= s.length) return
+      const bodyStart = s.indexOf(',', labelEnd + 1)
+      if (bodyStart < 0) return
+      let depth = 1
+      let bodyEnd = bodyStart + 1
+      for (; bodyEnd < s.length; bodyEnd++) {
+        if (s[bodyEnd] === '(') depth++
+        else if (s[bodyEnd] === ')') {
+          depth--
+          if (depth === 0) break
+        }
+      }
+      if (depth !== 0) return
+      const parsed = parsePriceAndMul(s.slice(bodyStart + 1, bodyEnd).trim())
       if (!parsed) return
+      const label = s.slice(labelStart, labelEnd).replace(/\\"/g, '"').replace(/\\\\/g, '\\')
       rules.push({
-        label: match[2] || `rule_${rules.length + 1}`,
-        conditions: parseConditionText(match[1].trim()),
+        label: label || `rule_${rules.length + 1}`,
+        conditions: parseConditionText(condition),
         pricePerCall: parsed.price,
         multiplier: parsed.multiplier,
       })
-      parseRuleChain(match[4].trim())
+      const rest = s.slice(bodyEnd + 1).trim()
+      if (!rest.startsWith(':')) return
+      parseRuleChain(rest.slice(1).trim())
     }
 
     const chainPrefix = 'v2: '
