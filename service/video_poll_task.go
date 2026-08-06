@@ -26,7 +26,7 @@ var (
 // StartVideoPollTask 启动视频状态轮询定时任务
 func StartVideoPollTask() {
 	videoPollOnce.Do(func() {
-		if !common.IsMasterNode {
+		if !common.IsMasterNode && !common.TaskPollEnabled {
 			return
 		}
 		gopool.Go(func() {
