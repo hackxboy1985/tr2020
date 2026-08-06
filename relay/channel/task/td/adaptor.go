@@ -140,6 +140,9 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	// 打印请求体用于调试
 	logger.LogInfo(nil, fmt.Sprintf("Td upstream request: %s", string(data)))
 
+	// 保存到 context，供 LogTaskConsumption 写入 other["request_body"]
+	c.Set(string(constant.ContextKeyVideoRequestBody), string(data))
+
 	return bytes.NewReader(data), nil
 }
 
@@ -183,6 +186,9 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 
 	taskID = sResp.Data.ID
 	taskData = responseBody
+
+	// 保存响应体到 context，供 LogTaskConsumption 写入 other["response_body"]
+	c.Set(string(constant.ContextKeyVideoResponseBody), string(responseBody))
 	return
 }
 
