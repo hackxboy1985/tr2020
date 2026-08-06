@@ -203,10 +203,16 @@ func convertImageRequestToTaskSubmitReq(req *dto.ImageRequest) relaycommon.TaskS
 // convertImageRequestToTudouTaskSubmitReq converts an OpenAI ImageRequest to a TaskSubmitReq for Tudou (Td) channel.
 func convertImageRequestToTudouTaskSubmitReq(req *dto.ImageRequest) relaycommon.TaskSubmitReq {
 	taskReq := relaycommon.TaskSubmitReq{
-		Prompt:     req.Prompt,
-		Size:       req.Size,
-		Quality:    req.Quality,    // Tudou uses Quality field directly
-		Resolution: req.Resolution, // Tudou requires Resolution (1k/2k/4k)
+		Prompt:  req.Prompt,
+		Size:    req.Size,
+		Quality: req.Quality,
+	}
+	// resolution 是扩展字段，存在 Extra 中
+	if v, ok := req.Extra["resolution"]; ok {
+		var resolution string
+		if err := common.Unmarshal(v, &resolution); err == nil {
+			taskReq.Resolution = resolution
+		}
 	}
 	// Extract image URLs for image-to-image requests
 	if len(req.Images) > 0 {
