@@ -688,6 +688,8 @@ type TaskSubmitReq struct {
 	Image          string                   `json:"image,omitempty"`
 	Images         []string                 `json:"images,omitempty"`
 	Size           string                   `json:"size,omitempty"`
+	Quality        string                   `json:"quality,omitempty"`        // 图像质量：standard/hd (OpenAI) 或 low/medium/high (扩展)
+	Resolution     string                   `json:"resolution,omitempty"`     // 分辨率档位：1k/2k/4k (扩展参数)
 	Duration       int                      `json:"duration,omitempty"`
 	Seconds        string                   `json:"seconds,omitempty"`
 	InputReference []string                 `json:"input_reference,omitempty"`

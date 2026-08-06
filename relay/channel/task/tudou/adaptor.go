@@ -50,8 +50,11 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 		)
 	}
 
-	// 验证 resolution
-	resolution := getStringFromMetadata(req.Metadata, "resolution", "1k")
+	// 获取并验证 resolution（默认 1k）
+	resolution := req.Resolution
+	if resolution == "" {
+		resolution = "1k"
+	}
 	if !isValidResolution(resolution) {
 		return service.TaskErrorWrapperLocal(
 			fmt.Errorf("invalid resolution: %s, must be one of: 1k, 2k, 4k", resolution),
@@ -60,11 +63,11 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 		)
 	}
 
-	// 验证 quality
-	quality := getStringFromMetadata(req.Metadata, "quality", "medium")
+	// 获取并验证 quality（默认 medium）
+	quality := normalizeQuality(req.Quality)
 	if !isValidQuality(quality) {
 		return service.TaskErrorWrapperLocal(
-			fmt.Errorf("invalid quality: %s, must be one of: low, medium, high", quality),
+			fmt.Errorf("invalid quality: %s, must be one of: low, medium, high, standard, hd", req.Quality),
 			"invalid_request",
 			http.StatusBadRequest,
 		)
@@ -103,9 +106,20 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	upstreamReq := GenerateRequest{
 		Model:      "gpt-image-2-all", // 固定模型
 		Prompt:     req.Prompt,
-		Size:       getStringFromMetadata(req.Metadata, "size", "1:1"),
-		Resolution: getStringFromMetadata(req.Metadata, "resolution", "1k"),
-		Quality:    getStringFromMetadata(req.Metadata, "quality", "medium"),
+		Size:       req.Size,
+		Resolution: req.Resolution,
+		Quality:    normalizeQuality(req.Quality),
+	}
+
+	// 默认值
+	if upstreamReq.Size == "" {
+		upstreamReq.Size = "1:1"
+	}
+	if upstreamReq.Resolution == "" {
+		upstreamReq.Resolution = "1k"
+	}
+	if upstreamReq.Quality == "" {
+		upstreamReq.Quality = "medium"
 	}
 
 	// 处理参考图（图生图模式）
@@ -267,5 +281,23 @@ func convertTudouStatus(status string) string {
 		return "failed"
 	default:
 		return "unknown"
+	}
+}
+
+// normalizeQuality 将 OpenAI 格式的 quality 转换为土豆平台格式
+// OpenAI: "standard" | "hd"
+// 土豆: "low" | "medium" | "high"
+func normalizeQuality(quality string) string {
+	switch strings.ToLower(quality) {
+	case "standard":
+		return QualityMedium
+	case "hd":
+		return QualityHigh
+	case "low", "medium", "high":
+		return strings.ToLower(quality)
+	case "":
+		return QualityMedium
+	default:
+		return quality // 返回原值，让验证函数处理
 	}
 }

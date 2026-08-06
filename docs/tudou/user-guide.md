@@ -27,8 +27,8 @@ Content-Type: application/json
 | prompt | string | 是 | 图像描述，支持中英文，建议详细描述 |
 | size | string | 否 | 画面比例，如 `1:1` `16:9` `3:2` 等，默认 `1:1` |
 | images | array[string] | 否 | 参考图数组（图生图模式），支持 HTTP/HTTPS URL 或 base64 |
-| metadata.resolution | string | 是 | 清晰度档位：`1k` / `2k` / `4k` |
-| metadata.quality | string | 是 | 质量档位：`low` / `medium` / `high` |
+| resolution | string | 否 | 清晰度档位：`1k` / `2k` / `4k`，默认 `1k` |
+| quality | string | 否 | 质量档位：`low` / `medium` / `high` 或 `standard` / `hd`（OpenAI格式），默认 `medium` |
 
 **支持的画面比例 (size)：**
 
@@ -59,10 +59,8 @@ curl -X POST "https://your-new-api-domain/v1/images/generations" \
     "model": "gpt-image-2-all",
     "prompt": "一只橘猫坐在窗台上看夕阳，水彩画风格",
     "size": "1:1",
-    "metadata": {
-      "resolution": "2k",
-      "quality": "high"
-    }
+    "resolution": "2k",
+    "quality": "high"
   }'
 ```
 
@@ -76,10 +74,8 @@ curl -X POST "https://your-new-api-domain/v1/images/generations" \
     "model": "gpt-image-2-all",
     "prompt": "星空下的古老城堡，电影感，细节丰富",
     "size": "16:9",
-    "metadata": {
-      "resolution": "4k",
-      "quality": "high"
-    }
+    "resolution": "4k",
+    "quality": "high"
   }'
 ```
 
@@ -94,10 +90,8 @@ curl -X POST "https://your-new-api-domain/v1/images/generations" \
     "prompt": "把这张照片变成水彩画风格",
     "size": "4:3",
     "images": ["https://example.com/photo.jpg"],
-    "metadata": {
-      "resolution": "2k",
-      "quality": "medium"
-    }
+    "resolution": "2k",
+    "quality": "medium"
   }'
 ```
 
@@ -115,10 +109,8 @@ curl -X POST "https://your-new-api-domain/v1/images/generations" \
       "https://example.com/photo1.jpg",
       "https://example.com/photo2.jpg"
     ],
-    "metadata": {
-      "resolution": "4k",
-      "quality": "high"
-    }
+    "resolution": "4k",
+    "quality": "high"
   }'
 ```
 
@@ -135,12 +127,29 @@ curl -X POST "https://your-new-api-domain/v1/images/generations" \
     "images": [
       "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAA..."
     ],
-    "metadata": {
-      "resolution": "2k",
-      "quality": "medium"
-    }
+    "resolution": "2k",
+    "quality": "medium"
   }'
 ```
+
+#### 兼容 OpenAI 格式
+
+```bash
+curl -X POST "https://your-new-api-domain/v1/images/generations" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-image-2-all",
+    "prompt": "一只可爱的小猫",
+    "size": "1024x1024",
+    "quality": "hd",
+    "resolution": "2k"
+  }'
+```
+
+**注意**：`quality` 支持 OpenAI 标准格式：
+- `standard` → 映射为 `medium`
+- `hd` → 映射为 `high`
 
 **注意：** base64 格式必须带 `data:image/png;base64,` 或 `data:image/jpeg;base64,` 前缀。
 
@@ -272,10 +281,8 @@ def generate_image_and_wait(prompt, resolution="2k", quality="high"):
         "model": "gpt-image-2-all",
         "prompt": prompt,
         "size": "1:1",
-        "metadata": {
-            "resolution": resolution,
-            "quality": quality
-        }
+        "resolution": resolution,
+        "quality": quality
     }
     
     response = requests.post(submit_url, json=payload, headers=headers)
