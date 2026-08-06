@@ -1,4 +1,4 @@
-package tudou
+package td
 
 import (
 	"bytes"

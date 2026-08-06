@@ -1,4 +1,4 @@
-package tudou
+package td
 
 const (
 	EndpointGenerateAsync = "/v1/images/generations/async"
