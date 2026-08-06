@@ -569,6 +569,9 @@ func OpenaiHandlerWithUsage(c *gin.Context, info *relaycommon.RelayInfo, resp *h
 	// 写入新的 response body
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 
+	// 保存响应体到 context，供消费日志写入 other["response_body"]
+	c.Set(string(constant.ContextKeyVideoResponseBody), string(responseBody))
+
 	// Once we've written to the client, we should not return errors anymore
 	// because the upstream has already consumed resources and returned content
 	// We should still perform billing even if parsing fails
