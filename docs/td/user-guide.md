@@ -180,7 +180,7 @@ curl -X POST "https://your-new-api-domain/v1/images/generations" \
 ### 查询单个任务
 
 ```
-GET https://your-new-api-domain/v1/tasks/{task_id}
+GET https://your-new-api-domain/v1/images/tasks/{task_id}
 ```
 
 **请求头：**
@@ -196,7 +196,7 @@ Authorization: Bearer YOUR_API_KEY
 ### 查询示例
 
 ```bash
-curl "https://your-new-api-domain/v1/tasks/task_bSPHAaYDWZIUXM0YkfXgtiWUlPnGnare" \
+curl "https://your-new-api-domain/v1/images/tasks/task_bSPHAaYDWZIUXM0YkfXgtiWUlPnGnare" \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
@@ -305,7 +305,7 @@ def generate_image_and_wait(prompt, resolution="2k", quality="high"):
     time.sleep(15)
     
     # 3. 轮询查询结果
-    query_url = f"https://your-new-api-domain/v1/tasks/{task_id}"
+    query_url = f"https://your-new-api-domain/v1/images/tasks/{task_id}"
     max_attempts = 60  # 最多尝试 60 次（5 分钟）
     
     for i in range(max_attempts):
