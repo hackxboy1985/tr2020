@@ -1,29 +1,21 @@
-# 土豆平台图像生成 API 用户文档
+# 图像生成 API 用户文档
 
 ## 概述
 
-土豆平台提供异步图像生成服务，支持文生图和图生图两种模式。通过 new-api 网关，下游用户可以使用 OpenAI 兼容的接口格式调用该服务。
-
-## 配置要求
-
-1. 在 new-api 管理后台添加土豆渠道
-2. 渠道类型选择：**Td** (土豆)
-3. 填写 API Key
-4. 设置 Base URL：`https://api.ai-tudou.net`
-5. 配置「默认分组」（default分组）
+本服务提供异步图像生成功能，支持文生图和图生图两种模式。使用 OpenAI 兼容的接口格式。
 
 ## 接口端点
 
 ### 提交图像生成任务
 
 ```
-POST https://your-new-api-domain/v1/images/generations
+POST /v1/images/generations
 ```
 
 **请求头：**
 
 ```
-Authorization: Bearer YOUR_NEW_API_TOKEN
+Authorization: Bearer YOUR_API_KEY
 Content-Type: application/json
 ```
 
@@ -60,8 +52,8 @@ Content-Type: application/json
 #### 文生图（基础）
 
 ```bash
-curl -X POST "https://your-new-api-domain/v1/images/generations" \
-  -H "Authorization: Bearer YOUR_NEW_API_TOKEN" \
+curl -X POST "/v1/images/generations" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-image-2-all",
@@ -77,8 +69,8 @@ curl -X POST "https://your-new-api-domain/v1/images/generations" \
 #### 文生图（4K高质量）
 
 ```bash
-curl -X POST "https://your-new-api-domain/v1/images/generations" \
-  -H "Authorization: Bearer YOUR_NEW_API_TOKEN" \
+curl -X POST "/v1/images/generations" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-image-2-all",
@@ -94,8 +86,8 @@ curl -X POST "https://your-new-api-domain/v1/images/generations" \
 #### 图生图（单张参考图 URL）
 
 ```bash
-curl -X POST "https://your-new-api-domain/v1/images/generations" \
-  -H "Authorization: Bearer YOUR_NEW_API_TOKEN" \
+curl -X POST "/v1/images/generations" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-image-2-all",
@@ -112,8 +104,8 @@ curl -X POST "https://your-new-api-domain/v1/images/generations" \
 #### 图生图（多张参考图融合）
 
 ```bash
-curl -X POST "https://your-new-api-domain/v1/images/generations" \
-  -H "Authorization: Bearer YOUR_NEW_API_TOKEN" \
+curl -X POST "/v1/images/generations" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-image-2-all",
@@ -133,8 +125,8 @@ curl -X POST "https://your-new-api-domain/v1/images/generations" \
 #### 图生图（base64 格式）
 
 ```bash
-curl -X POST "https://your-new-api-domain/v1/images/generations" \
-  -H "Authorization: Bearer YOUR_NEW_API_TOKEN" \
+curl -X POST "/v1/images/generations" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-image-2-all",
@@ -179,13 +171,13 @@ curl -X POST "https://your-new-api-domain/v1/images/generations" \
 ### 查询单个任务
 
 ```
-GET https://your-new-api-domain/v1/tasks/{task_id}
+GET /v1/tasks/{task_id}
 ```
 
 **请求头：**
 
 ```
-Authorization: Bearer YOUR_NEW_API_TOKEN
+Authorization: Bearer YOUR_API_KEY
 ```
 
 **路径参数：**
@@ -195,8 +187,8 @@ Authorization: Bearer YOUR_NEW_API_TOKEN
 ### 查询示例
 
 ```bash
-curl "https://your-new-api-domain/v1/tasks/task_bSPHAaYDWZIUXM0YkfXgtiWUlPnGnare" \
-  -H "Authorization: Bearer YOUR_NEW_API_TOKEN"
+curl "/v1/tasks/task_bSPHAaYDWZIUXM0YkfXgtiWUlPnGnare" \
+  -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
 ### 响应格式
@@ -271,9 +263,9 @@ import time
 
 def generate_image_and_wait(prompt, resolution="2k", quality="high"):
     # 1. 提交任务
-    submit_url = "https://your-new-api-domain/v1/images/generations"
+    submit_url = "/v1/images/generations"
     headers = {
-        "Authorization": "Bearer YOUR_NEW_API_TOKEN",
+        "Authorization": "Bearer YOUR_API_KEY",
         "Content-Type": "application/json"
     }
     payload = {
@@ -295,7 +287,7 @@ def generate_image_and_wait(prompt, resolution="2k", quality="high"):
     time.sleep(15)
     
     # 3. 轮询查询结果
-    query_url = f"https://your-new-api-domain/v1/tasks/{task_id}"
+    query_url = f"/v1/tasks/{task_id}"
     max_attempts = 60  # 最多尝试 60 次（5 分钟）
     
     for i in range(max_attempts):
@@ -343,14 +335,14 @@ image_url = generate_image_and_wait("一只可爱的小猫", resolution="4k", qu
    - 支持公网 HTTP/HTTPS URL
    - 支持 base64 格式（需带 MIME 前缀）
    - 不支持本地文件路径
-4. **并发限制**：根据渠道配置的并发数限制，建议高并发场景使用队列
+4. **并发限制**：根据账户配置的并发数限制，建议高并发场景使用队列
 5. **Prompt 优化**：详细的描述能获得更好的生成效果
 
 ---
 
 ## 定价参考
 
-具体价格请参考管理后台的模型定价配置。一般来说：
+具体价格请参考管理后台的定价配置。一般来说：
 
 - **1k + low**: 最经济，适合预览和测试
 - **2k + medium**: 平衡选择，适合日常使用
@@ -360,5 +352,4 @@ image_url = generate_image_and_wait("一只可爱的小猫", resolution="4k", qu
 
 ## 技术支持
 
-如有问题，请联系管理员或查看项目文档：
-- GitHub: https://github.com/QuantumNous/new-api
+如有问题，请联系管理员。
