@@ -553,27 +553,14 @@ func recordTaskCompletionLog(task *model.Task, responseBody []byte) {
 	if task == nil {
 		return
 	}
-	other := taskBillingOther(task)
-	other["task_id"] = task.TaskID
-	other["task_log_source"] = "polling_result"
-	if upstreamTaskID := task.GetUpstreamTaskID(); upstreamTaskID != "" {
-		other["upstream_task_id"] = upstreamTaskID
-	}
+	// 将最终响应体追加到原始提交日志的 other 字段，不单独新建日志
+	extra := map[string]interface{}{}
 	if len(responseBody) > 0 {
-		other["response_body"] = TruncateBody(string(responseBody))
+		extra["final_response_body"] = TruncateBody(string(responseBody))
 	}
-	model.RecordTaskBillingLog(model.RecordTaskBillingLogParams{
-		UserId:    task.UserId,
-		LogType:   model.LogTypeConsume,
-		Content:   "查询结果",
-		ChannelId: task.ChannelId,
-		ModelName: taskModelName(task),
-		Quota:     0,
-		TokenId:   task.PrivateData.TokenId,
-		Group:     task.Group,
-		Other:     other,
-		TaskId:    task.TaskID,
-	})
+	if err := model.AppendTaskLogOther(task.TaskID, extra); err != nil {
+		logger.LogWarn(context.Background(), fmt.Sprintf("AppendTaskLogOther failed for task %s: %v", task.TaskID, err))
+	}
 }
 
 // settleTaskBillingOnComplete 任务完成时的统一计费调整。
