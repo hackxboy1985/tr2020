@@ -186,7 +186,7 @@ func (a *TaskAdaptor) GetModelList() []string {
 
 // GetChannelName 返回渠道名称
 func (a *TaskAdaptor) GetChannelName() string {
-	return "Tudou"
+	return "Td"
 }
 
 // FetchTask 查询任务状态（轮询使用）
