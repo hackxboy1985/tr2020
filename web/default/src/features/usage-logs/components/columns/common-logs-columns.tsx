@@ -54,6 +54,7 @@ import {
   getLogTypeConfig,
   isPerCallBilling,
 } from '../../lib/utils'
+import { formatTierLabel } from '@/features/pricing/lib/billing-expr'
 import type { LogOtherData } from '../../types'
 import { DetailsDialog } from '../dialogs/details-dialog'
 import { LogPromptDialog } from '../dialogs/log-prompt-dialog'
@@ -164,10 +165,23 @@ function buildDetailSegments(
         .filter((entry) => ['inputPrice', 'outputPrice'].includes(entry.field))
         .map((entry) => formatPriceCompact(entry.price))
       if (baseEntries.length > 0) {
-        const tierLabel = tieredSummary.tier.label || t('Default')
+        const tierLabel = formatTierLabel(tieredSummary.tier.label) || t('Default')
         segments.push({
           text: `${tierLabel} · ${formatPriceList(baseEntries, true)}`,
         })
+      } else {
+        // per-call 模式：无 token price，展示命中阶梯和每次价格
+        const tierLabel = formatTierLabel(tieredSummary.tier.label) || t('Default')
+        const matchedPrice = other.matched_price
+        if (matchedPrice != null) {
+          segments.push({
+            text: `${t('Per-call')} · ${tierLabel} · ${formatBillingCurrencyFromUSD(matchedPrice, priceOpts)}/call`,
+          })
+        } else {
+          segments.push({
+            text: `${t('Per-call')} · ${tierLabel}`,
+          })
+        }
       }
 
       const cacheEntries = tieredSummary.priceEntries
@@ -205,10 +219,19 @@ function buildDetailSegments(
         })
       }
     } else {
-      segments.push({
-        text: `${t('Dynamic Pricing')} · ${t('No matching results')}`,
-        muted: true,
-      })
+      // tieredSummary 为 null：matched_tier 无法匹配，降级展示按次计费+总费用
+      const matchedPrice = other.matched_price
+      if (matchedPrice != null) {
+        segments.push({
+          text: `${t('Per-call')} · ${formatBillingCurrencyFromUSD(matchedPrice, priceOpts)}/call`,
+          muted: true,
+        })
+      } else {
+        segments.push({
+          text: t('Per-call'),
+          muted: true,
+        })
+      }
     }
   } else {
     const isPerCall = isPerCallBilling(other.model_price)
