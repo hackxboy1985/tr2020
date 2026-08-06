@@ -55,6 +55,7 @@ import { DEFAULT_TOKEN_UNIT, QUOTA_TYPE_VALUES } from '../constants'
 import { usePricingData } from '../hooks/use-pricing-data'
 import {
   formatDynamicUnitPrice,
+  formatPerCallPrice,
   getDynamicPriceEntries,
   getDynamicPricingSummary,
   getDynamicPricingTiers,
@@ -688,12 +689,10 @@ function GroupPricingSection(props: {
                                 : t('Always matches')}
                             </span>
                             <span className='shrink-0 font-mono text-xs font-semibold'>
-                              {formatDynamicUnitPrice(rule.pricePerCall * 1_000_000 * ratio, {
-                                tokenUnit: props.tokenUnit,
+                              {formatPerCallPrice(rule.pricePerCall * ratio, {
                                 showRechargePrice: showRechargePrice,
                                 priceRate: props.priceRate,
                                 usdExchangeRate: props.usdExchangeRate,
-                                groupRatioMultiplier: 1,
                               })}{mulSuffix(rule.multiplier)}/call
                             </span>
                           </div>
@@ -701,12 +700,10 @@ function GroupPricingSection(props: {
                         <div className='flex items-center justify-between gap-3 rounded px-2 py-1.5 text-sm'>
                           <span className='text-muted-foreground text-xs'>{t('Fallback price')}</span>
                           <span className='shrink-0 font-mono text-xs'>
-                            {formatDynamicUnitPrice(perCallConfig.fallbackPrice * 1_000_000 * ratio, {
-                              tokenUnit: props.tokenUnit,
+                            {formatPerCallPrice(perCallConfig.fallbackPrice * ratio, {
                               showRechargePrice: showRechargePrice,
                               priceRate: props.priceRate,
                               usdExchangeRate: props.usdExchangeRate,
-                              groupRatioMultiplier: 1,
                             })}{mulSuffix(perCallConfig.fallbackMultiplier)}/call
                           </span>
                         </div>

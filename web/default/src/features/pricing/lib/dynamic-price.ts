@@ -114,6 +114,26 @@ export function formatDynamicUnitPrice(
   })
 }
 
+/** 按次计费专用格式化：pricePerCall 单位是美元/次，不需要 token 换算 */
+export function formatPerCallPrice(
+  pricePerCall: number,
+  options: Omit<DynamicPriceOptions, 'tokenUnit' | 'groupRatioMultiplier'>
+): string {
+  const priceRate = options.priceRate ?? 1
+  const usdExchangeRate = options.usdExchangeRate ?? 1
+  const displayPrice = applyRechargeRate(
+    pricePerCall,
+    options.showRechargePrice ?? false,
+    priceRate,
+    usdExchangeRate
+  )
+  return formatBillingCurrencyFromUSD(displayPrice, {
+    digitsLarge: 4,
+    digitsSmall: 6,
+    abbreviate: false,
+  })
+}
+
 export function getDynamicPricingTiers(model: PricingModel): ParsedTier[] {
   if (!isDynamicPricingModel(model)) return []
   const { billingExpr } = splitBillingExprAndRequestRules(
