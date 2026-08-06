@@ -373,7 +373,7 @@ func handleTudouImageTask(c *gin.Context, info *relaycommon.RelayInfo, imageReq 
 	logger.LogInfo(c, fmt.Sprintf("Tudou image task submitted: taskId=%s upstreamId=%s quota=%d",
 		info.PublicTaskID, result.UpstreamTaskID, result.Quota))
 
-	// 返回任务提交响应给用户
+	// 返回任务提交响应给用户：自己的 task_id 和 submitted 状态
 	c.JSON(http.StatusOK, gin.H{
 		"task_id": info.PublicTaskID,
 		"status":  "submitted",
