@@ -170,16 +170,15 @@ function buildDetailSegments(
           text: `${tierLabel} · ${formatPriceList(baseEntries, true)}`,
         })
       } else {
-        // per-call 模式：无 token price，展示命中阶梯和每次价格
-        const tierLabel = formatTierLabel(tieredSummary.tier.label) || t('Default')
+        // per-call 模式：无 token price，只展示按次计费+价格
         const matchedPrice = other.matched_price
         if (matchedPrice != null) {
           segments.push({
-            text: `${t('Per-call')} · ${tierLabel} · ${formatBillingCurrencyFromUSD(matchedPrice, priceOpts)}/call`,
+            text: `${t('Per-call')} · ${formatBillingCurrencyFromUSD(matchedPrice, priceOpts)}/call`,
           })
         } else {
           segments.push({
-            text: `${t('Per-call')} · ${tierLabel}`,
+            text: t('Per-call'),
           })
         }
       }
