@@ -115,6 +115,11 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		Quality:    normalizeQuality(req.Quality),
 	}
 
+	// 如果 Size 为空，使用 Ratio 字段
+	if upstreamReq.Size == "" && req.Ratio != "" {
+		upstreamReq.Size = req.Ratio
+	}
+
 	// 默认值
 	if upstreamReq.Size == "" {
 		upstreamReq.Size = "1:1"
