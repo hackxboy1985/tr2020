@@ -307,6 +307,7 @@ export function parseTiersFromExpr(exprStr: string): ParsedTier[] {
 export function normalizeTierLabel(label: string | undefined): string {
   if (!label) return ''
   return label
+    .replace(/\\"/g, '"')   // unescape \" → " so escaped and raw labels compare equal
     .replace(/<[=＝]?|≤|＜[=＝]?/g, '<')
     .replace(/>[=＝]?|≥|＞[=＝]?/g, '>')
     .replace(/\s+/g, '')
