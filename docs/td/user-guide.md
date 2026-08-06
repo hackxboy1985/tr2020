@@ -170,7 +170,7 @@ curl -X POST "https://your-new-api-domain/v1/images/generations" \
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | string | 任务ID（task_ 前缀），用于后续查询 |
-| status | string | 任务状态：`submitted` / `processing` / `completed` / `failed` |
+| status | string | 任务状态：`submitted`（已提交） |
 | created | integer | 创建时间戳（Unix时间戳） |
 
 ---
@@ -206,9 +206,10 @@ curl "https://your-new-api-domain/v1/tasks/task_bSPHAaYDWZIUXM0YkfXgtiWUlPnGnare
 
 ```json
 {
-  "task_id": "task_bSPHAaYDWZIUXM0YkfXgtiWUlPnGnare",
+  "id": "task_bSPHAaYDWZIUXM0YkfXgtiWUlPnGnare",
   "status": "processing",
-  "progress": "30%"
+  "model": "gpt-image-2-all",
+  "created": 1780979971
 }
 ```
 
@@ -216,9 +217,13 @@ curl "https://your-new-api-domain/v1/tasks/task_bSPHAaYDWZIUXM0YkfXgtiWUlPnGnare
 
 ```json
 {
-  "task_id": "task_bSPHAaYDWZIUXM0YkfXgtiWUlPnGnare",
-  "status": "completed",
-  "url": "https://xxxxxx/image/xxxxxxxx_0.png"
+  "id": "task_bSPHAaYDWZIUXM0YkfXgtiWUlPnGnare",
+  "status": "succeeded",
+  "model": "gpt-image-2-all",
+  "created": 1780979971,
+  "result": {
+    "data": [{"url": "https://xxxxxx/image/xxxxxxxx_0.png"}]
+  }
 }
 ```
 
@@ -226,9 +231,14 @@ curl "https://your-new-api-domain/v1/tasks/task_bSPHAaYDWZIUXM0YkfXgtiWUlPnGnare
 
 ```json
 {
-  "task_id": "task_bSPHAaYDWZIUXM0YkfXgtiWUlPnGnare",
+  "id": "task_bSPHAaYDWZIUXM0YkfXgtiWUlPnGnare",
   "status": "failed",
-  "reason": "moderation failed"
+  "model": "gpt-image-2-all",
+  "created": 1780979971,
+  "error": {
+    "code": "task_failed",
+    "message": "moderation failed"
+  }
 }
 ```
 
@@ -236,11 +246,12 @@ curl "https://your-new-api-domain/v1/tasks/task_bSPHAaYDWZIUXM0YkfXgtiWUlPnGnare
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| task_id | string | 任务ID |
-| status | string | 任务状态：`submitted`（已提交）/ `processing`（处理中）/ `completed`（成功）/ `failed`（失败） |
-| progress | string | 进度百分比（仅处理中时返回） |
-| url | string | 生成的图像URL（仅成功时返回） |
-| reason | string | 失败原因（仅失败时返回） |
+| id | string | 任务ID |
+| status | string | 任务状态：`processing`（处理中）/ `succeeded`（成功）/ `failed`（失败） |
+| model | string | 模型名称 |
+| created | integer | 创建时间戳 |
+| result.data | array | 生成的图像列表（仅成功时返回） |
+| error.message | string | 失败原因（仅失败时返回） |
 
 ---
 

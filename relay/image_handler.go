@@ -375,8 +375,9 @@ func handleTudouImageTask(c *gin.Context, info *relaycommon.RelayInfo, imageReq 
 
 	// 返回任务提交响应给用户：自己的 task_id 和 submitted 状态
 	c.JSON(http.StatusOK, gin.H{
-		"task_id": info.PublicTaskID,
+		"id":      info.PublicTaskID,
 		"status":  "submitted",
+		"created": task.CreatedAt,
 	})
 
 	return nil
