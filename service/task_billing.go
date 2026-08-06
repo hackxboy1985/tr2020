@@ -56,6 +56,9 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 	if responseBody := c.GetString(string(constant.ContextKeyVideoResponseBody)); responseBody != "" {
 		other["response_body"] = TruncateBody(responseBody)
 	}
+	if upstreamRequestPath := c.GetString(string(constant.ContextKeyVideoRequestPath)); upstreamRequestPath != "" {
+		other["upstream_request_path"] = upstreamRequestPath
+	}
 	model.RecordConsumeLog(c, info.UserId, model.RecordConsumeLogParams{
 		ChannelId: info.ChannelId,
 		ModelName: info.OriginModelName,

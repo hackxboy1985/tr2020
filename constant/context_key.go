@@ -73,4 +73,5 @@ const (
 	ContextKeyVideoSaveRequestResponse ContextKey = "video_save_request_response"
 	ContextKeyVideoRequestBody         ContextKey = "video_request_body"
 	ContextKeyVideoResponseBody        ContextKey = "video_response_body"
+	ContextKeyVideoRequestPath         ContextKey = "video_request_path"
 )
