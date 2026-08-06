@@ -80,7 +80,9 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 
 // BuildRequestURL 构建上游URL
 func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, error) {
-	return fmt.Sprintf("%s%s", a.baseURL, EndpointGenerateAsync), nil
+	fullUrl := fmt.Sprintf("%s%s", a.baseURL, EndpointGenerateAsync)
+	logger.SysLog(fmt.Sprintf("Td request URL: %s", fullUrl))
+	return fullUrl, nil
 }
 
 // BuildRequestHeader 设置请求头
@@ -133,6 +135,10 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	if err != nil {
 		return nil, err
 	}
+
+	// 打印请求体用于调试
+	logger.SysLog(fmt.Sprintf("Td upstream request: %s", string(data)))
+
 	return bytes.NewReader(data), nil
 }
 
