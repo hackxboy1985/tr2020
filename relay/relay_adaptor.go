@@ -21,6 +21,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/channel/poster"
 	taskposter "github.com/QuantumNous/new-api/relay/channel/task/poster"
 	taskrr "github.com/QuantumNous/new-api/relay/channel/task/rr"
+	tasktudou "github.com/QuantumNous/new-api/relay/channel/task/tudou"
 	"github.com/QuantumNous/new-api/relay/channel/jina"
 	"github.com/QuantumNous/new-api/relay/channel/minimax"
 	"github.com/QuantumNous/new-api/relay/channel/mistral"
@@ -168,6 +169,8 @@ func GetTaskAdaptor(platform constant.TaskPlatform) channel.TaskAdaptor {
 			return &taskposter.TaskAdaptor{}
 		case constant.ChannelTypeRR:
 			return &taskrr.TaskAdaptor{}
+		case constant.ChannelTypeTudou:
+			return &tasktudou.TaskAdaptor{}
 		}
 	}
 	return nil

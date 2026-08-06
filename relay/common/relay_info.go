@@ -690,7 +690,7 @@ type TaskSubmitReq struct {
 	Size           string                   `json:"size,omitempty"`
 	Duration       int                      `json:"duration,omitempty"`
 	Seconds        string                   `json:"seconds,omitempty"`
-	InputReference string                   `json:"input_reference,omitempty"`
+	InputReference []string                 `json:"input_reference,omitempty"`
 	Metadata       map[string]interface{}   `json:"metadata,omitempty"`
 	// Ark 原生格式：content[] 数组，兼容直接透传
 	Content        []map[string]interface{} `json:"content,omitempty"`

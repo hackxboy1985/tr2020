@@ -57,6 +57,7 @@ const (
 	ChannelTypeCodex          = 57
 	ChannelTypePoster         = 58
 	ChannelTypeRR             = 59
+	ChannelTypeTudou          = 60
 	ChannelTypeDummy          // this one is only for count, do not add any channel after this
 
 )
@@ -122,6 +123,7 @@ var ChannelBaseURLs = []string{
 	"https://chatgpt.com",                       //57
 	"",                                          //58 poster
 	"https://www.runninghub.ai",                 //59 rr
+	"https://api.ai-tudou.net",                  //60 tudou
 }
 
 var ChannelTypeNames = map[int]string{
@@ -181,6 +183,7 @@ var ChannelTypeNames = map[int]string{
 	ChannelTypeCodex:          "Codex",
 	ChannelTypePoster:         "Poster",
 	ChannelTypeRR:             "RR",
+	ChannelTypeTudou:          "Td",
 }
 
 func GetChannelTypeName(channelType int) string {

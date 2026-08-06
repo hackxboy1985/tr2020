@@ -261,7 +261,7 @@ func (a *TaskAdaptor) convertToAliRequest(info *relaycommon.RelayInfo, req relay
 		Model: upstreamModel,
 		Input: AliVideoInput{
 			Prompt: req.Prompt,
-			ImgURL: req.InputReference,
+			ImgURL: getFirstString(req.InputReference),
 		},
 		Parameters: &AliVideoParameters{
 			PromptExtend: true, // 默认开启智能改写
@@ -533,3 +533,11 @@ func convertAliStatus(aliStatus string) string {
 		return dto.VideoStatusUnknown
 	}
 }
+
+func getFirstString(arr []string) string {
+	if len(arr) > 0 {
+		return arr[0]
+	}
+	return ""
+}
+
