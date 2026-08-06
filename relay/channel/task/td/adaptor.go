@@ -230,7 +230,10 @@ func (a *TaskAdaptor) FetchTask(baseUrl, key string, body map[string]any, proxy 
 	req.Header.Set("Authorization", "Bearer "+key)
 	req.Header.Set("Accept", "application/json")
 
-	client := &http.Client{}
+	client, err := service.GetHttpClientWithProxy(proxy)
+	if err != nil {
+		return nil, err
+	}
 	return client.Do(req)
 }
 
