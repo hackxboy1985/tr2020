@@ -553,6 +553,19 @@ func recordTaskCompletionLog(task *model.Task, responseBody []byte) {
 	if task == nil {
 		return
 	}
+
+	// Td 渠道：将最终响应体追加到原始提交日志，不单独新建"查询结果"日志
+	if ch, err := model.CacheGetChannel(task.ChannelId); err == nil && ch.Type == constant.ChannelTypeTudou {
+		extra := map[string]interface{}{}
+		if len(responseBody) > 0 {
+			extra["final_response_body"] = TruncateBody(string(responseBody))
+		}
+		if err := model.AppendTaskLogOther(task.TaskID, extra); err != nil {
+			logger.LogWarn(context.Background(), fmt.Sprintf("AppendTaskLogOther failed for task %s: %v", task.TaskID, err))
+		}
+		return
+	}
+
 	other := taskBillingOther(task)
 	other["task_id"] = task.TaskID
 	other["task_log_source"] = "polling_result"
