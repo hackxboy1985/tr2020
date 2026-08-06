@@ -233,38 +233,71 @@ export function SidebarModulesSection({
                 />
 
                 <SettingsControlChildren className='grid gap-3 md:grid-cols-2'>
-                  {modules.map(([moduleKey]) => {
+                  {modules.map(([moduleKey, moduleValue]) => {
                     const moduleInfo = moduleMeta[sectionKey]?.[moduleKey] ?? {
                       title: toTitleCase(moduleKey),
                       description: t('Custom module'),
                     }
+                    const isObjectConfig = typeof moduleValue === 'object' && moduleValue !== null
+                    const hasAdminOnly = isObjectConfig && 'adminOnly' in moduleValue
+
                     return (
-                      <FormField
-                        key={`${sectionKey}.${moduleKey}`}
-                        control={form.control}
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        name={`${sectionKey}.${moduleKey}` as any}
-                        render={({ field }) => (
-                          <SettingsSwitchItem className='border-b-0 py-2'>
-                            <SettingsSwitchContent>
-                              <FormLabel>{moduleInfo.title}</FormLabel>
-                              <FormDescription>
-                                {moduleInfo.description}
-                              </FormDescription>
-                            </SettingsSwitchContent>
-                            <FormControl>
-                              <Switch
-                                checked={Boolean(field.value)}
-                                onCheckedChange={field.onChange}
-                                disabled={
-                                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                  !form.watch(`${sectionKey}.enabled` as any)
-                                }
-                              />
-                            </FormControl>
-                          </SettingsSwitchItem>
+                      <div key={`${sectionKey}.${moduleKey}`} className='space-y-2'>
+                        <FormField
+                          control={form.control}
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          name={isObjectConfig ? `${sectionKey}.${moduleKey}.enabled` as any : `${sectionKey}.${moduleKey}` as any}
+                          render={({ field }) => (
+                            <SettingsSwitchItem className='border-b-0 py-2'>
+                              <SettingsSwitchContent>
+                                <FormLabel>{moduleInfo.title}</FormLabel>
+                                <FormDescription>
+                                  {moduleInfo.description}
+                                </FormDescription>
+                              </SettingsSwitchContent>
+                              <FormControl>
+                                <Switch
+                                  checked={Boolean(field.value)}
+                                  onCheckedChange={field.onChange}
+                                  disabled={
+                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                    !form.watch(`${sectionKey}.enabled` as any)
+                                  }
+                                />
+                              </FormControl>
+                            </SettingsSwitchItem>
+                          )}
+                        />
+                        {hasAdminOnly && (
+                          <FormField
+                            control={form.control}
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            name={`${sectionKey}.${moduleKey}.adminOnly` as any}
+                            render={({ field }) => (
+                              <SettingsSwitchItem className='border-b-0 py-2 pl-6'>
+                                <SettingsSwitchContent>
+                                  <FormLabel>{t('Admin only')}</FormLabel>
+                                  <FormDescription>
+                                    {t('Only visible to administrators (role ≥ 10)')}
+                                  </FormDescription>
+                                </SettingsSwitchContent>
+                                <FormControl>
+                                  <Switch
+                                    checked={Boolean(field.value)}
+                                    onCheckedChange={field.onChange}
+                                    disabled={
+                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                      !form.watch(`${sectionKey}.enabled` as any) ||
+                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                      !form.watch(`${sectionKey}.${moduleKey}.enabled` as any)
+                                    }
+                                  />
+                                </FormControl>
+                              </SettingsSwitchItem>
+                            )}
+                          />
                         )}
-                      />
+                      </div>
                     )
                   })}
                 </SettingsControlChildren>

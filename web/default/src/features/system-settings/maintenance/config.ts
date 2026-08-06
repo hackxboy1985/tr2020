@@ -33,7 +33,7 @@ export type HeaderNavModulesConfig = {
 
 export type SidebarSectionConfig = {
   enabled: boolean
-  [key: string]: boolean
+  [key: string]: boolean | { enabled: boolean; adminOnly: boolean }
 }
 
 export type SidebarModulesAdminConfig = Record<string, SidebarSectionConfig>
@@ -65,7 +65,7 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     token: true,
     log: true,
     midjourney: true,
-    task: true,
+    task: { enabled: true, adminOnly: false },
   },
   personal: {
     enabled: true,

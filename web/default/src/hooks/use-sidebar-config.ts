@@ -23,7 +23,7 @@ import type { NavGroup, NavItem } from '@/components/layout/types'
 
 type SidebarSectionConfig = {
   enabled: boolean
-  [key: string]: boolean
+  [key: string]: boolean | { enabled: boolean; adminOnly: boolean }
 }
 
 type SidebarModulesAdminConfig = Record<string, SidebarSectionConfig>
@@ -171,7 +171,8 @@ function parseUserSidebarConfig(
 function isModuleEnabled(
   url: string,
   adminConfig: SidebarModulesAdminConfig,
-  userConfig: SidebarModulesUserConfig
+  userConfig: SidebarModulesUserConfig,
+  userRole?: number
 ): boolean {
   const mapping = URL_TO_CONFIG_MAP[url]
   if (!mapping) {
@@ -181,10 +182,25 @@ function isModuleEnabled(
 
   const { section, module } = mapping
   const adminSection = adminConfig[section]
-  const adminAllowed = Boolean(
-    adminSection && adminSection.enabled && adminSection[module] === true
-  )
+
+  // Check admin config
+  const moduleValue = adminSection?.[module]
+  let adminAllowed = false
+  let requireAdmin = false
+
+  if (typeof moduleValue === 'boolean') {
+    adminAllowed = Boolean(adminSection?.enabled && moduleValue)
+  } else if (typeof moduleValue === 'object' && moduleValue !== null) {
+    adminAllowed = Boolean(adminSection?.enabled && moduleValue.enabled)
+    requireAdmin = moduleValue.adminOnly === true
+  }
+
   if (!adminAllowed) return false
+
+  // Check adminOnly restriction
+  if (requireAdmin && userRole !== undefined && userRole < 10) {
+    return false
+  }
 
   if (!userConfig) return true
 
@@ -200,13 +216,26 @@ function isModuleEnabled(
 function isNavItemVisible(
   item: NavItem,
   adminConfig: SidebarModulesAdminConfig,
-  userConfig: SidebarModulesUserConfig
+  userConfig: SidebarModulesUserConfig,
+  userRole?: number
 ): boolean {
   // Handle dynamic chat presets type — also runs the admin × user AND gate
   if ('type' in item && item.type === 'chat-presets') {
     const adminChat = adminConfig.chat
-    const adminAllowed = Boolean(adminChat?.enabled && adminChat.chat === true)
+    const chatValue = adminChat?.chat
+    let adminAllowed = false
+    let requireAdmin = false
+
+    if (typeof chatValue === 'boolean') {
+      adminAllowed = Boolean(adminChat?.enabled && chatValue)
+    } else if (typeof chatValue === 'object' && chatValue !== null) {
+      adminAllowed = Boolean(adminChat?.enabled && chatValue.enabled)
+      requireAdmin = chatValue.adminOnly === true
+    }
+
     if (!adminAllowed) return false
+    if (requireAdmin && userRole !== undefined && userRole < 10) return false
+
     if (!userConfig) return true
     const userChat = userConfig.chat
     if (!userChat) return true
@@ -218,7 +247,7 @@ function isNavItemVisible(
   if ('url' in item && item.url) {
     const configUrls = item.configUrls ?? [item.url]
     return configUrls.some((url) =>
-      isModuleEnabled(url as string, adminConfig, userConfig)
+      isModuleEnabled(url as string, adminConfig, userConfig, userRole)
     )
   }
 
@@ -226,7 +255,7 @@ function isNavItemVisible(
   if ('items' in item && item.items) {
     // If has sub-items, show this collapsible item if at least one sub-item is visible
     return item.items.some((subItem) =>
-      isModuleEnabled(subItem.url as string, adminConfig, userConfig)
+      isModuleEnabled(subItem.url as string, adminConfig, userConfig, userRole)
     )
   }
 
@@ -239,14 +268,15 @@ function isNavItemVisible(
 function filterNavItems(
   items: NavItem[],
   adminConfig: SidebarModulesAdminConfig,
-  userConfig: SidebarModulesUserConfig
+  userConfig: SidebarModulesUserConfig,
+  userRole?: number
 ): NavItem[] {
   return items
     .map((item) => {
       // If collapsible item, also filter its sub-items
       if ('items' in item && item.items) {
         const filteredSubItems = item.items.filter((subItem) =>
-          isModuleEnabled(subItem.url as string, adminConfig, userConfig)
+          isModuleEnabled(subItem.url as string, adminConfig, userConfig, userRole)
         )
 
         return {
@@ -256,7 +286,7 @@ function filterNavItems(
       }
       return item
     })
-    .filter((item) => isNavItemVisible(item, adminConfig, userConfig))
+    .filter((item) => isNavItemVisible(item, adminConfig, userConfig, userRole))
 }
 
 /**
@@ -304,10 +334,10 @@ export function useSidebarConfig(navGroups: NavGroup[]): NavGroup[] {
       navGroups
         .map((group) => ({
           ...group,
-          items: filterNavItems(group.items, adminConfig, userConfig),
+          items: filterNavItems(group.items, adminConfig, userConfig, auth?.user?.role),
         }))
         .filter((group) => group.items.length > 0), // Only show navigation groups with visible items
-    [navGroups, adminConfig, userConfig]
+    [navGroups, adminConfig, userConfig, auth?.user?.role]
   )
 
   return filteredNavGroups
