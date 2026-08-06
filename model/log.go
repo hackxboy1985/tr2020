@@ -431,31 +431,6 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 	}
 }
 
-// AppendTaskLogOther 找到与 taskId 关联的第一条消费日志，
-// 将 extra 中的字段合并写入其 other JSON 字段。
-func AppendTaskLogOther(taskId string, extra map[string]interface{}) error {
-	if taskId == "" || len(extra) == 0 {
-		return nil
-	}
-	var log Log
-	err := LOG_DB.Where("task_id = ? AND type = ?", taskId, LogTypeConsume).
-		Order("id ASC").First(&log).Error
-	if err != nil {
-		return err
-	}
-	// 反序列化现有 other
-	existing := make(map[string]interface{})
-	if log.Other != "" {
-		_ = common.UnmarshalJsonStr(log.Other, &existing)
-	}
-	// 合并新字段
-	for k, v := range extra {
-		existing[k] = v
-	}
-	newOther := common.MapToJsonStr(existing)
-	return LOG_DB.Model(&Log{}).Where("id = ?", log.Id).Update("other", newOther).Error
-}
-
 func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string, upstreamRequestId string, taskId string) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
