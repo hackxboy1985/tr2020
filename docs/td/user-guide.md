@@ -259,10 +259,10 @@ curl "https://your-new-api-domain/v1/images/tasks/task_bSPHAaYDWZIUXM0YkfXgtiWUl
 
 | 状态 | 说明 |
 |------|------|
-| submitted | 已提交，等待处理 |
+| submitted | 已提交，等待处理（仅提交接口返回） |
 | processing | 上游处理中 |
-| completed | 成功完成，图像可用 |
-| failed | 失败，查看 reason 字段了解原因 |
+| succeeded | 成功完成，图像可用 |
+| failed | 失败，查看 error.message 字段了解原因 |
 
 ---
 
