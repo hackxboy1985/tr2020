@@ -322,14 +322,16 @@ export function normalizeTierLabel(label: string | undefined): string {
  */
 export function formatTierLabel(label: string | undefined): string {
   if (!label || label === 'fallback') return label ?? ''
-  const simplified = label.replace(
+  // Unescape \" → " first so the regex can match both stored and raw forms
+  const unescaped = label.replace(/\\"/g, '"')
+  const simplified = unescaped.replace(
     /param\("([^"]+)"\)\s*==\s*("(?:[^"\\]|\\.)*"|[^\s&|]+)/g,
     (_match, path, val) => {
       const short = path.split('.').pop() || path
       return `${short} = ${val}`
     }
   )
-  if (simplified.includes('param(')) return label
+  if (simplified.includes('param(')) return unescaped
   return simplified
 }
 
