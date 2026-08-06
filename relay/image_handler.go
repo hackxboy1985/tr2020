@@ -34,6 +34,11 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 		return handleRRImageTask(c, info, imageReq)
 	}
 
+	// Tudou (Td) is an async image channel: hand off to the task submit pipeline.
+	if info.ChannelType == constant.ChannelTypeTudou {
+		return handleTudouImageTask(c, info, imageReq)
+	}
+
 	request, err := common.DeepCopy(imageReq)
 	if err != nil {
 		return types.NewError(fmt.Errorf("failed to copy request to ImageRequest: %w", err), types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
@@ -195,6 +200,24 @@ func convertImageRequestToTaskSubmitReq(req *dto.ImageRequest) relaycommon.TaskS
 	return taskReq
 }
 
+// convertImageRequestToTudouTaskSubmitReq converts an OpenAI ImageRequest to a TaskSubmitReq for Tudou (Td) channel.
+func convertImageRequestToTudouTaskSubmitReq(req *dto.ImageRequest) relaycommon.TaskSubmitReq {
+	taskReq := relaycommon.TaskSubmitReq{
+		Prompt:     req.Prompt,
+		Size:       req.Size,
+		Quality:    req.Quality,    // Tudou uses Quality field directly
+		Resolution: req.Resolution, // Tudou requires Resolution (1k/2k/4k)
+	}
+	// Extract image URLs for image-to-image requests
+	if len(req.Images) > 0 {
+		var imgs []string
+		if err := common.Unmarshal(req.Images, &imgs); err == nil {
+			taskReq.Images = imgs
+		}
+	}
+	return taskReq
+}
+
 // handleRRImageTask handles image generation for the RR async channel.
 // It refunds the sync pre-consume done by Relay, then runs the full async task pipeline.
 func handleRRImageTask(c *gin.Context, info *relaycommon.RelayInfo, imageReq *dto.ImageRequest) *types.NewAPIError {
@@ -268,6 +291,80 @@ func handleRRImageTask(c *gin.Context, info *relaycommon.RelayInfo, imageReq *dt
 	}
 
 	logger.LogInfo(c, fmt.Sprintf("RR image task submitted: taskId=%s upstreamId=%s quota=%d",
+		info.PublicTaskID, result.UpstreamTaskID, result.Quota))
+
+	return nil
+}
+
+// handleTudouImageTask handles image generation for the Tudou (Td) async channel.
+func handleTudouImageTask(c *gin.Context, info *relaycommon.RelayInfo, imageReq *dto.ImageRequest) *types.NewAPIError {
+	// Refund the pre-consume that Relay's sync billing path already charged.
+	if info.Billing != nil {
+		info.Billing.Refund(c)
+		info.Billing = nil
+	}
+
+	// Convert and store task request in context
+	taskReq := convertImageRequestToTudouTaskSubmitReq(imageReq)
+	c.Set("task_request", taskReq)
+
+	// Initialize TaskRelayInfo if needed
+	if info.TaskRelayInfo == nil {
+		info.TaskRelayInfo = &relaycommon.TaskRelayInfo{}
+	}
+
+	result, taskErr := RelayTaskSubmit(c, info)
+	if taskErr != nil {
+		return types.NewErrorWithStatusCode(taskErr.Error, types.ErrorCodeBadResponseStatusCode, taskErr.StatusCode)
+	}
+
+	// Settle billing and log consumption
+	if settleErr := service.SettleBilling(c, info, result.Quota); settleErr != nil {
+		common.SysError("settle Tudou image task billing error: " + settleErr.Error())
+	}
+
+	// Store request body for logging
+	if bs, bsErr := common.GetBodyStorage(c); bsErr == nil {
+		if _, seekErr := bs.Seek(0, io.SeekStart); seekErr == nil {
+			if bodyBytes, readErr := io.ReadAll(bs); readErr == nil && len(bodyBytes) > 0 {
+				c.Set(string(constant.ContextKeyVideoRequestBody), string(bodyBytes))
+			}
+		}
+	}
+	if taskReq.Prompt != "" {
+		c.Set(string(constant.ContextKeyPromptToSave), taskReq.Prompt)
+	}
+
+	service.LogTaskConsumption(c, info)
+
+	task := model.InitTask(result.Platform, info)
+	task.PrivateData.UpstreamTaskID = result.UpstreamTaskID
+	task.PrivateData.BillingSource = info.BillingSource
+	task.PrivateData.SubscriptionId = info.SubscriptionId
+	task.PrivateData.TokenId = info.TokenId
+	task.PrivateData.BillingContext = &model.TaskBillingContext{
+		ModelPrice:      info.PriceData.ModelPrice,
+		GroupRatio:      info.PriceData.GroupRatioInfo.GroupRatio,
+		ModelRatio:      info.PriceData.ModelRatio,
+		OtherRatios:     info.PriceData.OtherRatios,
+		OriginModelName: info.OriginModelName,
+		PerCallBilling:  info.PriceData.UsePrice,
+	}
+	task.Quota = result.Quota
+	task.Data = result.TaskData
+	task.Action = info.Action
+	task.Properties.Input = taskReq.Prompt
+	if rb := c.GetString(string(constant.ContextKeyVideoRequestBody)); rb != "" {
+		task.PrivateData.RequestBody = service.TruncateBody(rb)
+	}
+	if len(result.TaskData) > 0 {
+		task.PrivateData.SubmitRespBody = service.TruncateBody(string(result.TaskData))
+	}
+	if insertErr := task.Insert(); insertErr != nil {
+		common.SysError("insert Tudou image task error: " + insertErr.Error())
+	}
+
+	logger.LogInfo(c, fmt.Sprintf("Tudou image task submitted: taskId=%s upstreamId=%s quota=%d",
 		info.PublicTaskID, result.UpstreamTaskID, result.Quota))
 
 	return nil
