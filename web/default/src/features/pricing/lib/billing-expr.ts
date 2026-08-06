@@ -273,7 +273,7 @@ export function parseTiersFromExpr(exprStr: string): ParsedTier[] {
       `((?:(?:p|c|len)\\s*(?:<|<=|>|>=)\\s*[\\d.eE+]+)` +
       `(?:\\s*&&\\s*(?:p|c|len)\\s*(?:<|<=|>|>=)\\s*[\\d.eE+]+)*)`
     const tierRe = new RegExp(
-      `(?:${condGroup}\\s*\\?\\s*)?tier\\("([^"]*)",\\s*([^)]+)\\)`,
+      `(?:${condGroup}\\s*\\?\\s*)?tier\\("((?:[^"\\\\]|\\\\.)*)",\\s*([^)]+)\\)`,
       'g'
     )
     const tiers: ParsedTier[] = []

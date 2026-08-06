@@ -97,6 +97,27 @@ const TIME_FUNC_LABELS: Record<string, string> = {
   day: 'Day',
 }
 
+/**
+ * Simplify a tier label for display.
+ * - `param("a.b.imageSize") == "2K"` → `imageSize = "2K"`
+ * - `param("a") == "x" && param("b") == "y"` → `a = "x" && b = "y"`
+ * - Other labels returned as-is.
+ */
+function formatTierLabel(label: string): string {
+  if (!label || label === 'fallback') return label
+  // Replace each `param("a.b.c") == "x"` fragment with `c = "x"`
+  const simplified = label.replace(
+    /param\("([^"]+)"\)\s*==\s*("(?:[^"\\]|\\.)*"|[^\s&|]+)/g,
+    (_match, path, val) => {
+      const short = path.split('.').pop() || path
+      return `${short} = ${val}`
+    }
+  )
+  // If the result still contains param( it wasn't fully simplified, return original
+  if (simplified.includes('param(')) return label
+  return simplified
+}
+
 function formatTokenHint(value: string | number): string {
   const n = Number(value)
   if (!Number.isFinite(n) || n === 0) return ''
@@ -216,7 +237,7 @@ export function DynamicPricingBreakdown({
           <div>
             <span className='text-muted-foreground'>{t('Matched rule')}: </span>
             <span className='font-medium'>
-              {matchedTierLabel === 'fallback' ? t('Fallback') : matchedTierLabel}
+              {matchedTierLabel === 'fallback' ? t('Fallback') : formatTierLabel(matchedTierLabel)}
             </span>
           </div>
           <div>
@@ -352,7 +373,7 @@ export function DynamicPricingBreakdown({
                       variant='secondary'
                       className='bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300'
                     >
-                      {tier.label || t('Default')}
+                      {tier.label ? formatTierLabel(tier.label) : t('Default')}
                     </Badge>
                     {isMatched && (
                       <Badge
@@ -429,7 +450,7 @@ export function DynamicPricingBreakdown({
                             variant='secondary'
                             className='bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300'
                           >
-                            {tier.label || t('Default')}
+                            {tier.label ? formatTierLabel(tier.label) : t('Default')}
                           </Badge>
                           {isMatched && (
                             <Badge
