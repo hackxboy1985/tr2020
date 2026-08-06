@@ -11,6 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relay/channel"
 	taskcommon "github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -296,15 +297,15 @@ func isValidQuality(q string) bool {
 func convertTudouStatus(status string) string {
 	switch status {
 	case StatusSubmitted:
-		return "queued"
+		return string(model.TaskStatusSubmitted)
 	case StatusProcessing:
-		return "processing"
+		return string(model.TaskStatusInProgress)
 	case StatusCompleted:
-		return "completed"
+		return string(model.TaskStatusSuccess)
 	case StatusFailed:
-		return "failed"
+		return string(model.TaskStatusFailure)
 	default:
-		return "unknown"
+		return string(model.TaskStatusUnknown)
 	}
 }
 
