@@ -432,9 +432,9 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 }
 
 // AppendTaskLogOther 找到与 taskId 关联的第一条消费日志，
-// 将 extra 中的字段合并写入其 other JSON 字段。
-func AppendTaskLogOther(taskId string, extra map[string]interface{}) error {
-	if taskId == "" || len(extra) == 0 {
+// 将 extra 中的字段合并写入其 other JSON 字段，同时更新 use_time（秒）。
+func AppendTaskLogOther(taskId string, extra map[string]interface{}, useTime int) error {
+	if taskId == "" {
 		return nil
 	}
 	var log Log
@@ -451,7 +451,11 @@ func AppendTaskLogOther(taskId string, extra map[string]interface{}) error {
 		existing[k] = v
 	}
 	newOther := common.MapToJsonStr(existing)
-	return LOG_DB.Model(&Log{}).Where("id = ?", log.Id).Update("other", newOther).Error
+	updates := map[string]interface{}{"other": newOther}
+	if useTime > 0 {
+		updates["use_time"] = useTime
+	}
+	return LOG_DB.Model(&Log{}).Where("id = ?", log.Id).Updates(updates).Error
 }
 
 func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string, upstreamRequestId string, taskId string) (logs []*Log, total int64, err error) {

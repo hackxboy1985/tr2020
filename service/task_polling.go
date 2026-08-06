@@ -560,7 +560,11 @@ func recordTaskCompletionLog(task *model.Task, responseBody []byte) {
 		if len(responseBody) > 0 {
 			extra["final_response_body"] = TruncateBody(string(responseBody))
 		}
-		if err := model.AppendTaskLogOther(task.TaskID, extra); err != nil {
+		useTime := 0
+		if task.FinishTime > 0 && task.SubmitTime > 0 {
+			useTime = int(task.FinishTime - task.SubmitTime)
+		}
+		if err := model.AppendTaskLogOther(task.TaskID, extra, useTime); err != nil {
 			logger.LogWarn(context.Background(), fmt.Sprintf("AppendTaskLogOther failed for task %s: %v", task.TaskID, err))
 		}
 		return
