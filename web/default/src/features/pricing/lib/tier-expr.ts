@@ -453,7 +453,9 @@ export function generateExprFromPerCallConfig(
     const price = fmtNum(rule.pricePerCall)
     const mulExpr = buildMultiplierExpr(rule.multiplier ?? createDefaultMultiplier())
     const priceWithMul = `${price}${mulExpr}`
-    const ruleLabel = cond.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+    const ruleLabel = cond
+      .replace(/param\("(?:[^"]+\.)?([^".]+)"\)\s*==\s*"([^"]*)"/g, '$1 == $2')
+      .replace(/param\("(?:[^"]+\.)?([^".]+)"\)\s*==\s*([\d.]+)/g, '$1 == $2')
     const matched = `tier("${ruleLabel}", ${priceWithMul})`
     if (index === rules.length - 1) {
       return `${cond} ? ${matched} : tier("fallback", ${fallbackExpr})`
