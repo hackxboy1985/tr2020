@@ -64,6 +64,7 @@ import {
   isPerCallBilling,
   isTimingLogType,
 } from '../../lib/utils'
+import { formatTierLabel } from '@/features/pricing/lib/billing-expr'
 import type { LogOtherData } from '../../types'
 
 function timingTextColorClass(
@@ -155,13 +156,13 @@ function BillingBreakdown(props: {
   if (isTieredExpr) {
     rows.push({
       label: t('Billing Mode'),
-      value: t('Dynamic Pricing'),
+      value: t('Per-call'),
     })
     if (tieredSummary) {
       if (tieredSummary.tier.label) {
         rows.push({
           label: t('Matched Tier'),
-          value: tieredSummary.tier.label,
+          value: formatTierLabel(tieredSummary.tier.label),
         })
       }
       for (const entry of tieredSummary.priceEntries) {

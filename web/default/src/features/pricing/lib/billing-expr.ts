@@ -314,6 +314,25 @@ export function normalizeTierLabel(label: string | undefined): string {
     .toLowerCase()
 }
 
+/**
+ * Simplify a tier label for display.
+ * - `param("a.b.imageSize") == "2K"` → `imageSize = "2K"`
+ * - `param("a") == "x" && param("b") == "y"` → `a = "x" && b = "y"`
+ * - Other labels returned as-is.
+ */
+export function formatTierLabel(label: string | undefined): string {
+  if (!label || label === 'fallback') return label ?? ''
+  const simplified = label.replace(
+    /param\("([^"]+)"\)\s*==\s*("(?:[^"\\]|\\.)*"|[^\s&|]+)/g,
+    (_match, path, val) => {
+      const short = path.split('.').pop() || path
+      return `${short} = ${val}`
+    }
+  )
+  if (simplified.includes('param(')) return label
+  return simplified
+}
+
 // ---------------------------------------------------------------------------
 // Request rule parser
 // ---------------------------------------------------------------------------

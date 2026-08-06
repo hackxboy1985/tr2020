@@ -39,6 +39,7 @@ import {
   MATCH_LT,
   MATCH_RANGE,
   SOURCE_TIME,
+  formatTierLabel,
   normalizeTierLabel,
   parseTiersFromExpr,
   splitBillingExprAndRequestRules,
@@ -95,27 +96,6 @@ const TIME_FUNC_LABELS: Record<string, string> = {
   weekday: 'Weekday',
   month: 'Month',
   day: 'Day',
-}
-
-/**
- * Simplify a tier label for display.
- * - `param("a.b.imageSize") == "2K"` → `imageSize = "2K"`
- * - `param("a") == "x" && param("b") == "y"` → `a = "x" && b = "y"`
- * - Other labels returned as-is.
- */
-function formatTierLabel(label: string): string {
-  if (!label || label === 'fallback') return label
-  // Replace each `param("a.b.c") == "x"` fragment with `c = "x"`
-  const simplified = label.replace(
-    /param\("([^"]+)"\)\s*==\s*("(?:[^"\\]|\\.)*"|[^\s&|]+)/g,
-    (_match, path, val) => {
-      const short = path.split('.').pop() || path
-      return `${short} = ${val}`
-    }
-  )
-  // If the result still contains param( it wasn't fully simplified, return original
-  if (simplified.includes('param(')) return label
-  return simplified
 }
 
 function formatTokenHint(value: string | number): string {
