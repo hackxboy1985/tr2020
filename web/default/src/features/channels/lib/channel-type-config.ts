@@ -159,6 +159,17 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
         '可选，配置上游接口路径和 URL 有效期。\n\n示例：\n{"rr_endpoints":{"rhart-image-g-2-official":"/openapi/v2/rhart-image-g-2-official/text-to-image"},"rr_url_ttl_hours":24}\n\n字段说明：\nrr_endpoints   — 模型→完整路径映射（留空使用默认路径）\nrr_url_ttl_hours — 上游图片 URL 有效期（小时），默认 24\n\n默认路径：\n{model} → /openapi/v2/{model}/text-to-image',
     },
   },
+  60: {
+    id: 60,
+    name: CHANNEL_TYPES[60],
+    icon: 'openai',
+    defaultBaseUrl: 'https://api.ai-tudou.net',
+    hints: {
+      baseUrl: 'Default: https://api.ai-tudou.net',
+      key: 'Td API Key (Authorization: Bearer <key>)',
+      models: 'gpt-image-2-all',
+    },
+  },
 }
 
 /**
