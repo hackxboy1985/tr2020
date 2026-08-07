@@ -47,7 +47,7 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
     token: true,
     log: true,
     midjourney: true,
-    task: true,
+    task: { enabled: true, adminOnly: false },
   },
   personal: {
     enabled: true,
@@ -82,8 +82,14 @@ const mergeWithDefaultSidebarModules = (
 
       merged[sectionKey] = { ...defaultSection, ...existingSection }
       Object.keys(defaultSection).forEach((moduleKey) => {
-        if (merged[sectionKey][moduleKey] === undefined) {
-          merged[sectionKey][moduleKey] = defaultSection[moduleKey]
+        const defaultVal = defaultSection[moduleKey]
+        const existingVal = merged[sectionKey][moduleKey]
+        // 如果默认值是对象（如 { enabled, adminOnly }），而存储值是旧的 boolean，
+        // 则将 boolean 转换为对象格式以兼容旧数据
+        if (typeof defaultVal === 'object' && defaultVal !== null && typeof existingVal === 'boolean') {
+          merged[sectionKey][moduleKey] = { ...(defaultVal as object), enabled: existingVal } as { enabled: boolean; adminOnly: boolean }
+        } else if (existingVal === undefined) {
+          merged[sectionKey][moduleKey] = defaultVal
         }
       })
     }
