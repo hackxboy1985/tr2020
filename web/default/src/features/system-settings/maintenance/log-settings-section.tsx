@@ -62,6 +62,7 @@ const logSettingsSchema = z.object({
   SavePromptEnabled: z.boolean(),
   SavePromptUserVisible: z.boolean(),
   SavePromptBodyMaxBytes: z.coerce.number().int().min(1).max(65535),
+  LogUpstreamRequestEnabled: z.boolean(),
 })
 
 type LogSettingsFormValues = z.infer<typeof logSettingsSchema>
@@ -71,6 +72,7 @@ type LogSettingsSectionProps = {
   defaultSavePromptEnabled: boolean
   defaultSavePromptUserVisible: boolean
   defaultSavePromptBodyMaxBytes: number
+  defaultLogUpstreamRequestEnabled: boolean
 }
 
 const HOURS_IN_DAY = 24
@@ -103,6 +105,7 @@ export function LogSettingsSection({
   defaultSavePromptEnabled,
   defaultSavePromptUserVisible,
   defaultSavePromptBodyMaxBytes,
+  defaultLogUpstreamRequestEnabled,
 }: LogSettingsSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
@@ -113,6 +116,7 @@ export function LogSettingsSection({
       SavePromptEnabled: defaultSavePromptEnabled,
       SavePromptUserVisible: defaultSavePromptUserVisible,
       SavePromptBodyMaxBytes: defaultSavePromptBodyMaxBytes,
+      LogUpstreamRequestEnabled: defaultLogUpstreamRequestEnabled,
     },
   })
 
@@ -137,8 +141,9 @@ export function LogSettingsSection({
       SavePromptEnabled: defaultSavePromptEnabled,
       SavePromptUserVisible: defaultSavePromptUserVisible,
       SavePromptBodyMaxBytes: defaultSavePromptBodyMaxBytes,
+      LogUpstreamRequestEnabled: defaultLogUpstreamRequestEnabled,
     })
-  }, [defaultEnabled, defaultSavePromptEnabled, defaultSavePromptUserVisible, defaultSavePromptBodyMaxBytes, form])
+  }, [defaultEnabled, defaultSavePromptEnabled, defaultSavePromptUserVisible, defaultSavePromptBodyMaxBytes, defaultLogUpstreamRequestEnabled, form])
 
   const purgeTimestamp = useMemo(() => {
     if (!purgeDate) return null
@@ -164,6 +169,9 @@ export function LogSettingsSection({
     }
     if (values.SavePromptBodyMaxBytes !== defaultSavePromptBodyMaxBytes) {
       changes.push({ key: 'SavePromptBodyMaxBytes', value: values.SavePromptBodyMaxBytes })
+    }
+    if (values.LogUpstreamRequestEnabled !== defaultLogUpstreamRequestEnabled) {
+      changes.push({ key: 'LogUpstreamRequestEnabled', value: values.LogUpstreamRequestEnabled })
     }
 
     if (changes.length === 0) return
@@ -314,6 +322,30 @@ export function LogSettingsSection({
               )}
             />
           )}
+
+          <FormField
+            control={form.control}
+            name='LogUpstreamRequestEnabled'
+            render={({ field }) => (
+              <SettingsSwitchItem>
+                <SettingsSwitchContent>
+                  <FormLabel>{t('Log upstream request/response body')}</FormLabel>
+                  <FormDescription>
+                    {t(
+                      'Print upstream request and response bodies to system log. Disable in production to reduce log volume. Default: off.'
+                    )}
+                  </FormDescription>
+                </SettingsSwitchContent>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <FormMessage />
+              </SettingsSwitchItem>
+            )}
+          />
 
           <SettingsControlGroup className='space-y-3'>
             <div>

@@ -314,6 +314,8 @@ func updateOptionMap(key string, value string) (err error) {
 			common.AutomaticEnableChannelEnabled = boolValue
 		case "LogConsumeEnabled":
 			common.LogConsumeEnabled = boolValue
+		case "LogUpstreamRequestEnabled":
+			common.LogUpstreamRequestEnabled = boolValue
 		case "SavePromptEnabled":
 			common.SavePromptEnabled = boolValue
 		case "SavePromptUserVisible":

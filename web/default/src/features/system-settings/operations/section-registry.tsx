@@ -103,6 +103,7 @@ const OPERATIONS_SECTIONS = [
         defaultSavePromptEnabled={Boolean(settings.SavePromptEnabled)}
         defaultSavePromptUserVisible={Boolean(settings.SavePromptUserVisible)}
         defaultSavePromptBodyMaxBytes={Number(settings.SavePromptBodyMaxBytes) || 500}
+        defaultLogUpstreamRequestEnabled={Boolean(settings.LogUpstreamRequestEnabled)}
       />
     ),
   },

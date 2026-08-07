@@ -116,6 +116,7 @@ var LogConsumeEnabled = true
 var SavePromptEnabled = false
 var SavePromptUserVisible = false
 var SavePromptBodyMaxBytes = 500
+var LogUpstreamRequestEnabled = false // 控制上游请求体日志打印
 
 var TLSInsecureSkipVerify bool
 var InsecureTLSConfig = &tls.Config{InsecureSkipVerify: true}
