@@ -25,7 +25,7 @@ import { PlaygroundChat } from './components/playground-chat'
 import { PlaygroundInput } from './components/playground-input'
 import { usePlaygroundState, useChatHandler } from './hooks'
 import { createUserMessage, createLoadingAssistantMessage } from './lib'
-import type { Message as MessageType } from './types'
+import type { Message as MessageType, Attachment } from './types'
 
 export function Playground() {
   const { t } = useTranslation()
@@ -114,8 +114,14 @@ export function Playground() {
     }
   }, [groupsData, setGroups, config.group, updateConfig])
 
-  const handleSendMessage = (text: string) => {
+  const handleSendMessage = (text: string, attachments?: Attachment[]) => {
     const userMessage = createUserMessage(text)
+
+    // Add attachments to the user message
+    if (attachments && attachments.length > 0) {
+      userMessage.versions[0].attachments = attachments
+    }
+
     const assistantMessage = createLoadingAssistantMessage()
 
     const newMessages = [...messages, userMessage, assistantMessage]

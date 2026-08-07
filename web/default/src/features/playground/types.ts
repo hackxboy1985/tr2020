@@ -24,6 +24,16 @@ export type MessageStatus = 'loading' | 'streaming' | 'complete' | 'error'
 export interface MessageVersion {
   id: string
   content: string
+  attachments?: Attachment[]
+}
+
+export interface Attachment {
+  id: string
+  type: 'image' | 'file'
+  name: string
+  url: string // base64 data URL or remote URL
+  size?: number
+  mimeType?: string
 }
 
 export interface Message {

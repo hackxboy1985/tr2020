@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useMemo, useState } from 'react'
+import { FileIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -180,6 +181,9 @@ export function PlaygroundChat({
                                 ? parseThinkTags(version.content).visibleContent
                                 : version.content
 
+                              // Get attachments
+                              const attachments = version.attachments || []
+
                               const actions = (
                                 <MessageActions
                                   message={message}
@@ -195,6 +199,33 @@ export function PlaygroundChat({
 
                               return (
                                 <>
+                                  {/* Attachments */}
+                                  {attachments.length > 0 && (
+                                    <div className='mb-2 flex flex-wrap gap-2'>
+                                      {attachments.map((attachment) => (
+                                        <div
+                                          key={attachment.id}
+                                          className='overflow-hidden rounded-lg border'
+                                        >
+                                          {attachment.type === 'image' ? (
+                                            <img
+                                              src={attachment.url}
+                                              alt={attachment.name}
+                                              className='max-h-48 max-w-xs object-contain'
+                                            />
+                                          ) : (
+                                            <div className='flex items-center gap-2 p-2'>
+                                              <FileIcon className='h-6 w-6' />
+                                              <span className='text-sm'>
+                                                {attachment.name}
+                                              </span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+
                                   {/* Sources */}
                                   {hasSources && (
                                     <Sources>

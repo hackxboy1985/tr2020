@@ -131,9 +131,22 @@ export function getTextContent(content: string | ContentPart[]): string {
  */
 export function formatMessageForAPI(message: Message): ChatCompletionMessage {
   const currentVersion = getCurrentVersion(message)
+  const attachments = currentVersion.attachments || []
+
+  // Extract image URLs from attachments
+  const imageUrls = attachments
+    .filter((att) => att.type === 'image')
+    .map((att) => att.url)
+
+  // Build content with images if any
+  const content =
+    imageUrls.length > 0
+      ? buildMessageContent(currentVersion.content, imageUrls)
+      : currentVersion.content
+
   return {
     role: message.from,
-    content: currentVersion.content,
+    content,
   }
 }
 

@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import {
   PaperclipIcon,
   FileIcon,
@@ -31,9 +31,11 @@ import {
   NotepadTextIcon,
   CodeSquareIcon,
   GraduationCapIcon,
+  XIcon,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { nanoid } from 'nanoid'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,10 +52,10 @@ import {
 } from '@/components/ai-elements/prompt-input'
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion'
 import { ModelGroupSelector } from '@/components/model-group-selector'
-import type { ModelOption, GroupOption } from '../types'
+import type { ModelOption, GroupOption, Attachment } from '../types'
 
 interface PlaygroundInputProps {
-  onSubmit: (text: string) => void
+  onSubmit: (text: string, attachments?: Attachment[]) => void
   onStop?: () => void
   disabled?: boolean
   isGenerating?: boolean
@@ -90,6 +92,9 @@ export function PlaygroundInput({
 }: PlaygroundInputProps) {
   const { t } = useTranslation()
   const [text, setText] = useState('')
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
 
   const isModelSelectDisabled =
     disabled || isModelLoading || models.length === 0
@@ -97,14 +102,86 @@ export function PlaygroundInput({
 
   const handleSubmit = (message: PromptInputMessage) => {
     if (!message.text?.trim() || disabled) return
-    onSubmit(message.text)
+    onSubmit(message.text, attachments)
     setText('')
+    setAttachments([])
+  }
+
+  const convertFileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const handleFileSelect = async (
+    files: FileList | null,
+    type: 'image' | 'file'
+  ) => {
+    if (!files || files.length === 0) return
+
+    const maxSize = 10 * 1024 * 1024 // 10MB
+    const validFiles: File[] = []
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      if (file.size > maxSize) {
+        toast.error(t('File size exceeds 10MB limit'), {
+          description: file.name,
+        })
+        continue
+      }
+
+      if (type === 'image' && !file.type.startsWith('image/')) {
+        toast.error(t('Please select an image file'), {
+          description: file.name,
+        })
+        continue
+      }
+
+      validFiles.push(file)
+    }
+
+    if (validFiles.length === 0) return
+
+    try {
+      const newAttachments: Attachment[] = await Promise.all(
+        validFiles.map(async (file) => ({
+          id: nanoid(),
+          type,
+          name: file.name,
+          url: await convertFileToBase64(file),
+          size: file.size,
+          mimeType: file.type,
+        }))
+      )
+
+      setAttachments((prev) => [...prev, ...newAttachments])
+      toast.success(
+        t('{{count}} file(s) added', { count: newAttachments.length })
+      )
+    } catch (error) {
+      toast.error(t('Failed to process files'))
+      console.error('File processing error:', error)
+    }
+  }
+
+  const handleRemoveAttachment = (id: string) => {
+    setAttachments((prev) => prev.filter((att) => att.id !== id))
   }
 
   const handleFileAction = (action: string) => {
-    toast.info(t('Feature in development'), {
-      description: action,
-    })
+    if (action === 'upload-file') {
+      fileInputRef.current?.click()
+    } else if (action === 'upload-photo') {
+      imageInputRef.current?.click()
+    } else {
+      toast.info(t('Feature in development'), {
+        description: action,
+      })
+    }
   }
 
   const handleSuggestionClick = (suggestion: string) => {
@@ -113,6 +190,62 @@ export function PlaygroundInput({
 
   return (
     <div className='grid shrink-0 gap-4 px-1 md:pb-4'>
+      {/* Hidden file inputs */}
+      <input
+        ref={fileInputRef}
+        type='file'
+        multiple
+        className='hidden'
+        onChange={(e) => handleFileSelect(e.target.files, 'file')}
+      />
+      <input
+        ref={imageInputRef}
+        type='file'
+        multiple
+        accept='image/*'
+        className='hidden'
+        onChange={(e) => handleFileSelect(e.target.files, 'image')}
+      />
+
+      {/* Attachments preview */}
+      {attachments.length > 0 && (
+        <div className='flex flex-wrap gap-2 px-2'>
+          {attachments.map((attachment) => (
+            <div
+              key={attachment.id}
+              className='relative flex items-center gap-2 rounded-lg border bg-secondary/50 p-2 pr-8'
+            >
+              {attachment.type === 'image' ? (
+                <img
+                  src={attachment.url}
+                  alt={attachment.name}
+                  className='h-12 w-12 rounded object-cover'
+                />
+              ) : (
+                <FileIcon className='h-12 w-12 text-muted-foreground' />
+              )}
+              <div className='flex flex-col overflow-hidden text-xs'>
+                <span className='truncate font-medium' title={attachment.name}>
+                  {attachment.name}
+                </span>
+                {attachment.size && (
+                  <span className='text-muted-foreground'>
+                    {(attachment.size / 1024).toFixed(1)} KB
+                  </span>
+                )}
+              </div>
+              <button
+                type='button'
+                onClick={() => handleRemoveAttachment(attachment.id)}
+                className='absolute right-1 top-1 rounded p-1 hover:bg-destructive/10 hover:text-destructive'
+              >
+                <XIcon size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <PromptInput groupClassName='rounded-xl' onSubmit={handleSubmit}>
         <PromptInputTextarea
           autoComplete='off'
