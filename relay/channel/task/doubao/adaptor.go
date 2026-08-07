@@ -209,7 +209,9 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	}
 
 	// 打印最终发往上游的请求体，方便排查转换问题
-	logger.LogInfo(c, fmt.Sprintf("doubao video upstream request body: %s", data))
+	if common.LogUpstreamRequestEnabled {
+		logger.LogInfo(c, fmt.Sprintf("doubao video upstream request body: %s", data))
+	}
 	// 保存到 context，供 savePrompt 写入 prompt_logs.request_body
 	c.Set(string(constant.ContextKeyVideoRequestBody), string(data))
 

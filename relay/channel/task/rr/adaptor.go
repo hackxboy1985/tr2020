@@ -150,7 +150,9 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	if err != nil {
 		return nil, err
 	}
-	common.SysLog(fmt.Sprintf("RR upstream request body: %s", string(data)))
+	if common.LogUpstreamRequestEnabled {
+		common.SysLog(fmt.Sprintf("RR upstream request body: %s", string(data)))
+	}
 	return bytes.NewReader(data), nil
 }
 

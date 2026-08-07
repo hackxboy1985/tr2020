@@ -715,6 +715,8 @@
     "Claude CLI Header Passthrough": "Claude CLI Header Passthrough",
     "Clean": "Clean",
     "Clean history logs": "Clean history logs",
+    "Log upstream request/response body": "Log upstream request/response body",
+    "Print upstream request and response bodies to system log. Disable in production to reduce log volume. Default: off.": "Print upstream request and response bodies to system log. Disable in production to reduce log volume. Default: off.",
     "Clean logs": "Clean logs",
     "Clean up inactive cache": "Clean up inactive cache",
     "Clean Up Log Files": "Clean Up Log Files",

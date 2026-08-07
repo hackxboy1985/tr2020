@@ -720,6 +720,8 @@
     "Claude CLI Header Passthrough": "Claude CLI 请求头透传",
     "Clean": "无冲突",
     "Clean history logs": "清理历史日志",
+    "Log upstream request/response body": "记录上游请求响应报文",
+    "Print upstream request and response bodies to system log. Disable in production to reduce log volume. Default: off.": "将上游请求和响应报文打印到系统日志。生产环境建议关闭以减少日志量。默认：关闭。",
     "Clean logs": "清理日志",
     "Clean up inactive cache": "清理不活跃缓存",
     "Clean Up Log Files": "清理日志文件",
