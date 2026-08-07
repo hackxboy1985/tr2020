@@ -133,20 +133,46 @@ export function formatMessageForAPI(message: Message): ChatCompletionMessage {
   const currentVersion = getCurrentVersion(message)
   const attachments = currentVersion.attachments || []
 
-  // Extract image URLs from attachments
-  const imageUrls = attachments
-    .filter((att) => att.type === 'image')
-    .map((att) => att.url)
+  // No attachments, return simple text content
+  if (attachments.length === 0) {
+    return {
+      role: message.from,
+      content: currentVersion.content,
+    }
+  }
 
-  // Build content with images if any
-  const content =
-    imageUrls.length > 0
-      ? buildMessageContent(currentVersion.content, imageUrls)
-      : currentVersion.content
+  // Build content parts with text and attachments
+  const parts: ContentPart[] = [
+    {
+      type: 'text',
+      text: currentVersion.content || '',
+    },
+  ]
+
+  // Add image attachments as image_url
+  const imageAttachments = attachments.filter((att) => att.type === 'image')
+  imageAttachments.forEach((att) => {
+    parts.push({
+      type: 'image_url',
+      image_url: { url: att.url },
+    })
+  })
+
+  // Add file attachments as file with base64 data
+  const fileAttachments = attachments.filter((att) => att.type === 'file')
+  fileAttachments.forEach((att) => {
+    parts.push({
+      type: 'file',
+      file: {
+        filename: att.name,
+        file_data: att.url, // base64 data URL
+      },
+    })
+  })
 
   return {
     role: message.from,
-    content,
+    content: parts,
   }
 }
 
