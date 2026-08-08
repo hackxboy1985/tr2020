@@ -554,8 +554,8 @@ func recordTaskCompletionLog(task *model.Task, responseBody []byte) {
 		return
 	}
 
-	// Td 渠道：将最终响应体追加到原始提交日志，不单独新建"查询结果"日志
-	if ch, err := model.CacheGetChannel(task.ChannelId); err == nil && ch.Type == constant.ChannelTypeTudou {
+	// Td/RR 渠道：将最终响应体追加到原始提交日志，不单独新建"查询结果"日志
+	if ch, err := model.CacheGetChannel(task.ChannelId); err == nil && (ch.Type == constant.ChannelTypeTudou || ch.Type == constant.ChannelTypeRR) {
 		extra := map[string]interface{}{}
 		if len(responseBody) > 0 {
 			extra["final_response_body"] = TruncateBody(string(responseBody))

@@ -85,7 +85,7 @@ func (a *TaskAdaptor) InjectBillingParams(c *gin.Context, info *relaycommon.Rela
 		return
 	}
 
-	cfg := mapSize(req.Size)
+	cfg := mapSizeWithResolution(req.Size, req.Resolution)
 
 	if info.BillingRequestInput == nil {
 		info.BillingRequestInput = &billingexpr.RequestInput{Body: []byte("{}")}
@@ -131,12 +131,12 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		return nil, fmt.Errorf("task_request not found in context")
 	}
 
-	cfg := mapSize(req.Size)
+	cfg := mapSizeWithResolution(req.Size, req.Resolution)
 	body := submitRequest{
 		Prompt:      req.Prompt,
 		AspectRatio: cfg.AspectRatio,
 		Resolution:  cfg.Resolution,
-		Quality:     mapQuality(req.Mode),
+		Quality:     mapQuality(req.Quality),
 	}
 	if req.HasImage() {
 		if req.Image != "" {

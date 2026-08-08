@@ -1,5 +1,7 @@
 package rr
 
+import "strings"
+
 // SizeConfig holds the mapped RR parameters for a given OpenAI size string.
 type SizeConfig struct {
 	AspectRatio string
@@ -47,12 +49,28 @@ var SizeMap = map[string]SizeConfig{
 var DefaultSizeConfig = SizeConfig{AspectRatio: "1:1", Resolution: "1k"}
 
 // mapSize returns the SizeConfig for the given OpenAI size string.
+// If size is in ratio format (e.g. "16:9"), it is used directly as AspectRatio
+// and resolution defaults to "1k".
 // Falls back to DefaultSizeConfig if the size is not recognized.
 func mapSize(size string) SizeConfig {
 	if cfg, ok := SizeMap[size]; ok {
 		return cfg
 	}
+	// ratio format: contains ":" but no "x" (e.g. "16:9", "1:1", "9:16")
+	if strings.Contains(size, ":") && !strings.Contains(size, "x") {
+		return SizeConfig{AspectRatio: size, Resolution: "1k"}
+	}
 	return DefaultSizeConfig
+}
+
+// mapSizeWithResolution is like mapSize but allows an explicit resolution override.
+// When size is in ratio format and resolution is provided, the resolution is used directly.
+func mapSizeWithResolution(size, resolution string) SizeConfig {
+	cfg := mapSize(size)
+	if resolution != "" && strings.Contains(size, ":") && !strings.Contains(size, "x") {
+		cfg.Resolution = resolution
+	}
+	return cfg
 }
 
 // QualityMap maps OpenAI quality strings to RR quality values.

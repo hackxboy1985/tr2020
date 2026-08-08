@@ -19,7 +19,7 @@
 GATEWAY="http://api.luluai.cc"
 API_KEY="sk-TmnBitxnzFMupKgxalfkQA34jJwGpXynfIwYfoxe8OVgqEOc"
 
-MODEL="g-image-2"
+MODEL="gpt-image-2-all"
 
 # 默认参数
 DEFAULT_PROMPT="A serene mountain landscape at sunrise, photorealistic, 8k"
@@ -47,12 +47,14 @@ parse_args() {
     ARG_SIZE=""
     ARG_QUALITY=""
     ARG_IMG=""
+    ARG_RESOLUTION=""
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --prompt)  ARG_PROMPT="$2";  shift 2 ;;
-            --size)    ARG_SIZE="$2";    shift 2 ;;
-            --quality) ARG_QUALITY="$2"; shift 2 ;;
-            --img)     ARG_IMG="$2";     shift 2 ;;
+            --prompt)     ARG_PROMPT="$2";     shift 2 ;;
+            --size)       ARG_SIZE="$2";       shift 2 ;;
+            --quality)    ARG_QUALITY="$2";    shift 2 ;;
+            --img)        ARG_IMG="$2";        shift 2 ;;
+            --resolution) ARG_RESOLUTION="$2"; shift 2 ;;
             *) shift ;;
         esac
     done
@@ -229,6 +231,27 @@ EOF
 )"
 }
 
+# TD 格式兼容测试：使用 TD 渠道风格的参数（size=比例, resolution=档位, quality=medium/high）
+# 目的：验证 RR 渠道是否能兼容处理 TD 格式参数
+test_td_compat() {
+    parse_args "$@"
+    local prompt="${ARG_PROMPT:-$DEFAULT_PROMPT}"
+    local size="${ARG_SIZE:-16:9}"
+    local resolution="${ARG_RESOLUTION:-2k}"
+    local quality="${ARG_QUALITY:-medium}"
+
+    submit_and_poll "TD格式兼容测试  size=$size  resolution=$resolution  quality=$quality" "$(cat <<EOF
+{
+  "model": "$MODEL",
+  "prompt": "$prompt",
+  "size": "$size",
+  "resolution": "$resolution",
+  "quality": "$quality"
+}
+EOF
+)"
+}
+
 # ──────────────────────────────────────────────
 # 入口
 # ──────────────────────────────────────────────
@@ -237,13 +260,15 @@ case "$1" in
         shift; test_t2i "$@" ;;
     i2i)
         shift; test_i2i "$@" ;;
+    td-compat)
+        shift; test_td_compat "$@" ;;
     task-query)
         if [ -z "$2" ]; then
             echo -e "${RED}用法: bash test_rr.sh task-query <task_id>${RESET}"
             exit 1
         fi
         poll_task "$2" ;;
-    all|"")
+    all)
         info "=== RR 渠道全量测试  model=$MODEL ==="
 
         # 文生图：标准质量 1:1
@@ -259,9 +284,41 @@ case "$1" in
         test_i2i
 
         sep; echo -e "${GREEN}=== 全量测试结束 ===${RESET}" ;;
+
+    "")
+        echo ""
+        echo -e "${YELLOW}请选择测试类型：${RESET}"
+        echo ""
+        echo "  1) 文生图 - 标准质量 1:1  (1024x1024, standard)"
+        echo "  2) 文生图 - 高质量 16:9   (1280x720,  hd)"
+        echo "  3) 文生图 - 竖图 9:16     (720x1280,  standard)"
+        echo "  4) 图生图                 (1792x1024, standard)"
+        echo "  5) 全量测试               (以上全部)"
+        echo "  6) TD格式兼容测试         (size=16:9, resolution=2k, quality=medium)"
+        echo ""
+        printf "请输入编号 [1-6]: "
+        read -r choice
+        echo ""
+        case "$choice" in
+            1) test_t2i --size 1024x1024 --quality standard ;;
+            2) test_t2i --size 1280x720  --quality hd ;;
+            3) test_t2i --size 720x1280  --quality standard ;;
+            4) test_i2i ;;
+            5)
+                info "=== RR 渠道全量测试  model=$MODEL ==="
+                test_t2i --size 1024x1024 --quality standard
+                test_t2i --size 1280x720  --quality hd
+                test_t2i --size 720x1280  --quality standard
+                test_i2i
+                sep; echo -e "${GREEN}=== 全量测试结束 ===${RESET}" ;;
+            6) test_td_compat ;;
+            *)
+                echo -e "${RED}无效选项: $choice${RESET}"
+                exit 1 ;;
+        esac ;;
     *)
         echo "用法:"
-        echo "  bash test_rr.sh                              # 全量测试"
+        echo "  bash test_rr.sh                              # 交互式选择测试"
         echo "  bash test_rr.sh t2i [--prompt P] [--size S] [--quality Q]"
         echo "  bash test_rr.sh i2i [--prompt P] [--img URL] [--size S] [--quality Q]"
         echo "  bash test_rr.sh task-query <task_id>"
