@@ -207,10 +207,31 @@ export function parseSidebarModulesAdmin(
       Object.entries(raw as Record<string, unknown>).forEach(
         ([moduleKey, moduleValue]) => {
           if (moduleKey === 'enabled') return
-          sectionConfig[moduleKey] = toBoolean(
-            moduleValue,
-            defaultSection[moduleKey] ?? true
-          )
+
+          const defaultValue = defaultSection[moduleKey]
+
+          // 如果默认值是对象格式（如 { enabled, adminOnly }），需要特殊处理
+          if (typeof defaultValue === 'object' && defaultValue !== null && 'enabled' in defaultValue) {
+            if (typeof moduleValue === 'object' && moduleValue !== null) {
+              // 存储的也是对象，直接使用
+              sectionConfig[moduleKey] = {
+                enabled: toBoolean((moduleValue as Record<string, unknown>).enabled, true),
+                adminOnly: toBoolean((moduleValue as Record<string, unknown>).adminOnly, false),
+              }
+            } else {
+              // 存储的是旧的 boolean，转换为对象格式（兼容旧数据）
+              sectionConfig[moduleKey] = {
+                ...defaultValue,
+                enabled: toBoolean(moduleValue, true),
+              }
+            }
+          } else {
+            // 普通的 boolean 模块配置
+            sectionConfig[moduleKey] = toBoolean(
+              moduleValue,
+              defaultSection[moduleKey] ?? true
+            )
+          }
         }
       )
 
