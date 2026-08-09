@@ -396,9 +396,12 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		}
 		service.AppendChannelAffinityAdminInfo(c, adminInfo)
 		other["admin_info"] = adminInfo
-		// 添加 request_body 到 other 中，以便在日志详情中显示
+		// 添加 request_body 和 response_body 到 other 中，以便在日志详情中显示
 		if requestBody := c.GetString(string(constant.ContextKeyVideoRequestBody)); requestBody != "" {
 			other["request_body"] = service.TruncateBody(requestBody)
+		}
+		if responseBody := c.GetString(string(constant.ContextKeyVideoResponseBody)); responseBody != "" {
+			other["response_body"] = service.TruncateBody(responseBody)
 		}
 		startTime := common.GetContextKeyTime(c, constant.ContextKeyRequestStartTime)
 		if startTime.IsZero() {
