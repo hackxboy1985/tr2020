@@ -1552,6 +1552,15 @@ func GeminiChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.R
 	fullTextResponse.Model = info.UpstreamModelName
 	usage := buildUsageFromGeminiMetadata(geminiResponse.UsageMetadata, info.GetEstimatePromptTokens())
 
+	if usage.CompletionTokens == 0 {
+		clientGone := c.Request.Context().Err() != nil
+		usageMetaJSON, _ := common.Marshal(geminiResponse.UsageMetadata)
+		logger.LogWarn(c, fmt.Sprintf(
+			"[GeminiChatHandler] completion_tokens=0 | model=%s | client_gone=%v | usage_metadata=%s | response_body=%s",
+			info.UpstreamModelName, clientGone, usageMetaJSON, responseBody,
+		))
+	}
+
 	fullTextResponse.Usage = usage
 
 	switch info.RelayFormat {
