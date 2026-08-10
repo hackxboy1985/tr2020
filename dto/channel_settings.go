@@ -62,14 +62,20 @@ type ChannelOtherSettings struct {
 	//   示例: {"rhart-image-g-2-official": "/openapi/v2/rhart-image-g-2-official/text-to-image"}
 	// RRUrlTTLHours: 上游图片 URL 有效期（小时），默认 24
 	// RRUrlProxyBaseURL: 对外图片代理基础地址，如 https://img.example.com/oss。配置后替换上游 URL 的 scheme/host，并将配置路径作为前缀，原路径和 query 保持不变。
-	RREndpoints       map[string]string `json:"rr_endpoints,omitempty"`
-	RRUrlTTLHours     int               `json:"rr_url_ttl_hours,omitempty"`
-	RRUrlProxyBaseURL string            `json:"rr_url_proxy_base_url,omitempty"`
+	// RRUrlProxyMappings: 多域名映射代理配置，key 为原始域名（如 "cdn1.rr.com"），value 为代理基础 URL。优先级高于 RRUrlProxyBaseURL。
+	RREndpoints        map[string]string `json:"rr_endpoints,omitempty"`
+	RRUrlTTLHours      int               `json:"rr_url_ttl_hours,omitempty"`
+	RRUrlProxyBaseURL  string            `json:"rr_url_proxy_base_url,omitempty"`
+	RRUrlProxyMappings map[string]string `json:"rr_url_proxy_mappings,omitempty"`
 	// Td 渠道配置
 	// TdUrlTTLHours: 上游图片 URL 有效期（小时），默认 24
 	// TdUrlProxyBaseURL: 对外图片代理基础地址，配置后替换上游 URL 的 scheme/host，原路径和 query 保持不变。
-	TdUrlTTLHours     int    `json:"td_url_ttl_hours,omitempty"`
-	TdUrlProxyBaseURL string `json:"td_url_proxy_base_url,omitempty"`
+	// TdUrlProxyMappings: 多域名映射代理配置，key 为原始域名（如 "cdn1.td.com"），value 为代理基础 URL。优先级高于 TdUrlProxyBaseURL。
+	TdUrlTTLHours      int               `json:"td_url_ttl_hours,omitempty"`
+	TdUrlProxyBaseURL  string            `json:"td_url_proxy_base_url,omitempty"`
+	TdUrlProxyMappings map[string]string `json:"td_url_proxy_mappings,omitempty"`
+	// SaveResponseBody 为 true 时，将上游响应体（脱敏后）保存到消费日志的 Other 字段，用于调试
+	SaveResponseBody bool `json:"save_response_body,omitempty"`
 }
 
 func (s *ChannelOtherSettings) IsOpenRouterEnterprise() bool {

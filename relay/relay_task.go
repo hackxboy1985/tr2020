@@ -601,11 +601,12 @@ func imageTaskFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskRes
 		resultURL := originTask.GetResultURL()
 		if originTask.ChannelId > 0 {
 			if ch, err := model.CacheGetChannel(originTask.ChannelId); err == nil {
+				settings := ch.GetOtherSettings()
 				switch ch.Type {
 				case constant.ChannelTypeRR:
-					resultURL = rewriteRRResultURL(resultURL, ch.GetOtherSettings().RRUrlProxyBaseURL)
+					resultURL = rewriteResultURLWithMappings(resultURL, settings.RRUrlProxyBaseURL, settings.RRUrlProxyMappings)
 				case constant.ChannelTypeTudou:
-					resultURL = rewriteRRResultURL(resultURL, ch.GetOtherSettings().TdUrlProxyBaseURL)
+					resultURL = rewriteResultURLWithMappings(resultURL, settings.TdUrlProxyBaseURL, settings.TdUrlProxyMappings)
 				}
 			}
 		}
@@ -631,6 +632,59 @@ func imageTaskFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskRes
 	return
 }
 
+func rewriteResultURLWithMappings(resultURL, defaultProxyBaseURL string, mappings map[string]string) string {
+	if resultURL == "" {
+		return resultURL
+	}
+	urls := strings.Split(resultURL, ",")
+	for i, raw := range urls {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		u, err := url.Parse(raw)
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			continue
+		}
+
+		// 优先使用 mappings 中的配置（根据原始域名匹配）
+		var proxyBaseURL string
+		if mappings != nil {
+			if mapped, ok := mappings[u.Host]; ok {
+				proxyBaseURL = mapped
+			}
+		}
+		// 如果 mappings 中没有匹配，使用默认的 defaultProxyBaseURL
+		if proxyBaseURL == "" {
+			proxyBaseURL = defaultProxyBaseURL
+		}
+
+		// 如果最终没有代理配置，保持原 URL
+		proxyBaseURL = strings.TrimSpace(proxyBaseURL)
+		if proxyBaseURL == "" {
+			continue
+		}
+
+		// 解析代理基础 URL
+		proxyBase, err := url.Parse(proxyBaseURL)
+		if err != nil || proxyBase.Scheme == "" || proxyBase.Host == "" {
+			continue
+		}
+
+		// 改写 URL
+		proxyBasePath := strings.TrimRight(proxyBase.Path, "/")
+		u.Scheme = proxyBase.Scheme
+		u.Host = proxyBase.Host
+		if proxyBasePath != "" {
+			u.Path = proxyBasePath + "/" + strings.TrimLeft(u.Path, "/")
+		}
+		urls[i] = u.String()
+	}
+	return strings.Join(urls, ",")
+}
+
+// rewriteRRResultURL 保留此函数以兼容可能的其他调用（已弃用，建议使用 rewriteResultURLWithMappings）
+// Deprecated: 使用 rewriteResultURLWithMappings 代替
 func rewriteRRResultURL(resultURL, proxyBaseURL string) string {
 	proxyBaseURL = strings.TrimSpace(proxyBaseURL)
 	if resultURL == "" || proxyBaseURL == "" {
