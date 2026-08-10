@@ -18,6 +18,7 @@
 # ──────────────────────────────────────────────
 GATEWAY="http://api.luluai.cc"
 API_KEY="sk-TmnBitxnzFMupKgxalfkQA34jJwGpXynfIwYfoxe8OVgqEOc"
+API_BASE="$GATEWAY/v1"
 
 MODEL="gpt-image-2-all"
 
@@ -191,6 +192,56 @@ print(d.get('status',''))
     done
 }
 
+# 独立查询任务结果（不轮询，只查一次）
+query_task_once() {
+    local task_id="$1"
+    if [ -z "$task_id" ]; then
+        echo -e "${RED}错误: 未提供任务ID${RESET}"
+        return 1
+    fi
+
+    info "查询任务  task_id=$task_id"
+
+    local resp
+    resp=$(curl -sSL -X GET \
+        -H "Authorization: Bearer $API_KEY" \
+        "$API_BASE/images/tasks/$task_id")
+
+    if [ $? -ne 0 ]; then
+        fail "请求失败"
+        return 1
+    fi
+
+    echo ""
+    echo "── 查询结果 ──────────────────────────"
+    echo "$resp" | jq -C . 2>/dev/null || echo "$resp"
+    echo ""
+
+    local status
+    status=$(echo "$resp" | jq -r '.status // empty' 2>/dev/null)
+
+    case "$status" in
+        succeeded)
+            local image_url
+            image_url=$(echo "$resp" | jq -r '.data[0].url // empty' 2>/dev/null)
+            if [ -n "$image_url" ]; then
+                pass "任务成功  image_url=${image_url}"
+            else
+                pass "任务成功  (未找到图片URL)"
+            fi
+            ;;
+        failed)
+            fail "任务失败  status=$status"
+            ;;
+        processing)
+            info "任务进行中  status=$status  可继续轮询: bash test_rr.sh task-query $task_id"
+            ;;
+        *)
+            info "当前状态: ${status:-未知}"
+            ;;
+    esac
+}
+
 # ──────────────────────────────────────────────
 # 用例函数
 # ──────────────────────────────────────────────
@@ -295,8 +346,9 @@ case "$1" in
         echo "  4) 图生图                 (1792x1024, standard)"
         echo "  5) 全量测试               (以上全部)"
         echo "  6) TD格式兼容测试         (size=16:9, resolution=2k, quality=medium)"
+        echo "  7) 查询任务结果           (输入任务ID)"
         echo ""
-        printf "请输入编号 [1-6]: "
+        printf "请输入编号 [1-7]: "
         read -r choice
         echo ""
         case "$choice" in
@@ -312,6 +364,14 @@ case "$1" in
                 test_i2i
                 sep; echo -e "${GREEN}=== 全量测试结束 ===${RESET}" ;;
             6) test_td_compat ;;
+            7)
+                printf "请输入任务ID: "
+                read -r task_id
+                if [ -n "$task_id" ]; then
+                    query_task_once "$task_id"
+                else
+                    echo -e "${RED}未输入任务ID${RESET}"
+                fi ;;
             *)
                 echo -e "${RED}无效选项: $choice${RESET}"
                 exit 1 ;;

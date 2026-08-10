@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -26,6 +27,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
 )
+
+// inlineDataRe 用于脱敏 Gemini 响应体中 inlineData.data 的 base64 图片数据
+var inlineDataRe = regexp.MustCompile(`"data"\s*:\s*"[^"]*"`)
 
 // https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference?hl=zh-cn#blob
 var geminiSupportedMimeTypes = map[string]bool{
@@ -1552,13 +1556,10 @@ func GeminiChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.R
 	fullTextResponse.Model = info.UpstreamModelName
 	usage := buildUsageFromGeminiMetadata(geminiResponse.UsageMetadata, info.GetEstimatePromptTokens())
 
-	if usage.CompletionTokens == 0 {
-		clientGone := c.Request.Context().Err() != nil
-		usageMetaJSON, _ := common.Marshal(geminiResponse.UsageMetadata)
-		logger.LogWarn(c, fmt.Sprintf(
-			"[GeminiChatHandler] completion_tokens=0 | model=%s | client_gone=%v | usage_metadata=%s | response_body=%s",
-			info.UpstreamModelName, clientGone, usageMetaJSON, responseBody,
-		))
+	// 保存脱敏后的 responseBody 到 Other（去除 inlineData.data 图片base64）
+	if info.ChannelOtherSettings.SaveResponseBody {
+		sanitized := inlineDataRe.ReplaceAllString(string(responseBody), `"data":"<stripped>"`)
+		common.SetContextKey(c, constant.ContextKeyVideoResponseBody, sanitized)
 	}
 
 	fullTextResponse.Usage = usage
