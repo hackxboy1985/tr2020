@@ -13,15 +13,19 @@ import (
 	"github.com/bytedance/gopkg/util/gopool"
 )
 
+const userCacheSchemaVersion = 2
+
 // UserBase struct remains the same as it represents the cached data structure
 type UserBase struct {
-	Id       int    `json:"id"`
-	Group    string `json:"group"`
-	Email    string `json:"email"`
-	Quota    int    `json:"quota"`
-	Status   int    `json:"status"`
-	Username string `json:"username"`
-	Setting  string `json:"setting"`
+	Id           int    `json:"id"`
+	Group        string `json:"group"`
+	Email        string `json:"email"`
+	Quota        int    `json:"quota"`
+	Status       int    `json:"status"`
+	Username     string `json:"username"`
+	Setting      string `json:"setting"`
+	CacheSchema  int    `json:"cache_schema"`
+	AuthVersion  int    `json:"auth_version"`
 }
 
 func (user *UserBase) WriteContext(c *gin.Context) {
@@ -63,7 +67,34 @@ func InvalidateUserCache(userId int) error {
 	return invalidateUserCache(userId)
 }
 
-// updateUserCache updates all user cache fields using hash
+func writeUserCache(userBase *UserBase, setTTL bool) error {
+	if !common.RedisEnabled || userBase == nil {
+		return nil
+	}
+	if setTTL {
+		return common.RedisHSetObj(
+			getUserCacheKey(userBase.Id),
+			userBase,
+			time.Duration(common.RedisKeyCacheSeconds())*time.Second,
+		)
+	}
+	return common.RedisHSetObj(
+		getUserCacheKey(userBase.Id),
+		userBase,
+		0,
+	)
+}
+
+func populateUserCache(user User) error {
+	if !common.RedisEnabled {
+		return nil
+	}
+	return writeUserCache(user.ToBaseUser(), true)
+}
+
+// updateUserCache refreshes non-quota user cache fields.
+// Quota is maintained by atomic quota delta paths and must not be overwritten
+// by stale user snapshots from profile/settings updates.
 func updateUserCache(user User) error {
 	if !common.RedisEnabled {
 		return nil
@@ -160,14 +191,6 @@ func getUserQuotaCache(userId int) (int, error) {
 	return cache.Quota, nil
 }
 
-func getUserStatusCache(userId int) (int, error) {
-	cache, err := GetUserCache(userId)
-	if err != nil {
-		return 0, err
-	}
-	return cache.Status, nil
-}
-
 func getUserNameCache(userId int) (string, error) {
 	cache, err := GetUserCache(userId)
 	if err != nil {
@@ -208,6 +231,22 @@ func updateUserGroupCache(userId int, group string) error {
 		return nil
 	}
 	return common.RedisHSetField(getUserCacheKey(userId), "Group", group)
+}
+
+// RefreshUserGroupCache writes the database-authoritative group into an
+// existing user hash without changing the user's authentication version.
+func RefreshUserGroupCache(userId int) error {
+	if !common.RedisEnabled {
+		return nil
+	}
+	if userId <= 0 {
+		return fmt.Errorf("invalid user id")
+	}
+	var user User
+	if err := DB.Select("id", commonGroupCol).Where("id = ?", userId).First(&user).Error; err != nil {
+		return err
+	}
+	return updateUserGroupCache(userId, user.Group)
 }
 
 func UpdateUserGroupCache(userId int, group string) error {
