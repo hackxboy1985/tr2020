@@ -23,6 +23,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { parseHttpStatusCodeRules } from '@/lib/http-status-code-rules'
+import { api } from '@/lib/api'
 import {
   Form,
   FormControl,
@@ -220,12 +221,9 @@ export function MonitoringSettingsSection({
   // 加载分组列表
   useEffect(() => {
     setGroupsLoading(true)
-    fetch('/api/channel/groups', {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-    })
-      .then((r) => r.json())
+    api.get('/api/channel/groups')
       .then((res) => {
-        if (res.success) setGroups(res.data)
+        if (res.data.success) setGroups(res.data.data)
       })
       .finally(() => setGroupsLoading(false))
   }, [])
@@ -240,19 +238,11 @@ export function MonitoringSettingsSection({
     setGroupsSaving(true)
     try {
       const visibleGroups = groups.filter((g) => g.selected).map((g) => g.name)
-      const res = await fetch('/api/channel/group-monitor-config', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({ visible_groups: visibleGroups }),
-      })
-      const data = await res.json()
-      if (data.success) {
+      const res = await api.post('/api/channel/group-monitor-config', { visible_groups: visibleGroups })
+      if (res.data.success) {
         toast.success(t('Saved'))
       } else {
-        toast.error(data.message)
+        toast.error(res.data.message)
       }
     } finally {
       setGroupsSaving(false)

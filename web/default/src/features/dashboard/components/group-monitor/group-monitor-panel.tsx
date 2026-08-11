@@ -10,6 +10,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { api } from '@/lib/api'
 
 type HeartbeatResult = {
   success: boolean
@@ -295,12 +296,9 @@ export function GroupMonitorPanel() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/user/group-monitor', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-      })
-      const data = await res.json()
-      if (data.success) {
-        setGroups(data.data ?? [])
+      const res = await api.get('/api/user/group-monitor')
+      if (res.data.success) {
+        setGroups(res.data.data ?? [])
         setLastUpdated(new Date())
       }
     } finally {
