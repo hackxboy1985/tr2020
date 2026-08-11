@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -31,6 +32,20 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
+
+// channelTestHistoryThrottle 限制每个渠道写入测试历史的频率（30秒内最多写一次）
+var channelTestHistoryThrottle sync.Map // map[int]int64: channelId -> lastWriteUnixSec
+
+func shouldWriteChannelTestHistory(channelId int) bool {
+	now := time.Now().Unix()
+	if last, ok := channelTestHistoryThrottle.Load(channelId); ok {
+		if now-last.(int64) < 30 {
+			return false
+		}
+	}
+	channelTestHistoryThrottle.Store(channelId, now)
+	return true
+}
 
 func relayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIError {
 	var err *types.NewAPIError
@@ -228,9 +243,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		if newAPIError == nil {
 			relayInfo.LastError = nil
-			// 将用户真实请求数据写入测试历史，供分组监控使用
+			// 将用户真实请求数据写入测试历史，供分组监控使用（30秒内每渠道最多写一次）
 			startTime := common.GetContextKeyTime(c, constant.ContextKeyRequestStartTime)
-			if !startTime.IsZero() {
+			if !startTime.IsZero() && shouldWriteChannelTestHistory(channel.Id) {
 				responseTime := int(time.Since(startTime).Milliseconds())
 				go func(chId int, rt int) {
 					logger.LogInfo(c, fmt.Sprintf("渠道 #%d 用户请求成功（%dms），写入测试历史", chId, rt))
