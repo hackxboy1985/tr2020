@@ -28,6 +28,7 @@ import { FadeIn } from '@/components/page-transition'
 import { ModelsChartPreferences } from './components/models/models-chart-preferences'
 import { ModelsFilter } from './components/models/models-filter-dialog'
 import { OverviewDashboard } from './components/overview/overview-dashboard'
+import { GroupMonitorPanel } from './components/group-monitor/group-monitor-panel'
 import { DEFAULT_TIME_GRANULARITY } from './constants'
 import {
   buildDefaultDashboardFilters,
@@ -197,7 +198,10 @@ export function Dashboard() {
   const visibleSections = useMemo(
     () =>
       DASHBOARD_SECTION_IDS.filter(
-        (section) => section !== 'overview' && (section !== 'users' || isAdmin)
+        (section) =>
+          section !== 'overview' &&
+          (section !== 'users' || isAdmin) &&
+          (section !== 'group-monitor' || isAdmin)
       ),
     [isAdmin]
   )
@@ -312,6 +316,11 @@ export function Dashboard() {
               <Suspense fallback={<ModelChartsFallback />}>
                 <LazyTokenCharts />
               </Suspense>
+            </FadeIn>
+          )}
+          {activeSection === 'group-monitor' && isAdmin && (
+            <FadeIn>
+              <GroupMonitorPanel />
             </FadeIn>
           )}
         </div>

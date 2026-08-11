@@ -312,6 +312,8 @@ func updateOptionMap(key string, value string) (err error) {
 			common.AutomaticDisableChannelEnabled = boolValue
 		case "AutomaticEnableChannelEnabled":
 			common.AutomaticEnableChannelEnabled = boolValue
+		case "NotifyOnChannelStatusChange":
+			common.NotifyOnChannelStatusChange = boolValue
 		case "LogConsumeEnabled":
 			common.LogConsumeEnabled = boolValue
 		case "LogUpstreamRequestEnabled":
@@ -621,3 +623,21 @@ func handleConfigUpdate(key, value string) bool {
 
 	return true // 已处理
 }
+
+// GetGroupMonitorVisibleGroups 获取分组监控可见分组列表
+func GetGroupMonitorVisibleGroups() []string {
+	var option Option
+	err := DB.Where("`key` = ?", "GroupMonitorVisibleGroups").First(&option).Error
+	if err != nil || option.Value == "" {
+		return nil // nil 表示显示所有分组
+	}
+
+	return strings.Split(option.Value, ",")
+}
+
+// SetGroupMonitorVisibleGroups 设置分组监控可见分组列表
+func SetGroupMonitorVisibleGroups(groups []string) error {
+	value := strings.Join(groups, ",")
+	return UpdateOption("GroupMonitorVisibleGroups", value)
+}
+

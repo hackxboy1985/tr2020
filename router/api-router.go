@@ -266,6 +266,10 @@ func SetApiRouter(router *gin.Engine) {
 			channelRoute.POST("/upstream_updates/apply_all", controller.ApplyAllChannelUpstreamModelUpdates)
 			channelRoute.POST("/upstream_updates/detect", controller.DetectChannelUpstreamModelUpdates)
 			channelRoute.POST("/upstream_updates/detect_all", controller.DetectAllChannelUpstreamModelUpdates)
+			// 分组监控相关接口
+			channelRoute.GET("/groups", controller.GetAllGroups)
+			channelRoute.POST("/group-monitor-config", controller.SaveGroupMonitorConfig)
+			channelRoute.GET("/group-monitor", controller.GetGroupMonitorStatus)
 		}
 		tokenRoute := apiRouter.Group("/token")
 		tokenRoute.Use(middleware.TokenOrUserAuth())

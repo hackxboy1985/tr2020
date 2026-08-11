@@ -873,6 +873,11 @@ func TestChannel(c *gin.Context) {
 	tok := time.Now()
 	milliseconds := tok.Sub(tik).Milliseconds()
 	go channel.UpdateResponseTime(milliseconds)
+
+	// 记录测试历史
+	success := result.newAPIError == nil
+	go model.RecordChannelTestHistory(channel.Id, success, int(milliseconds))
+
 	consumedTime := float64(milliseconds) / 1000.0
 	if result.newAPIError != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -962,6 +967,11 @@ func testAllChannels(notify bool) error {
 			}
 
 			channel.UpdateResponseTime(milliseconds)
+
+			// 记录测试历史
+			success := newAPIError == nil && milliseconds <= disableThreshold
+			model.RecordChannelTestHistory(channel.Id, success, int(milliseconds))
+
 			time.Sleep(common.RequestInterval)
 		}
 

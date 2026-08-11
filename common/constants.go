@@ -151,6 +151,7 @@ var QuotaForInvitee = 0
 var ChannelDisableThreshold = 5.0
 var AutomaticDisableChannelEnabled = false
 var AutomaticEnableChannelEnabled = false
+var NotifyOnChannelStatusChange = true // 渠道状态变更时是否发送邮件通知
 var QuotaRemindThreshold = 1000
 var PreConsumedQuota = 500
 

@@ -290,6 +290,7 @@ func migrateDB() error {
 		&SeedanceAssetGroup{},
 		&SeedanceAsset{},
 		&SeedanceFaceVerification{},
+		&ChannelTestHistory{},
 	)
 	if err != nil {
 		return err

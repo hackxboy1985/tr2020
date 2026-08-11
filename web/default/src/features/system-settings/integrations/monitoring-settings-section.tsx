@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, useState, useEffect } from 'react'
 import * as z from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -35,6 +35,9 @@ import {
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { Separator } from '@/components/ui/separator'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Button } from '@/components/ui/button'
 import {
   SettingsForm,
   SettingsSwitchContent,
@@ -61,6 +64,7 @@ const monitoringSchema = z
     AutomaticDisableKeywords: z.string(),
     AutomaticDisableStatusCodes: z.string(),
     AutomaticRetryStatusCodes: z.string(),
+    NotifyOnChannelStatusChange: z.boolean(),
     monitor_setting: z.object({
       auto_test_channel_enabled: z.boolean(),
       auto_test_channel_minutes: z.coerce
@@ -109,6 +113,7 @@ type MonitoringSettingsSectionProps = {
     AutomaticDisableKeywords: string
     AutomaticDisableStatusCodes: string
     AutomaticRetryStatusCodes: string
+    NotifyOnChannelStatusChange: boolean
     'monitor_setting.auto_test_channel_enabled': boolean
     'monitor_setting.auto_test_channel_minutes': number
   }
@@ -126,6 +131,7 @@ type NormalizedMonitoringValues = {
   AutomaticDisableKeywords: string
   AutomaticDisableStatusCodes: string
   AutomaticRetryStatusCodes: string
+  NotifyOnChannelStatusChange: boolean
   'monitor_setting.auto_test_channel_enabled': boolean
   'monitor_setting.auto_test_channel_minutes': number
 }
@@ -142,6 +148,7 @@ const buildFormDefaults = (
   ),
   AutomaticDisableStatusCodes: defaults.AutomaticDisableStatusCodes ?? '',
   AutomaticRetryStatusCodes: defaults.AutomaticRetryStatusCodes ?? '',
+  NotifyOnChannelStatusChange: defaults.NotifyOnChannelStatusChange ?? true,
   monitor_setting: {
     auto_test_channel_enabled:
       defaults['monitor_setting.auto_test_channel_enabled'],
@@ -166,6 +173,7 @@ const normalizeDefaults = (
   AutomaticRetryStatusCodes: parseHttpStatusCodeRules(
     defaults.AutomaticRetryStatusCodes ?? ''
   ).normalized,
+  NotifyOnChannelStatusChange: defaults.NotifyOnChannelStatusChange ?? true,
   'monitor_setting.auto_test_channel_enabled':
     defaults['monitor_setting.auto_test_channel_enabled'],
   'monitor_setting.auto_test_channel_minutes':
@@ -188,6 +196,7 @@ const normalizeFormValues = (
   AutomaticRetryStatusCodes: parseHttpStatusCodeRules(
     values.AutomaticRetryStatusCodes
   ).normalized,
+  NotifyOnChannelStatusChange: values.NotifyOnChannelStatusChange,
   'monitor_setting.auto_test_channel_enabled':
     values.monitor_setting.auto_test_channel_enabled,
   'monitor_setting.auto_test_channel_minutes':
@@ -202,6 +211,53 @@ export function MonitoringSettingsSection({
   const baselineRef = useRef<NormalizedMonitoringValues>(
     normalizeDefaults(defaultValues)
   )
+
+  // 分组监控配置状态
+  const [groups, setGroups] = useState<{ name: string; selected: boolean }[]>([])
+  const [groupsLoading, setGroupsLoading] = useState(false)
+  const [groupsSaving, setGroupsSaving] = useState(false)
+
+  // 加载分组列表
+  useEffect(() => {
+    setGroupsLoading(true)
+    fetch('/api/channel/groups', {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+    })
+      .then((r) => r.json())
+      .then((res) => {
+        if (res.success) setGroups(res.data)
+      })
+      .finally(() => setGroupsLoading(false))
+  }, [])
+
+  const handleGroupToggle = (name: string, checked: boolean) => {
+    setGroups((prev) =>
+      prev.map((g) => (g.name === name ? { ...g, selected: checked } : g))
+    )
+  }
+
+  const handleSaveGroups = async () => {
+    setGroupsSaving(true)
+    try {
+      const visibleGroups = groups.filter((g) => g.selected).map((g) => g.name)
+      const res = await fetch('/api/channel/group-monitor-config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({ visible_groups: visibleGroups }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(t('Saved'))
+      } else {
+        toast.error(data.message)
+      }
+    } finally {
+      setGroupsSaving(false)
+    }
+  }
 
   const formDefaults = useMemo(
     () => buildFormDefaults(defaultValues),
@@ -483,6 +539,93 @@ export function MonitoringSettingsSection({
           </div>
         </SettingsForm>
       </Form>
+
+      {/* 分隔线 + 邮件通知 + 分组监控配置 */}
+      <Separator className='my-6' />
+
+      <div className='space-y-6'>
+        {/* 邮件通知开关 */}
+        <Form {...form}>
+          <SettingsForm onSubmit={form.handleSubmit(onSubmit)}>
+            <FormField
+              control={form.control}
+              name='NotifyOnChannelStatusChange'
+              render={({ field }) => (
+                <SettingsSwitchItem>
+                  <SettingsSwitchContent>
+                    <FormLabel>
+                      {t('Channel status change email notification')}
+                    </FormLabel>
+                    <FormDescription>
+                      {t(
+                        'Send an email to the admin when a channel is automatically enabled or disabled'
+                      )}
+                    </FormDescription>
+                  </SettingsSwitchContent>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </SettingsSwitchItem>
+              )}
+            />
+          </SettingsForm>
+        </Form>
+
+        <Separator className='my-6' />
+
+        {/* 分组监控配置 */}
+        <div className='space-y-3'>
+          <div>
+            <h3 className='text-base font-medium'>
+              {t('Group monitor configuration')}
+            </h3>
+            <p className='text-sm text-muted-foreground mt-1'>
+              {t(
+                'Select which groups to display on the monitor page. All channels continue to be tested regardless of this setting.'
+              )}
+            </p>
+          </div>
+
+          {groupsLoading ? (
+            <p className='text-sm text-muted-foreground'>{t('Loading...')}</p>
+          ) : groups.length === 0 ? (
+            <p className='text-sm text-muted-foreground'>
+              {t('No groups found')}
+            </p>
+          ) : (
+            <div className='space-y-2'>
+              {groups.map((group) => (
+                <div key={group.name} className='flex items-center space-x-2'>
+                  <Checkbox
+                    id={`group-${group.name}`}
+                    checked={group.selected}
+                    onCheckedChange={(checked) =>
+                      handleGroupToggle(group.name, checked as boolean)
+                    }
+                  />
+                  <label
+                    htmlFor={`group-${group.name}`}
+                    className='text-sm cursor-pointer select-none'
+                  >
+                    {group.name}
+                  </label>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <Button
+            size='sm'
+            onClick={handleSaveGroups}
+            disabled={groupsSaving || groupsLoading}
+          >
+            {groupsSaving ? t('Saving...') : t('Save group config')}
+          </Button>
+        </div>
+      </div>
     </SettingsSection>
   )
 }

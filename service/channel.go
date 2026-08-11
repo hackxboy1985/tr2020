@@ -27,18 +27,28 @@ func DisableChannel(channelError types.ChannelError, reason string) {
 
 	success := model.UpdateChannelStatus(channelError.ChannelId, channelError.UsingKey, common.ChannelStatusAutoDisabled, reason)
 	if success {
-		subject := fmt.Sprintf("通道「%s」（#%d）已被禁用", channelError.ChannelName, channelError.ChannelId)
-		content := fmt.Sprintf("通道「%s」（#%d）已被禁用，原因：%s", channelError.ChannelName, channelError.ChannelId, reason)
-		NotifyRootUser(formatNotifyType(channelError.ChannelId, common.ChannelStatusAutoDisabled), subject, content)
+		// 检查是否启用邮件通知
+		if common.NotifyOnChannelStatusChange {
+			subject := fmt.Sprintf("通道「%s」（#%d）已被禁用", channelError.ChannelName, channelError.ChannelId)
+			content := fmt.Sprintf("通道「%s」（#%d）已被禁用，原因：%s", channelError.ChannelName, channelError.ChannelId, reason)
+			NotifyRootUser(formatNotifyType(channelError.ChannelId, common.ChannelStatusAutoDisabled), subject, content)
+		} else {
+			common.SysLog(fmt.Sprintf("通道「%s」（#%d）已被禁用，但邮件通知已关闭", channelError.ChannelName, channelError.ChannelId))
+		}
 	}
 }
 
 func EnableChannel(channelId int, usingKey string, channelName string) {
 	success := model.UpdateChannelStatus(channelId, usingKey, common.ChannelStatusEnabled, "")
 	if success {
-		subject := fmt.Sprintf("通道「%s」（#%d）已被启用", channelName, channelId)
-		content := fmt.Sprintf("通道「%s」（#%d）已被启用", channelName, channelId)
-		NotifyRootUser(formatNotifyType(channelId, common.ChannelStatusEnabled), subject, content)
+		// 检查是否启用邮件通知
+		if common.NotifyOnChannelStatusChange {
+			subject := fmt.Sprintf("通道「%s」（#%d）已被启用", channelName, channelId)
+			content := fmt.Sprintf("通道「%s」（#%d）已被启用", channelName, channelId)
+			NotifyRootUser(formatNotifyType(channelId, common.ChannelStatusEnabled), subject, content)
+		} else {
+			common.SysLog(fmt.Sprintf("通道「%s」（#%d）已被启用，但邮件通知已关闭", channelName, channelId))
+		}
 	}
 }
 
