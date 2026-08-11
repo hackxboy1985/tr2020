@@ -228,6 +228,15 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		if newAPIError == nil {
 			relayInfo.LastError = nil
+			// 将用户真实请求数据写入测试历史，供分组监控使用
+			startTime := common.GetContextKeyTime(c, constant.ContextKeyRequestStartTime)
+			if !startTime.IsZero() {
+				responseTime := int(time.Since(startTime).Milliseconds())
+				go func(chId int, rt int) {
+					logger.LogInfo(c, fmt.Sprintf("渠道 #%d 用户请求成功（%dms），写入测试历史", chId, rt))
+					model.RecordChannelTestHistory(chId, true, rt)
+				}(channel.Id, responseTime)
+			}
 			return
 		}
 

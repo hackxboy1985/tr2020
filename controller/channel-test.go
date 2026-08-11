@@ -935,6 +935,16 @@ func testAllChannels(notify bool) error {
 				continue
 			}
 			isChannelEnabled := channel.Status == common.ChannelStatusEnabled
+
+			// 检查最近 30 秒内是否有用户成功请求，有则跳过主动测试
+			recentTest, err := model.GetMostRecentChannelTest(channel.Id, 30)
+			if err == nil && recentTest != nil {
+				common.SysLog(fmt.Sprintf("渠道 #%d「%s」最近 30 秒内有用户成功请求（%dms），跳过主动测试", channel.Id, channel.Name, recentTest.ResponseTime))
+				channel.UpdateResponseTime(int64(recentTest.ResponseTime))
+				time.Sleep(common.RequestInterval)
+				continue
+			}
+
 			tik := time.Now()
 			result := testChannel(channel, testUserID, "", "", shouldUseStreamForAutomaticChannelTest(channel))
 			tok := time.Now()
