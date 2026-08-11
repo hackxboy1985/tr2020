@@ -58,6 +58,7 @@ type Log struct {
 	PromptText        string `json:"prompt_text,omitempty" gorm:"-"`
 	RequestBody       string `json:"request_body,omitempty" gorm:"-"`
 	ResponseBody      string `json:"response_body,omitempty" gorm:"-"`
+	HasPromptLog      bool   `json:"has_prompt_log,omitempty" gorm:"-"` // 是否存在提示词日志（列表查询时只查存在性，不加载具体内容）
 }
 
 // don't use iota, avoid change log type value

@@ -161,6 +161,27 @@ func SearchPromptLogsByLogIds(logIds []int) (map[int]*PromptLog, error) {
 	return result, nil
 }
 
+// CheckPromptLogsExistence 批量检查提示词日志是否存在，返回 map[log_id]bool
+// 优化性能：只查询 log_id，不加载大文本字段
+func CheckPromptLogsExistence(logIds []int) (map[int]bool, error) {
+	if len(logIds) == 0 {
+		return nil, nil
+	}
+	var existingLogIds []int
+	err := LOG_DB.Model(&PromptLog{}).
+		Select("log_id").
+		Where("log_id IN ?", logIds).
+		Pluck("log_id", &existingLogIds).Error
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[int]bool, len(existingLogIds))
+	for _, logId := range existingLogIds {
+		result[logId] = true
+	}
+	return result, nil
+}
+
 // DeleteOldPromptLog deletes prompt logs older than targetTimestamp in batches.
 func DeleteOldPromptLog(ctx context.Context, targetTimestamp int64, limit int) (int64, error) {
 	var total int64 = 0

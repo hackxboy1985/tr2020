@@ -57,13 +57,12 @@ func GetAllLogs(c *gin.Context) {
 			}
 		}
 		if len(logIds) > 0 {
-			promptMap, err := model.SearchPromptLogsByLogIds(logIds)
+			// 优化：只查询是否存在提示词日志，不加载具体内容（点击时再按需加载）
+			existenceMap, err := model.CheckPromptLogsExistence(logIds)
 			if err == nil {
 				for _, l := range logs {
-					if pl, ok := promptMap[l.Id]; ok {
-						l.PromptText = pl.PromptText
-						l.RequestBody = pl.RequestBody
-						l.ResponseBody = pl.ResponseBody
+					if exists := existenceMap[l.Id]; exists {
+						l.HasPromptLog = true
 					}
 				}
 			}
