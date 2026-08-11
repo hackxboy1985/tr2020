@@ -5,11 +5,12 @@ import (
 )
 
 type ChannelTestHistory struct {
-	Id           int64 `json:"id" gorm:"primaryKey;autoIncrement"`
-	ChannelId    int   `json:"channel_id" gorm:"index:idx_channel_tested,priority:1"`
-	Success      bool  `json:"success"`
-	ResponseTime int   `json:"response_time"` // 响应时间（毫秒），失败时为 0
-	TestedAt     int64 `json:"tested_at" gorm:"index:idx_channel_tested,priority:2"`
+	Id           int64  `json:"id" gorm:"primaryKey;autoIncrement"`
+	ChannelId    int    `json:"channel_id" gorm:"index:idx_channel_tested,priority:1"`
+	Success      bool   `json:"success"`
+	ResponseTime int    `json:"response_time"` // 响应时间（毫秒），失败时为 0
+	TestModel    string `json:"test_model" gorm:"type:varchar(128)"`
+	TestedAt     int64  `json:"tested_at" gorm:"index:idx_channel_tested,priority:2"`
 }
 
 func (ChannelTestHistory) TableName() string {
@@ -17,11 +18,12 @@ func (ChannelTestHistory) TableName() string {
 }
 
 // RecordChannelTestHistory 记录渠道测试历史
-func RecordChannelTestHistory(channelId int, success bool, responseTime int) error {
+func RecordChannelTestHistory(channelId int, success bool, responseTime int, testModel string) error {
 	history := ChannelTestHistory{
 		ChannelId:    channelId,
 		Success:      success,
 		ResponseTime: responseTime,
+		TestModel:    testModel,
 		TestedAt:     common.GetTimestamp(),
 	}
 

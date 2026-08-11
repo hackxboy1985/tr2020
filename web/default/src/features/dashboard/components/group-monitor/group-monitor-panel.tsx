@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { RefreshCw, AlertTriangle, CheckCircle, XCircle, TrendingDown } from 'lucide-react'
+import { RefreshCw, AlertTriangle, CheckCircle, XCircle, TrendingDown, Clock, Zap, ChevronDown, ChevronUp, Cpu } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,6 +20,7 @@ type HeartbeatRecord = {
   tested_at: number
   color: 'green' | 'yellow' | 'orange' | 'red'
   results: Record<number, HeartbeatResult>
+  test_model?: string
 }
 
 type ChannelInfo = {
@@ -98,32 +99,30 @@ function StatusBadge({ status }: { status: GroupMonitorResult['status'] }) {
   )
 }
 
-function HeartbeatGrid({ heartbeats }: { heartbeats: HeartbeatRecord[] }) {
-  // 按时间升序展示（最左边是最早的，最右边是最新的）
+function HeartbeatGrid({ heartbeats, onSelect }: { heartbeats: HeartbeatRecord[], onSelect?: (hb: HeartbeatRecord) => void }) {
   const sorted = [...heartbeats].sort((a, b) => a.tested_at - b.tested_at)
 
   return (
     <TooltipProvider>
-      <div className='flex gap-0.5 items-center'>
+      <div className='flex gap-0.5 items-end'>
         {sorted.map((hb, idx) => (
           <Tooltip key={idx}>
             <TooltipTrigger asChild>
               <div
-                className={`w-2 h-6 rounded-sm cursor-pointer ${HEARTBEAT_COLORS[hb.color] ?? 'bg-gray-300'}`}
+                onClick={() => onSelect?.(hb)}
+                className={`w-2.5 h-8 rounded-sm cursor-pointer hover:opacity-80 transition-opacity ${HEARTBEAT_COLORS[hb.color] ?? 'bg-gray-300'}`}
               />
             </TooltipTrigger>
             <TooltipContent side='top' className='text-xs'>
               <p>{HEARTBEAT_TOOLTIP[hb.color]}</p>
-              <p className='text-muted-foreground'>
-                {formatTimeAgo(hb.tested_at)}
-              </p>
+              <p className='text-muted-foreground'>{formatTimeAgo(hb.tested_at)}</p>
+              {hb.test_model && <p className='text-muted-foreground'>{hb.test_model}</p>}
             </TooltipContent>
           </Tooltip>
         ))}
-        {/* 填充空格子（如果历史不足 60 条） */}
         {Array.from({ length: Math.max(0, 60 - sorted.length) }).map(
           (_, idx) => (
-            <div key={`empty-${idx}`} className='w-2 h-6 rounded-sm bg-gray-200' />
+            <div key={`empty-${idx}`} className='w-2.5 h-8 rounded-sm bg-gray-200' />
           )
         )}
       </div>
@@ -133,8 +132,23 @@ function HeartbeatGrid({ heartbeats }: { heartbeats: HeartbeatRecord[] }) {
 
 function GroupCard({ group }: { group: GroupMonitorResult }) {
   const { t } = useTranslation()
+  const [selectedHeartbeat, setSelectedHeartbeat] = useState<HeartbeatRecord | null>(null)
   const channelName = (ch: ChannelInfo | DisabledChannelInfo) =>
     ch.name ?? ch.display_name ?? `Priority ${ch.priority}`
+
+  // 最新一次心跳（用于底部默认详情）
+  const latestHeartbeat = group.heartbeats?.length > 0
+    ? [...group.heartbeats].sort((a, b) => b.tested_at - a.tested_at)[0]
+    : null
+
+  const detailHeartbeat = selectedHeartbeat ?? latestHeartbeat
+
+  // 取 detailHeartbeat 中最优渠道的 response_time 和 test_model
+  const detailResponseTime = detailHeartbeat
+    ? Object.values(detailHeartbeat.results).find(r => r.success)?.response_time ?? 0
+    : 0
+  const detailModel = detailHeartbeat?.test_model ?? ''
+  const detailTime = detailHeartbeat?.tested_at ?? 0
 
   return (
     <Card>
@@ -194,9 +208,22 @@ function GroupCard({ group }: { group: GroupMonitorResult }) {
         <div>
           <div className='flex justify-between text-xs text-muted-foreground mb-1'>
             <span>{t('Past')}</span>
-            <span>{t('Latest')} {t('Last 60 tests')}</span>
+            <span className='flex items-center gap-1'>
+              {t('Last 60 tests')}
+              {selectedHeartbeat && (
+                <button
+                  onClick={() => setSelectedHeartbeat(null)}
+                  className='ml-1 text-xs underline text-blue-500 hover:text-blue-700'
+                >
+                  {t('Reset')}
+                </button>
+              )}
+            </span>
           </div>
-          <HeartbeatGrid heartbeats={group.heartbeats ?? []} />
+          <HeartbeatGrid
+            heartbeats={group.heartbeats ?? []}
+            onSelect={(hb) => setSelectedHeartbeat(prev => prev?.tested_at === hb.tested_at ? null : hb)}
+          />
         </div>
 
         {/* 图例 */}
@@ -222,6 +249,38 @@ function GroupCard({ group }: { group: GroupMonitorResult }) {
             {t('Down')}
           </span>
         </div>
+
+        {/* 底部详情区 */}
+        {detailHeartbeat && (
+          <div className='border-t pt-3 mt-1'>
+            <div className='flex items-center gap-2 text-xs text-muted-foreground mb-2'>
+              <StatusBadge status={detailHeartbeat.color === 'red' ? 'down' : detailHeartbeat.color === 'green' ? 'up' : 'degraded'} />
+              {selectedHeartbeat && (
+                <span className='text-blue-500'>{t('Selected record')}</span>
+              )}
+            </div>
+            <div className='flex flex-wrap gap-4 text-xs text-muted-foreground'>
+              {detailTime > 0 && (
+                <span className='flex items-center gap-1'>
+                  <Clock className='h-3 w-3' />
+                  {t('Detection time')}: {new Date(detailTime * 1000).toLocaleString()}
+                </span>
+              )}
+              {detailResponseTime > 0 && (
+                <span className='flex items-center gap-1'>
+                  <Zap className='h-3 w-3' />
+                  {t('Latency')}: {detailResponseTime}ms
+                </span>
+              )}
+              {detailModel && (
+                <span className='flex items-center gap-1'>
+                  <Cpu className='h-3 w-3' />
+                  {t('Test model')}: {detailModel}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   )

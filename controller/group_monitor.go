@@ -95,8 +95,9 @@ type DisabledChannelInfo struct {
 }
 
 type HeartbeatRecord struct {
-	TestedAt int64             `json:"tested_at"`
-	Color    string            `json:"color"` // green / yellow / orange / red
+	TestedAt int64              `json:"tested_at"`
+	Color    string             `json:"color"` // green / yellow / orange / red
+	TestModel string            `json:"test_model,omitempty"`
 	Results  map[int]TestResult `json:"results"`
 }
 
@@ -250,8 +251,9 @@ func generateChannelDisplayNames(abilities []model.Ability) map[int]string {
 
 // calculateHeartbeats 计算心跳格
 func calculateHeartbeats(top3Abilities []model.Ability, histories map[int][]model.ChannelTestHistory) []HeartbeatRecord {
-	// 按时间点分组
+	// 按时间点分组，同时记录 test_model
 	timeMap := make(map[int64]map[int]TestResult)
+	timeModelMap := make(map[int64]string) // 每个时间点的测试模型
 
 	for _, ability := range top3Abilities {
 		channelHistories := histories[ability.ChannelId]
@@ -262,6 +264,10 @@ func calculateHeartbeats(top3Abilities []model.Ability, histories map[int][]mode
 			timeMap[h.TestedAt][ability.ChannelId] = TestResult{
 				Success:      h.Success,
 				ResponseTime: h.ResponseTime,
+			}
+			// 取第一个有值的 test_model
+			if h.TestModel != "" && timeModelMap[h.TestedAt] == "" {
+				timeModelMap[h.TestedAt] = h.TestModel
 			}
 		}
 	}
@@ -283,9 +289,10 @@ func calculateHeartbeats(top3Abilities []model.Ability, histories map[int][]mode
 		color := calculateHeartbeatColor(top3Abilities, results)
 
 		heartbeats = append(heartbeats, HeartbeatRecord{
-			TestedAt: t,
-			Color:    color,
-			Results:  results,
+			TestedAt:  t,
+			Color:     color,
+			TestModel: timeModelMap[t],
+			Results:   results,
 		})
 	}
 

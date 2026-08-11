@@ -248,10 +248,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			startTime := common.GetContextKeyTime(c, constant.ContextKeyRequestStartTime)
 			if !startTime.IsZero() && shouldWriteChannelTestHistory(channel.Id) {
 				responseTime := int(time.Since(startTime).Milliseconds())
-				go func(chId int, rt int) {
+				modelName := common.GetContextKeyString(c, constant.ContextKeyOriginalModel)
+				go func(chId, rt int, m string) {
 					logger.LogInfo(c, fmt.Sprintf("渠道 #%d 用户请求成功（%dms），写入测试历史", chId, rt))
-					model.RecordChannelTestHistory(chId, true, rt)
-				}(channel.Id, responseTime)
+					model.RecordChannelTestHistory(chId, true, rt, m)
+				}(channel.Id, responseTime, modelName)
 			}
 			return
 		}

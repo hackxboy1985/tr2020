@@ -41,6 +41,7 @@ type testResult struct {
 	context     *gin.Context
 	localErr    error
 	newAPIError *types.NewAPIError
+	testModel   string // 实际使用的测试模型
 }
 
 func normalizeChannelTestEndpoint(channel *model.Channel, modelName, endpointType string) string {
@@ -519,6 +520,7 @@ func testChannel(channel *model.Channel, testUserID int, testModel string, endpo
 		context:     c,
 		localErr:    nil,
 		newAPIError: nil,
+		testModel:   testModel,
 	}
 }
 
@@ -876,7 +878,7 @@ func TestChannel(c *gin.Context) {
 
 	// 记录测试历史
 	success := result.newAPIError == nil
-	go model.RecordChannelTestHistory(channel.Id, success, int(milliseconds))
+	go model.RecordChannelTestHistory(channel.Id, success, int(milliseconds), testModel)
 
 	consumedTime := float64(milliseconds) / 1000.0
 	if result.newAPIError != nil {
@@ -980,7 +982,7 @@ func testAllChannels(notify bool) error {
 
 			// 记录测试历史
 			success := newAPIError == nil && milliseconds <= disableThreshold
-			model.RecordChannelTestHistory(channel.Id, success, int(milliseconds))
+			model.RecordChannelTestHistory(channel.Id, success, int(milliseconds), result.testModel)
 
 			time.Sleep(common.RequestInterval)
 		}
