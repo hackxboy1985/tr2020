@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"sort"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
 )
@@ -105,19 +107,33 @@ type TestResult struct {
 
 // GetGroupMonitorStatus 获取分组监控状态
 func GetGroupMonitorStatus(c *gin.Context) {
-	isAdmin := true // 已通过 AdminAuth
+	userRole := c.GetInt("role")
+	isAdmin := userRole >= common.RoleAdminUser
 
 	// 读取要显示的分组配置
 	visibleGroups := model.GetGroupMonitorVisibleGroups()
 
 	// 如果未配置，则显示所有分组
-	var allGroups []string
 	if visibleGroups == nil {
 		model.DB.Model(&model.Ability{}).
 			Distinct("group").
 			Where("enabled = ?", true).
-			Pluck("group", &allGroups)
-		visibleGroups = allGroups
+			Pluck("group", &visibleGroups)
+	}
+
+	// 普通用户：过滤出该用户有权访问的分组
+	if !isAdmin {
+		userId := c.GetInt("id")
+		userGroup, _ := model.GetUserGroup(userId, false)
+		userUsableGroups := service.GetUserUsableGroups(userGroup)
+
+		filtered := []string{}
+		for _, g := range visibleGroups {
+			if _, ok := userUsableGroups[g]; ok {
+				filtered = append(filtered, g)
+			}
+		}
+		visibleGroups = filtered
 	}
 
 	// 对每个可见分组，计算监控数据

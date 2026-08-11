@@ -122,6 +122,8 @@ func SetApiRouter(router *gin.Engine) {
 				// Custom OAuth bindings
 				selfRoute.GET("/oauth/bindings", controller.GetUserOAuthBindings)
 				selfRoute.DELETE("/oauth/bindings/:provider_id", controller.UnbindCustomOAuth)
+				// 分组监控（用户+管理员均可访问，按权限返回不同数据）
+				selfRoute.GET("/group-monitor", controller.GetGroupMonitorStatus)
 			}
 
 			adminRoute := userRoute.Group("/")
@@ -266,10 +268,9 @@ func SetApiRouter(router *gin.Engine) {
 			channelRoute.POST("/upstream_updates/apply_all", controller.ApplyAllChannelUpstreamModelUpdates)
 			channelRoute.POST("/upstream_updates/detect", controller.DetectChannelUpstreamModelUpdates)
 			channelRoute.POST("/upstream_updates/detect_all", controller.DetectAllChannelUpstreamModelUpdates)
-			// 分组监控相关接口
+			// 分组监控相关接口（管理员配置）
 			channelRoute.GET("/groups", controller.GetAllGroups)
 			channelRoute.POST("/group-monitor-config", controller.SaveGroupMonitorConfig)
-			channelRoute.GET("/group-monitor", controller.GetGroupMonitorStatus)
 		}
 		tokenRoute := apiRouter.Group("/token")
 		tokenRoute.Use(middleware.TokenOrUserAuth())

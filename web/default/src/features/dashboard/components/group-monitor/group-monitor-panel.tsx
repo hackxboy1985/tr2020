@@ -236,7 +236,7 @@ export function GroupMonitorPanel() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/channel/group-monitor', {
+      const res = await fetch('/api/user/group-monitor', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       })
       const data = await res.json()
