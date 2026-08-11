@@ -36,6 +36,7 @@ import (
 // channelTestHistoryThrottle 限制每个渠道写入测试历史的频率（30秒内最多写一次）
 var channelTestHistoryThrottle sync.Map // map[int]int64: channelId -> lastWriteUnixSec
 
+// shouldWriteChannelTestHistory 判断是否应该写入测试历史（30秒内每渠道最多写一次）
 func shouldWriteChannelTestHistory(channelId int) bool {
 	now := time.Now().Unix()
 	if last, ok := channelTestHistoryThrottle.Load(channelId); ok {
