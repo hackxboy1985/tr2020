@@ -23,6 +23,7 @@ import { type Table } from '@tanstack/react-table'
 import { Eye, EyeOff, Download } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useIsAdmin } from '@/hooks/use-admin'
+import { getCommonHeaders } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import type { ComboboxInputOption } from '@/components/ui/combobox-input'
 import { SearchableFilterInput } from './searchable-filter-input'
@@ -192,6 +193,7 @@ export function CommonLogsFilterBar<TData>(
     try {
       const response = await fetch(`/api/log/export?${queryParams.toString()}`, {
         credentials: 'include',
+        headers: getCommonHeaders(),
       })
       if (!response.ok) {
         const error = await response.json()
