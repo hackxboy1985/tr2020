@@ -20,7 +20,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useQueryClient, useIsFetching } from '@tanstack/react-query'
 import { useNavigate, getRouteApi } from '@tanstack/react-router'
 import { type Table } from '@tanstack/react-table'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, Download } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useIsAdmin } from '@/hooks/use-admin'
 import { Button } from '@/components/ui/button'
@@ -172,6 +172,26 @@ export function CommonLogsFilterBar<TData>(
     [handleApply]
   )
 
+  const handleExport = useCallback(() => {
+    const filterParams = buildSearchParams(filters, 'common')
+    const queryParams = new URLSearchParams()
+
+    if (filterParams.startTime) queryParams.set('start_timestamp', String(filterParams.startTime))
+    if (filterParams.endTime) queryParams.set('end_timestamp', String(filterParams.endTime))
+    if (filterParams.model) queryParams.set('model', String(filterParams.model))
+    if (filterParams.token) queryParams.set('token', String(filterParams.token))
+    if (filterParams.channel) queryParams.set('channel', String(filterParams.channel))
+    if (filterParams.channelType) queryParams.set('channelType', String(filterParams.channelType))
+    if (filterParams.group) queryParams.set('group', String(filterParams.group))
+    if (filterParams.username) queryParams.set('username', String(filterParams.username))
+    if (filterParams.requestId) queryParams.set('request_id', String(filterParams.requestId))
+    if (filterParams.upstreamRequestId) queryParams.set('upstream_request_id', String(filterParams.upstreamRequestId))
+    if (filterParams.taskId) queryParams.set('task_id', String(filterParams.taskId))
+    if (logType !== LOG_TYPE_ALL_VALUE) queryParams.set('type', logType)
+
+    window.location.href = `/api/log/export?${queryParams.toString()}`
+  }, [filters, logType])
+
   const fetchTokenOptions = useCallback(
     async (keyword: string): Promise<ComboboxInputOption[]> => {
       const params = new URLSearchParams({ keyword, p: '1', size: '10' })
@@ -255,6 +275,24 @@ export function CommonLogsFilterBar<TData>(
           {sensitiveVisible ? t('Hide') : t('Show')}
         </TooltipContent>
       </Tooltip>
+      {isAdmin && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant='ghost'
+                size='icon'
+                onClick={handleExport}
+                aria-label={t('Export')}
+                className='text-muted-foreground hover:text-foreground size-7'
+              />
+            }
+          >
+            <Download />
+          </TooltipTrigger>
+          <TooltipContent>{t('Export')}</TooltipContent>
+        </Tooltip>
+      )}
     </div>
   )
 
