@@ -41,6 +41,7 @@ export interface CommonFilters {
   startTime?: Date
   endTime?: Date
   channel?: string
+  channelType?: number // 1=通用渠道, 2=视频渠道
 }
 
 /**

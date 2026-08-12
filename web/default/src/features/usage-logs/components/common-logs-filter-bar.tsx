@@ -90,6 +90,7 @@ export function CommonLogsFilterBar<TData>(
         : start,
       endTime: searchParams.endTime ? new Date(searchParams.endTime) : end,
       channel: searchParams.channel || undefined,
+      channelType: searchParams.channelType || undefined,
       model: searchParams.model || undefined,
       token: searchParams.token || undefined,
       group: searchParams.group || undefined,
@@ -111,6 +112,7 @@ export function CommonLogsFilterBar<TData>(
     searchParams.startTime,
     searchParams.endTime,
     searchParams.channel,
+    searchParams.channelType,
     searchParams.model,
     searchParams.token,
     searchParams.group,
@@ -345,6 +347,27 @@ export function CommonLogsFilterBar<TData>(
             onChange={(e) => handleChange('channel', e.target.value)}
             onKeyDown={handleKeyDown}
           />
+        </LogsFilterField>
+      )}
+      {isAdmin && (
+        <LogsFilterField>
+          <Select
+            value={filters.channelType?.toString() || ''}
+            onValueChange={(value) =>
+              handleChange('channelType', value ? Number(value) : undefined)
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={t('Channel Type')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="">{t('All')}</SelectItem>
+                <SelectItem value="1">{t('Common Channel')}</SelectItem>
+                <SelectItem value="2">{t('Video Channel')}</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         </LogsFilterField>
       )}
       <LogsFilterField>

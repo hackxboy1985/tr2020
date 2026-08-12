@@ -47,6 +47,7 @@ type Log struct {
 	UseTime           int    `json:"use_time" gorm:"default:0"`
 	IsStream          bool   `json:"is_stream"`
 	ChannelId         int    `json:"channel" gorm:"index"`
+	ChannelType       int    `json:"channel_type" gorm:"default:1;index"` // 1=通用渠道, 2=视频渠道
 	ChannelName       string `json:"channel_name" gorm:"->"`
 	TokenId           int    `json:"token_id" gorm:"default:0;index"`
 	Group             string `json:"group" gorm:"index"`
@@ -114,19 +115,20 @@ func RecordLog(userId int, logType int, content string) {
 }
 
 // RecordLogWithQuota 记录带积分变动的日志（用于补扣/退款等场景），同时写入数据看板
-func RecordLogWithQuota(userId int, logType int, quota int, modelName string, channelId int, tokenId int, tokenName string, content string) {
+func RecordLogWithQuota(userId int, logType int, quota int, modelName string, channelId int, channelType int, tokenId int, tokenName string, content string) {
 	username, _ := GetUsernameById(userId, false)
 	log := &Log{
-		UserId:    userId,
-		Username:  username,
-		CreatedAt: common.GetTimestamp(),
-		Type:      logType,
-		Quota:     quota,
-		ModelName: modelName,
-		ChannelId: channelId,
-		TokenId:   tokenId,
-		TokenName: tokenName,
-		Content:   content,
+		UserId:      userId,
+		Username:    username,
+		CreatedAt:   common.GetTimestamp(),
+		Type:        logType,
+		Quota:       quota,
+		ModelName:   modelName,
+		ChannelId:   channelId,
+		ChannelType: channelType,
+		TokenId:     tokenId,
+		TokenName:   tokenName,
+		Content:     content,
 	}
 	err := LOG_DB.Create(log).Error
 	if err != nil {
@@ -431,7 +433,7 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 	}
 }
 
-func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string, upstreamRequestId string, taskId string) (logs []*Log, total int64, err error) {
+func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, channelType int, group string, requestId string, upstreamRequestId string, taskId string) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
 		tx = LOG_DB
@@ -465,6 +467,9 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 	}
 	if channel != 0 {
 		tx = tx.Where("logs.channel_id = ?", channel)
+	}
+	if channelType != 0 {
+		tx = tx.Where("logs.channel_type = ?", channelType)
 	}
 	if group != "" {
 		tx = tx.Where("logs."+logGroupCol+" = ?", group)
