@@ -18,11 +18,11 @@ services:
   new-api-mints:
     #image: calciumion/new-api:latest
     image: new-api-mints:latest
-    container_name: new-api
+    container_name: new-api-mints
     restart: always
     command: --log-dir /app/logs
     ports:
-      - "3000:3000"
+      - "3001:3000"
     volumes:
       - ./data:/data
       - ./logs:/app/logs
