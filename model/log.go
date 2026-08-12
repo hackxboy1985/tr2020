@@ -72,6 +72,12 @@ const (
 	LogTypeRefund  = 6
 )
 
+// ChannelType 定义：用于区分 logs 表中的 channel_id 指向哪张渠道表
+const (
+	ChannelTypeCommon = 1 // 普通AI渠道 (channels 表)
+	ChannelTypeVideo  = 2 // 视频渠道 (video_channels 表)
+)
+
 func formatUserLogs(logs []*Log, startIdx int) {
 	for i := range logs {
 		logs[i].ChannelName = ""

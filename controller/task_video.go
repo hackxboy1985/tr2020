@@ -213,10 +213,8 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 											tokenName = token.Name
 										}
 									}
-									// 视频任务都是广告类型
-									channelType := 2
 
-									model.RecordLogWithQuota(task.UserId, model.LogTypeSystem, quotaDelta, modelName, task.ChannelId, channelType, task.PrivateData.TokenId, tokenName, logContent)
+									model.RecordLogWithQuota(task.UserId, model.LogTypeSystem, quotaDelta, modelName, task.ChannelId, model.ChannelTypeVideo, task.PrivateData.TokenId, tokenName, logContent)
 								}
 							} else if quotaDelta < 0 {
 								// 需要退还多扣的费用
@@ -245,10 +243,8 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 											tokenName = token.Name
 										}
 									}
-									// 视频任务都是广告类型
-									channelType := 2
 
-									model.RecordLogWithQuota(task.UserId, model.LogTypeSystem, -refundQuota, modelName, task.ChannelId, channelType, task.PrivateData.TokenId, tokenName, logContent)
+									model.RecordLogWithQuota(task.UserId, model.LogTypeSystem, -refundQuota, modelName, task.ChannelId, model.ChannelTypeVideo, task.PrivateData.TokenId, tokenName, logContent)
 								}
 							} else {
 								// quotaDelta == 0, 预扣费刚好准确
