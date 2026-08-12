@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -56,7 +57,7 @@ func ExportAllLogs(c *gin.Context) {
 	f.SetActiveSheet(index)
 
 	// 设置表头
-	headers := []string{"时间", "token_name", "模型", "内容", "原始quota", "分组", "渠道", "渠道类型", "request_id", "prompt_tokens", "completion_tokens", "耗时_ms", "是否流式", "IP", "用户名", "上游请求ID", "任务ID"}
+	headers := []string{"时间", "token_name", "模型", "内容", "原始quota", "平台计费_元", "分组倍率", "分组", "渠道", "渠道类型", "request_id", "prompt_tokens", "completion_tokens", "耗时_ms", "是否流式", "IP", "用户名", "上游请求ID", "任务ID"}
 	for i, header := range headers {
 		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
 		f.SetCellValue(sheetName, cell, header)
@@ -65,31 +66,48 @@ func ExportAllLogs(c *gin.Context) {
 	// 写入数据
 	for i, log := range logs {
 		row := i + 2
+
+		// 解析 Other 字段获取 group_ratio
+		var otherData map[string]interface{}
+		groupRatio := ""
+		if log.Other != "" {
+			if err := json.Unmarshal([]byte(log.Other), &otherData); err == nil {
+				if gr, ok := otherData["group_ratio"]; ok {
+					groupRatio = fmt.Sprintf("%v", gr)
+				}
+			}
+		}
+
+		// 计算平台计费（quota / 500000）
+		platformFee := float64(log.Quota) / 500000.0
+
 		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), time.Unix(log.CreatedAt, 0).Format("2006-01-02 15:04:05"))
 		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), log.TokenName)
 		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), log.ModelName)
 		f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), log.Content)
 		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), log.Quota)
-		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), log.Group)
-		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), log.ChannelId)
+		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), platformFee)
+		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), groupRatio)
+		f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), log.Group)
+		f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), log.ChannelId)
 		channelTypeText := "通用渠道"
 		if log.ChannelType == 2 {
 			channelTypeText = "视频渠道"
 		}
-		f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), channelTypeText)
-		f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), log.RequestId)
-		f.SetCellValue(sheetName, fmt.Sprintf("J%d", row), log.PromptTokens)
-		f.SetCellValue(sheetName, fmt.Sprintf("K%d", row), log.CompletionTokens)
-		f.SetCellValue(sheetName, fmt.Sprintf("L%d", row), log.UseTime)
+		f.SetCellValue(sheetName, fmt.Sprintf("J%d", row), channelTypeText)
+		f.SetCellValue(sheetName, fmt.Sprintf("K%d", row), log.RequestId)
+		f.SetCellValue(sheetName, fmt.Sprintf("L%d", row), log.PromptTokens)
+		f.SetCellValue(sheetName, fmt.Sprintf("M%d", row), log.CompletionTokens)
+		f.SetCellValue(sheetName, fmt.Sprintf("N%d", row), log.UseTime)
 		streamText := "否"
 		if log.IsStream {
 			streamText = "是"
 		}
-		f.SetCellValue(sheetName, fmt.Sprintf("M%d", row), streamText)
-		f.SetCellValue(sheetName, fmt.Sprintf("N%d", row), log.Ip)
-		f.SetCellValue(sheetName, fmt.Sprintf("O%d", row), log.Username)
-		f.SetCellValue(sheetName, fmt.Sprintf("P%d", row), log.UpstreamRequestId)
-		f.SetCellValue(sheetName, fmt.Sprintf("Q%d", row), log.TaskId)
+		f.SetCellValue(sheetName, fmt.Sprintf("O%d", row), streamText)
+		f.SetCellValue(sheetName, fmt.Sprintf("P%d", row), log.Ip)
+		f.SetCellValue(sheetName, fmt.Sprintf("Q%d", row), log.Username)
+		f.SetCellValue(sheetName, fmt.Sprintf("R%d", row), log.UpstreamRequestId)
+		f.SetCellValue(sheetName, fmt.Sprintf("S%d", row), log.TaskId)
 	}
 
 	// 设置响应头
