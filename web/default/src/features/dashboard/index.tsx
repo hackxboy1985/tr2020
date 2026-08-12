@@ -28,7 +28,6 @@ import { FadeIn } from '@/components/page-transition'
 import { ModelsChartPreferences } from './components/models/models-chart-preferences'
 import { ModelsFilter } from './components/models/models-filter-dialog'
 import { OverviewDashboard } from './components/overview/overview-dashboard'
-import { GroupMonitorPanel } from './components/group-monitor/group-monitor-panel'
 import { DEFAULT_TIME_GRANULARITY } from './constants'
 import {
   buildDefaultDashboardFilters,
@@ -81,6 +80,12 @@ const LazyUserCharts = lazy(() =>
 const LazyTokenCharts = lazy(() =>
   import('./components/tokens/token-charts').then((m) => ({
     default: m.TokenCharts,
+  }))
+)
+
+const LazyGroupMonitorPanel = lazy(() =>
+  import('./components/group-monitor/group-monitor-panel').then((m) => ({
+    default: m.GroupMonitorPanel,
   }))
 )
 
@@ -320,7 +325,9 @@ export function Dashboard() {
           )}
           {activeSection === 'group-monitor' && isAdmin && (
             <FadeIn>
-              <GroupMonitorPanel />
+              <Suspense fallback={<Skeleton className='h-48 w-full' />}>
+                <LazyGroupMonitorPanel />
+              </Suspense>
             </FadeIn>
           )}
         </div>
