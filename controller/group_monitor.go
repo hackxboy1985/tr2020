@@ -15,9 +15,9 @@ import (
 // GetAllGroups 获取所有分组列表（用于配置页面）
 func GetAllGroups(c *gin.Context) {
 	var groups []string
+	// 查询所有分组（不过滤 enabled，管理员配置时应该能看到所有分组）
 	err := model.DB.Model(&model.Ability{}).
 		Distinct("group").
-		Where("enabled = ?", true).
 		Pluck("group", &groups).Error
 
 	if err != nil {
