@@ -40,6 +40,9 @@ func ExportAllLogs(c *gin.Context) {
 		return
 	}
 
+	// 调试：记录查询到的日志数量
+	common.SysLog(fmt.Sprintf("ExportAllLogs: found %d logs", len(logs)))
+
 	// 创建 Excel 文件
 	f := excelize.NewFile()
 	defer func() {
@@ -57,7 +60,7 @@ func ExportAllLogs(c *gin.Context) {
 	f.SetActiveSheet(index)
 
 	// 设置表头
-	headers := []string{"时间", "token_name", "模型", "内容", "原始quota", "平台计费_元", "分组倍率", "分组", "渠道", "渠道类型", "request_id", "prompt_tokens", "completion_tokens", "耗时_ms", "是否流式", "IP", "用户名", "上游请求ID", "任务ID"}
+	headers := []string{"时间", "类型", "token_name", "模型", "内容", "原始quota", "平台计费_元", "分组倍率", "分组", "渠道", "渠道类型", "request_id", "prompt_tokens", "completion_tokens", "耗时_ms", "是否流式", "IP", "用户名", "上游请求ID", "任务ID"}
 	for i, header := range headers {
 		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
 		f.SetCellValue(sheetName, cell, header)
@@ -81,33 +84,51 @@ func ExportAllLogs(c *gin.Context) {
 		// 计算平台计费（quota / 500000）
 		platformFee := float64(log.Quota) / 500000.0
 
+		// 转换类型为中文
+		logTypeStr := "未知"
+		switch log.Type {
+		case 1:
+			logTypeStr = "充值"
+		case 2:
+			logTypeStr = "消费"
+		case 3:
+			logTypeStr = "管理操作"
+		case 4:
+			logTypeStr = "系统日志"
+		case 5:
+			logTypeStr = "错误日志"
+		case 6:
+			logTypeStr = "退款"
+		}
+
 		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), time.Unix(log.CreatedAt, 0).Format("2006-01-02 15:04:05"))
-		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), log.TokenName)
-		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), log.ModelName)
-		f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), log.Content)
-		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), log.Quota)
-		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), platformFee)
-		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), groupRatio)
-		f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), log.Group)
-		f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), log.ChannelId)
+		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), logTypeStr)
+		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), log.TokenName)
+		f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), log.ModelName)
+		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), log.Content)
+		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), log.Quota)
+		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), platformFee)
+		f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), groupRatio)
+		f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), log.Group)
+		f.SetCellValue(sheetName, fmt.Sprintf("J%d", row), log.ChannelId)
 		channelTypeText := "通用渠道"
 		if log.ChannelType == 2 {
 			channelTypeText = "视频渠道"
 		}
-		f.SetCellValue(sheetName, fmt.Sprintf("J%d", row), channelTypeText)
-		f.SetCellValue(sheetName, fmt.Sprintf("K%d", row), log.RequestId)
-		f.SetCellValue(sheetName, fmt.Sprintf("L%d", row), log.PromptTokens)
-		f.SetCellValue(sheetName, fmt.Sprintf("M%d", row), log.CompletionTokens)
-		f.SetCellValue(sheetName, fmt.Sprintf("N%d", row), log.UseTime)
+		f.SetCellValue(sheetName, fmt.Sprintf("K%d", row), channelTypeText)
+		f.SetCellValue(sheetName, fmt.Sprintf("L%d", row), log.RequestId)
+		f.SetCellValue(sheetName, fmt.Sprintf("M%d", row), log.PromptTokens)
+		f.SetCellValue(sheetName, fmt.Sprintf("N%d", row), log.CompletionTokens)
+		f.SetCellValue(sheetName, fmt.Sprintf("O%d", row), log.UseTime)
 		streamText := "否"
 		if log.IsStream {
 			streamText = "是"
 		}
-		f.SetCellValue(sheetName, fmt.Sprintf("O%d", row), streamText)
-		f.SetCellValue(sheetName, fmt.Sprintf("P%d", row), log.Ip)
-		f.SetCellValue(sheetName, fmt.Sprintf("Q%d", row), log.Username)
-		f.SetCellValue(sheetName, fmt.Sprintf("R%d", row), log.UpstreamRequestId)
-		f.SetCellValue(sheetName, fmt.Sprintf("S%d", row), log.TaskId)
+		f.SetCellValue(sheetName, fmt.Sprintf("P%d", row), streamText)
+		f.SetCellValue(sheetName, fmt.Sprintf("Q%d", row), log.Ip)
+		f.SetCellValue(sheetName, fmt.Sprintf("R%d", row), log.Username)
+		f.SetCellValue(sheetName, fmt.Sprintf("S%d", row), log.UpstreamRequestId)
+		f.SetCellValue(sheetName, fmt.Sprintf("T%d", row), log.TaskId)
 	}
 
 	// 设置响应头
