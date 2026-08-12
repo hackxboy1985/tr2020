@@ -23,7 +23,7 @@ import { type Table } from '@tanstack/react-table'
 import { Eye, EyeOff, Download } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useIsAdmin } from '@/hooks/use-admin'
-import { getCommonHeaders } from '@/lib/api'
+import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import type { ComboboxInputOption } from '@/components/ui/combobox-input'
 import { SearchableFilterInput } from './searchable-filter-input'
@@ -191,17 +191,13 @@ export function CommonLogsFilterBar<TData>(
     if (logType !== LOG_TYPE_ALL_VALUE) queryParams.set('type', logType)
 
     try {
-      const response = await fetch(`/api/log/export?${queryParams.toString()}`, {
-        credentials: 'include',
-        headers: getCommonHeaders(),
+      const response = await api.get(`/api/log/export?${queryParams.toString()}`, {
+        responseType: 'blob',
       })
-      if (!response.ok) {
-        const error = await response.json()
-        alert(error.message || 'Export failed')
-        return
-      }
 
-      const blob = await response.blob()
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      })
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -210,8 +206,9 @@ export function CommonLogsFilterBar<TData>(
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
-    } catch (error) {
-      alert('Export failed: ' + error)
+    } catch (error: any) {
+      const message = error.response?.data?.message || error.message || 'Export failed'
+      alert(message)
     }
   }, [filters, logType])
 

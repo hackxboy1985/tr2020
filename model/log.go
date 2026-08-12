@@ -640,8 +640,21 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 		rpmTpmQuery = rpmTpmQuery.Where(logGroupCol+" = ?", group)
 	}
 
-	tx = tx.Where("type IN ?", []int{LogTypeConsume, LogTypeRefund})
-	rpmTpmQuery = rpmTpmQuery.Where("type = ?", LogTypeConsume)
+	// 根据 logType 过滤
+	if logType != 0 {
+		tx = tx.Where("type = ?", logType)
+		// rpm/tpm 只统计消费类型
+		if logType == LogTypeConsume {
+			rpmTpmQuery = rpmTpmQuery.Where("type = ?", logType)
+		} else {
+			// 非消费类型，rpm/tpm 无意义，设为0
+			rpmTpmQuery = rpmTpmQuery.Where("1 = 0") // 返回空结果
+		}
+	} else {
+		// logType=0 表示统计所有消费和退款
+		tx = tx.Where("type IN ?", []int{LogTypeConsume, LogTypeRefund})
+		rpmTpmQuery = rpmTpmQuery.Where("type = ?", LogTypeConsume)
+	}
 
 	// 只统计最近60秒的rpm和tpm
 	rpmTpmQuery = rpmTpmQuery.Where("created_at >= ?", time.Now().Add(-60*time.Second).Unix())
