@@ -3,6 +3,7 @@ package controller
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"time"
 
@@ -33,11 +34,38 @@ func ExportAllLogs(c *gin.Context) {
 	upstreamRequestId := c.Query("upstream_request_id")
 	taskId := c.Query("task_id")
 
-	// 查询所有符合条件的日志（不分页）
-	logs, _, err := model.GetAllLogs(logType, startTimestamp, endTimestamp, modelName, username, tokenName, 0, 999999, channel, channelType, group, requestId, upstreamRequestId, taskId)
-	if err != nil {
-		common.ApiError(c, err)
-		return
+	// 导出逻辑：如果 logType=0（所有类型），只导出消费(2)和退款(6)
+	var logs []*model.Log
+	var err error
+
+	if logType == 0 {
+		// 查询消费记录
+		logsConsume, _, errConsume := model.GetAllLogs(2, startTimestamp, endTimestamp, modelName, username, tokenName, 0, 999999, channel, channelType, group, requestId, upstreamRequestId, taskId)
+		if errConsume != nil {
+			common.ApiError(c, errConsume)
+			return
+		}
+
+		// 查询退款记录
+		logsRefund, _, errRefund := model.GetAllLogs(6, startTimestamp, endTimestamp, modelName, username, tokenName, 0, 999999, channel, channelType, group, requestId, upstreamRequestId, taskId)
+		if errRefund != nil {
+			common.ApiError(c, errRefund)
+			return
+		}
+
+		// 合并并按时间排序
+		logs = append(logsConsume, logsRefund...)
+		// 按创建时间降序排序
+		sort.Slice(logs, func(i, j int) bool {
+			return logs[i].CreatedAt > logs[j].CreatedAt
+		})
+	} else {
+		// 查询指定类型的日志
+		logs, _, err = model.GetAllLogs(logType, startTimestamp, endTimestamp, modelName, username, tokenName, 0, 999999, channel, channelType, group, requestId, upstreamRequestId, taskId)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
 	}
 
 	// 调试：记录查询到的日志数量
