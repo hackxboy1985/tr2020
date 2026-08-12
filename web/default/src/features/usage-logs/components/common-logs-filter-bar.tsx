@@ -177,8 +177,9 @@ export function CommonLogsFilterBar<TData>(
     const filterParams = buildSearchParams(filters, 'common')
     const queryParams = new URLSearchParams()
 
-    if (filterParams.startTime) queryParams.set('start_timestamp', String(filterParams.startTime))
-    if (filterParams.endTime) queryParams.set('end_timestamp', String(filterParams.endTime))
+    // 时间戳转换：毫秒转秒
+    if (filterParams.startTime) queryParams.set('start_timestamp', String(Math.floor(Number(filterParams.startTime) / 1000)))
+    if (filterParams.endTime) queryParams.set('end_timestamp', String(Math.floor(Number(filterParams.endTime) / 1000)))
     if (filterParams.model) queryParams.set('model', String(filterParams.model))
     if (filterParams.token) queryParams.set('token', String(filterParams.token))
     if (filterParams.channel) queryParams.set('channel', String(filterParams.channel))
