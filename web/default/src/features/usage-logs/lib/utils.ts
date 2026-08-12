@@ -206,6 +206,9 @@ export function buildApiParams(config: {
     ...(isAdmin && searchParams.channel
       ? { channel: Number(searchParams.channel) || 0 }
       : {}),
+    ...(isAdmin && searchParams.channelType
+      ? { channelType: Number(searchParams.channelType) || 0 }
+      : {}),
     ...(isAdmin && searchParams.username
       ? { username: String(searchParams.username) }
       : {}),

@@ -190,7 +190,9 @@ export function CommonLogsFilterBar<TData>(
     if (logType !== LOG_TYPE_ALL_VALUE) queryParams.set('type', logType)
 
     try {
-      const response = await fetch(`/api/log/export?${queryParams.toString()}`)
+      const response = await fetch(`/api/log/export?${queryParams.toString()}`, {
+        credentials: 'include',
+      })
       if (!response.ok) {
         const error = await response.json()
         alert(error.message || 'Export failed')
