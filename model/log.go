@@ -587,7 +587,7 @@ type Stat struct {
 	Tpm   int `json:"tpm"`
 }
 
-func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, group string, requestId string, upstreamRequestId string, taskId string) (stat Stat, err error) {
+func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, channelType int, group string, requestId string, upstreamRequestId string, taskId string) (stat Stat, err error) {
 	tx := LOG_DB.Table("logs").Select("sum(quota) quota")
 
 	// 为rpm和tpm创建单独的查询
@@ -630,6 +630,10 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 	if channel != 0 {
 		tx = tx.Where("channel_id = ?", channel)
 		rpmTpmQuery = rpmTpmQuery.Where("channel_id = ?", channel)
+	}
+	if channelType != 0 {
+		tx = tx.Where("channel_type = ?", channelType)
+		rpmTpmQuery = rpmTpmQuery.Where("channel_type = ?", channelType)
 	}
 	if group != "" {
 		tx = tx.Where(logGroupCol+" = ?", group)
