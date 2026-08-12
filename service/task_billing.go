@@ -203,6 +203,9 @@ func RefundTaskQuota(ctx context.Context, task *model.Task, reason string, final
 	if upstreamTaskID := task.GetUpstreamTaskID(); upstreamTaskID != "" {
 		other["upstream_task_id"] = upstreamTaskID
 	}
+	if task.PrivateData.OriTaskID != "" {
+		other["ori_task_id"] = task.PrivateData.OriTaskID
+	}
 	model.RecordTaskBillingLog(model.RecordTaskBillingLogParams{
 		UserId:    task.UserId,
 		LogType:   model.LogTypeRefund,
@@ -274,6 +277,9 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 	other["actual_quota"] = actualQuota
 	if upstreamTaskID := task.GetUpstreamTaskID(); upstreamTaskID != "" {
 		other["upstream_task_id"] = upstreamTaskID
+	}
+	if task.PrivateData.OriTaskID != "" {
+		other["ori_task_id"] = task.PrivateData.OriTaskID
 	}
 	model.RecordTaskBillingLog(model.RecordTaskBillingLogParams{
 		UserId:    task.UserId,

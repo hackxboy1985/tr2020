@@ -80,7 +80,9 @@ type responseTask struct {
 	Ratio           string                 `json:"ratio"`
 	FramesPerSecond int                    `json:"framespersecond"`
 	ServiceTier     string                 `json:"service_tier"`
-	Tools           []struct {
+	// UpstreamTaskID 是豆包内部的源头任务 ID（如 cgt-... 格式）
+	UpstreamTaskID string `json:"upstream_task_id,omitempty"`
+	Tools          []struct {
 		Type string `json:"type"`
 	} `json:"tools"`
 	Usage struct {
@@ -350,7 +352,8 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 	}
 
 	taskResult := relaycommon.TaskInfo{
-		Code: 0,
+		Code:      0,
+		OriTaskID: resTask.UpstreamTaskID,
 	}
 
 	// Map Doubao status to internal status

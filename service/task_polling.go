@@ -394,6 +394,11 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 
 	task.Data = redactVideoResponseBody(responseBody)
 
+	// 若 adaptor 解析出源头任务 ID，存入 PrivateData 供计费日志使用
+	if taskResult.OriTaskID != "" {
+		task.PrivateData.OriTaskID = taskResult.OriTaskID
+	}
+
 	logger.LogDebug(ctx, "updateVideoSingleTask taskResult: %+v", taskResult)
 
 	now := time.Now().Unix()
@@ -544,6 +549,9 @@ func recordTaskCompletionLog(task *model.Task, responseBody []byte) {
 	other["task_log_source"] = "polling_result"
 	if upstreamTaskID := task.GetUpstreamTaskID(); upstreamTaskID != "" {
 		other["upstream_task_id"] = upstreamTaskID
+	}
+	if task.PrivateData.OriTaskID != "" {
+		other["ori_task_id"] = task.PrivateData.OriTaskID
 	}
 	if len(responseBody) > 0 {
 		other["response_body"] = TruncateBody(string(responseBody))

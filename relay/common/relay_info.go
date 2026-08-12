@@ -775,6 +775,7 @@ type TaskInfo struct {
 	Progress         string `json:"progress,omitempty"`
 	CompletionTokens int    `json:"completion_tokens,omitempty"` // 用于按倍率计费
 	TotalTokens      int    `json:"total_tokens,omitempty"`      // 用于按倍率计费
+	OriTaskID        string `json:"-"`                           // 上游源头任务 ID（如豆包 cgt-...），写入计费日志 other.ori_task_id
 }
 
 func FailTaskInfo(reason string) *TaskInfo {
