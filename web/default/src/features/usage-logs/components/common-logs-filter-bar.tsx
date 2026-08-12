@@ -172,7 +172,7 @@ export function CommonLogsFilterBar<TData>(
     [handleApply]
   )
 
-  const handleExport = useCallback(() => {
+  const handleExport = useCallback(async () => {
     const filterParams = buildSearchParams(filters, 'common')
     const queryParams = new URLSearchParams()
 
@@ -189,7 +189,26 @@ export function CommonLogsFilterBar<TData>(
     if (filterParams.taskId) queryParams.set('task_id', String(filterParams.taskId))
     if (logType !== LOG_TYPE_ALL_VALUE) queryParams.set('type', logType)
 
-    window.location.href = `/api/log/export?${queryParams.toString()}`
+    try {
+      const response = await fetch(`/api/log/export?${queryParams.toString()}`)
+      if (!response.ok) {
+        const error = await response.json()
+        alert(error.message || 'Export failed')
+        return
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `logs_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      alert('Export failed: ' + error)
+    }
   }, [filters, logType])
 
   const fetchTokenOptions = useCallback(
@@ -396,13 +415,19 @@ export function CommonLogsFilterBar<TData>(
             }
           >
             <SelectTrigger>
-              <SelectValue placeholder={t('Channel Type')} />
+              <SelectValue placeholder='渠道类型'>
+                {filters.channelType === 1
+                  ? '普通'
+                  : filters.channelType === 2
+                    ? '广告'
+                    : undefined}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
                 <SelectItem value="">{t('All')}</SelectItem>
-                <SelectItem value="1">{t('Common Channel')}</SelectItem>
-                <SelectItem value="2">{t('Video Channel')}</SelectItem>
+                <SelectItem value="1">普通</SelectItem>
+                <SelectItem value="2">广告</SelectItem>
               </SelectGroup>
             </SelectContent>
           </Select>
