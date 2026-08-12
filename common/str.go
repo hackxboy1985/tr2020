@@ -263,3 +263,30 @@ func MaskSensitiveInfo(str string) string {
 
 	return str
 }
+
+// ParseGroupRatioFromOther 从 Other JSON 字段中解析 group_ratio
+func ParseGroupRatioFromOther(other string) float64 {
+	if other == "" {
+		return 1.0
+	}
+
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(other), &data); err != nil {
+		return 1.0
+	}
+
+	if ratio, ok := data["group_ratio"]; ok {
+		switch v := ratio.(type) {
+		case float64:
+			return v
+		case int:
+			return float64(v)
+		case string:
+			if f, err := strconv.ParseFloat(v, 64); err == nil {
+				return f
+			}
+		}
+	}
+
+	return 1.0
+}
