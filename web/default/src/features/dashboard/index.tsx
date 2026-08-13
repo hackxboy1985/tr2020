@@ -155,6 +155,9 @@ const SECTION_META: Record<DashboardSectionId, { titleKey: string }> = {
   tokens: {
     titleKey: 'Token Analytics',
   },
+  'group-monitor': {
+    titleKey: 'Group Monitor',
+  },
 }
 
 export function Dashboard() {
