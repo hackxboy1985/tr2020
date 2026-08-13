@@ -88,7 +88,7 @@ func ExportAllLogs(c *gin.Context) {
 	f.SetActiveSheet(index)
 
 	// 设置表头
-	headers := []string{"时间", "类型", "token_name", "模型", "内容", "原始quota", "平台计费_元", "分组倍率", "分组", "渠道", "渠道类型", "request_id", "prompt_tokens", "completion_tokens", "耗时_ms", "是否流式", "IP", "用户名", "上游请求ID", "任务ID"}
+	headers := []string{"时间", "类型", "token_name", "模型", "内容", "原始quota", "平台计费_元", "分组倍率", "分组", "渠道", "渠道类型", "request_id", "prompt_tokens", "completion_tokens", "耗时_ms", "是否流式", "IP", "上游请求ID", "任务ID"}
 	for i, header := range headers {
 		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
 		f.SetCellValue(sheetName, cell, header)
@@ -154,9 +154,8 @@ func ExportAllLogs(c *gin.Context) {
 		}
 		f.SetCellValue(sheetName, fmt.Sprintf("P%d", row), streamText)
 		f.SetCellValue(sheetName, fmt.Sprintf("Q%d", row), log.Ip)
-		f.SetCellValue(sheetName, fmt.Sprintf("R%d", row), log.Username)
-		f.SetCellValue(sheetName, fmt.Sprintf("S%d", row), log.UpstreamRequestId)
-		f.SetCellValue(sheetName, fmt.Sprintf("T%d", row), log.TaskId)
+		f.SetCellValue(sheetName, fmt.Sprintf("R%d", row), log.UpstreamRequestId)
+		f.SetCellValue(sheetName, fmt.Sprintf("S%d", row), log.TaskId)
 	}
 
 	// 设置响应头
