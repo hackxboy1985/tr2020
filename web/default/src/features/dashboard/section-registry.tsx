@@ -44,17 +44,11 @@ const DASHBOARD_SECTIONS = [
     titleKey: 'Token Analytics',
     build: () => null,
   },
-  {
-    id: 'group-monitor',
-    titleKey: 'Group Monitor',
-    adminOnly: true,
-    build: () => null,
-  },
 ] as const
 
 export type DashboardSectionId = (typeof DASHBOARD_SECTIONS)[number]['id']
 
-const ADMIN_ONLY_SECTIONS = new Set<string>(['users', 'group-monitor'])
+const ADMIN_ONLY_SECTIONS = new Set<string>(['users'])
 
 const dashboardRegistry = createSectionRegistry<
   DashboardSectionId,
@@ -76,7 +70,8 @@ export function getDashboardSectionNavItems(
 ) {
   const all = dashboardRegistry.getSectionNavItems(t)
   if (options?.isAdmin) return all
+  // 过滤掉管理员专属的 section
   return all.filter(
-    (item) => !ADMIN_ONLY_SECTIONS.has(item.id)
+    (_, idx) => !ADMIN_ONLY_SECTIONS.has(DASHBOARD_SECTIONS[idx].id)
   )
 }
