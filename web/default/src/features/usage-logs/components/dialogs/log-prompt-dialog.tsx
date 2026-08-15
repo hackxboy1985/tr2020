@@ -108,7 +108,7 @@ export function LogPromptDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className='flex-1 min-h-0 flex flex-col'>
+        <div>
           {loading ? (
             <div className='flex items-center justify-center py-12'>
               <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary' />
@@ -120,7 +120,7 @@ export function LogPromptDialog({
             </Alert>
           ) : (
             <>
-              <ScrollArea className='flex-1 h-0'>
+              <ScrollArea className='h-[55vh]'>
                 <div className='space-y-4 pr-4'>
                   <div className='bg-muted/50 rounded-md border p-4 relative'>
                     <div className='text-xs font-semibold text-muted-foreground mb-2'>{t('Prompt')}</div>
