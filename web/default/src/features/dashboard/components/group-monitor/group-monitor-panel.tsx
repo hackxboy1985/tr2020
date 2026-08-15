@@ -108,7 +108,7 @@ function HeartbeatGrid({ heartbeats, onSelect }: { heartbeats: HeartbeatRecord[]
 
   return (
     <TooltipProvider>
-      <div className='flex gap-0.5 items-end overflow-x-auto'>
+      <div className='flex flex-row-reverse gap-0.5 items-end overflow-x-auto'>
         {sorted.map((hb, idx) => (
           <Tooltip key={idx}>
             <TooltipTrigger asChild>
