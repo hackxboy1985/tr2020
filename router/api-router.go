@@ -308,15 +308,20 @@ func SetApiRouter(router *gin.Engine) {
 			redemptionRoute.DELETE("/:id", controller.DeleteRedemption)
 		}
 		logRoute := apiRouter.Group("/log")
-		logRoute.GET("/", middleware.AdminAuth(), controller.GetAllLogs)
-		logRoute.DELETE("/", middleware.AdminAuth(), controller.DeleteHistoryLogs)
-		logRoute.GET("/stat", middleware.AdminAuth(), controller.GetLogsStat)
-		logRoute.GET("/self/stat", middleware.UserAuth(), controller.GetLogsSelfStat)
-		logRoute.GET("/channel_affinity_usage_cache", middleware.AdminAuth(), controller.GetChannelAffinityUsageCacheStats)
-		logRoute.GET("/search", middleware.AdminAuth(), controller.SearchAllLogs)
-		logRoute.GET("/self", middleware.UserAuth(), controller.GetUserLogs)
-		logRoute.GET("/self/search", middleware.UserAuth(), middleware.SearchRateLimit(), controller.SearchUserLogs)
-		logRoute.GET("/:id/prompt", middleware.AdminAuth(), controller.GetPromptLog)
+		{
+			logRoute.GET("/", middleware.AdminAuth(), controller.GetAllLogs)
+			logRoute.DELETE("/", middleware.AdminAuth(), controller.DeleteHistoryLogs)
+			logRoute.GET("/stat", middleware.AdminAuth(), controller.GetLogsStat)
+			logRoute.GET("/self/stat", middleware.UserAuth(), controller.GetLogsSelfStat)
+			logRoute.GET("/channel_affinity_usage_cache", middleware.AdminAuth(), controller.GetChannelAffinityUsageCacheStats)
+			logRoute.GET("/search", middleware.AdminAuth(), controller.SearchAllLogs)
+			logRoute.GET("/self", middleware.UserAuth(), controller.GetUserLogs)
+			logRoute.GET("/self/search", middleware.UserAuth(), middleware.SearchRateLimit(), controller.SearchUserLogs)
+			logRoute.GET("/:id/prompt", middleware.AdminAuth(), controller.GetPromptLog)
+
+			logRoute.Use(middleware.CORS(), middleware.CriticalRateLimit())
+			logRoute.GET("/token", middleware.TokenAuthReadOnly(), controller.GetLogByKey)
+		}
 
 		dataRoute := apiRouter.Group("/data")
 		dataRoute.GET("/", middleware.AdminAuth(), controller.GetAllQuotaDates)
@@ -324,10 +329,6 @@ func SetApiRouter(router *gin.Engine) {
 		dataRoute.GET("/self", middleware.UserAuth(), controller.GetUserQuotaDates)
 		dataRoute.GET("/tokens", middleware.UserAuth(), controller.GetUserQuotaByToken)
 
-		logRoute.Use(middleware.CORS(), middleware.CriticalRateLimit())
-		{
-			logRoute.GET("/token", middleware.TokenAuthReadOnly(), controller.GetLogByKey)
-		}
 		groupRoute := apiRouter.Group("/group")
 		groupRoute.Use(middleware.AdminAuth())
 		{
