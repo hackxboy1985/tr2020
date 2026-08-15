@@ -109,3 +109,23 @@ export const getAllTaskLogs = (params: GetTaskLogsParams) =>
 
 export const getUserTaskLogs = (params: GetTaskLogsParams) =>
   fetchLogs('/api/task', params, false)
+
+// ============================================================================
+// Prompt Log API
+// ============================================================================
+
+export async function getPromptLog(logId: number): Promise<{
+  success: boolean
+  message?: string
+  data?: {
+    id: number
+    log_id: number
+    prompt_text: string
+    request_body?: string
+    response_body?: string
+    created_at: number
+  }
+}> {
+  const res = await api.get(`/api/log/${logId}/prompt`)
+  return res.data
+}

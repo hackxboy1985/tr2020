@@ -33,6 +33,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { formatTimestampToDate } from '@/lib/format'
 import type { UsageLog } from '../../data/schema'
+import { getPromptLog } from '../../api'
 
 interface LogPromptDialogProps {
   log: UsageLog
@@ -77,13 +78,7 @@ export function LogPromptDialog({
         // Otherwise fetch it separately
         setLoading(true)
         setError(null)
-        fetch(`/api/log/${log.id}/prompt`)
-          .then((res) => {
-            if (!res.ok) {
-              throw new Error('Failed to fetch prompt')
-            }
-            return res.json()
-          })
+        getPromptLog(log.id)
           .then((data) => {
             if (data.success && data.data) {
               setPromptData(data.data)
