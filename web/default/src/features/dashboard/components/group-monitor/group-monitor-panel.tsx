@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { RefreshCw, AlertTriangle, CheckCircle, XCircle, TrendingDown, Clock, Zap, ChevronDown, ChevronUp, Cpu } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -101,14 +101,23 @@ function StatusBadge({ status }: { status: GroupMonitorResult['status'] }) {
 }
 
 function HeartbeatGrid({ heartbeats, onSelect }: { heartbeats: HeartbeatRecord[], onSelect?: (hb: HeartbeatRecord) => void }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+
   // 只显示最近60条记录
   const sorted = [...heartbeats]
     .sort((a, b) => b.tested_at - a.tested_at)
     .slice(0, 60)
 
+  // 自动滚动到最右侧（最新数据）
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollLeft = containerRef.current.scrollWidth
+    }
+  }, [sorted.length])
+
   return (
     <TooltipProvider>
-      <div className='flex flex-row-reverse gap-0.5 items-end overflow-x-auto'>
+      <div ref={containerRef} className='flex flex-row-reverse gap-0.5 items-end overflow-x-auto'>
         {sorted.map((hb, idx) => (
           <Tooltip key={idx}>
             <TooltipTrigger asChild>
