@@ -926,16 +926,11 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
       cell: function PromptCell({ row }) {
         const [dialogOpen, setDialogOpen] = useState(false)
         const log = row.original
-        const promptText = log.prompt_text
 
-        // Only show for CONSUME logs (type=2) that have prompt_text
-        if (log.type !== 2 || !promptText) {
+        // Only show for CONSUME logs (type=2) that have prompt log
+        if (log.type !== 2 || !log.has_prompt_log) {
           return <span className='text-muted-foreground/40'>—</span>
         }
-
-        const charCount = promptText.length
-        const displayText =
-          charCount > 50 ? `${charCount} ${t('chars')}` : t('Short')
 
         return (
           <>
@@ -946,7 +941,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
               title={t('Click to view prompt')}
             >
               <span className='border-border/80 bg-blue-50 dark:bg-blue-950/30 inline-flex h-6 items-center rounded-md border border-blue-200 dark:border-blue-800 px-2 text-xs font-medium text-blue-700 dark:text-blue-300'>
-                {displayText}
+                {t('Saved')}
               </span>
               <span className='text-muted-foreground group-hover:text-foreground group-hover:underline'>
                 {t('View')}

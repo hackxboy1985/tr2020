@@ -48,6 +48,7 @@ export const usageLogSchema = z.object({
   prompt_text: z.string().optional(),
   request_body: z.string().optional(),
   response_body: z.string().optional(),
+  has_prompt_log: z.boolean().optional(),
 })
 
 export type UsageLog = z.infer<typeof usageLogSchema>
