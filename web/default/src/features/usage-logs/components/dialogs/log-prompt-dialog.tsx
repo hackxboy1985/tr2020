@@ -77,7 +77,7 @@ export function LogPromptDialog({
         // Otherwise fetch it separately
         setLoading(true)
         setError(null)
-        fetch(`/api/log/prompt/${log.id}`)
+        fetch(`/api/log/${log.id}/prompt`)
           .then((res) => {
             if (!res.ok) {
               throw new Error('Failed to fetch prompt')
