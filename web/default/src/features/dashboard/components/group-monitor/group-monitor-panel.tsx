@@ -101,11 +101,14 @@ function StatusBadge({ status }: { status: GroupMonitorResult['status'] }) {
 }
 
 function HeartbeatGrid({ heartbeats, onSelect }: { heartbeats: HeartbeatRecord[], onSelect?: (hb: HeartbeatRecord) => void }) {
-  const sorted = [...heartbeats].sort((a, b) => a.tested_at - b.tested_at)
+  // 只显示最近60条记录
+  const sorted = [...heartbeats]
+    .sort((a, b) => b.tested_at - a.tested_at)
+    .slice(0, 60)
 
   return (
     <TooltipProvider>
-      <div className='flex gap-0.5 items-end'>
+      <div className='flex gap-0.5 items-end overflow-x-auto'>
         {sorted.map((hb, idx) => (
           <Tooltip key={idx}>
             <TooltipTrigger asChild>
