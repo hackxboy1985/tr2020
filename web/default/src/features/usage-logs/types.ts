@@ -70,6 +70,7 @@ export interface DrawingLogFilters extends CommonFilters {
  */
 export interface TaskLogFilters extends CommonFilters {
   taskId?: string
+  upstreamTaskId?: string
 }
 
 /**
@@ -334,6 +335,8 @@ export interface GetTaskLogsParams {
   task_id?: string
   start_timestamp?: number
   end_timestamp?: number
+  upstream_task_id?: string
+}
 }
 
 // ============================================================================

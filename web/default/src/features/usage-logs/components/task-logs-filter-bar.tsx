@@ -96,6 +96,9 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
         : {
             ...baseFilters,
             ...(searchParams.filter ? { taskId: searchParams.filter } : {}),
+            ...(searchParams.upstreamTaskId
+              ? { upstreamTaskId: searchParams.upstreamTaskId }
+              : {}),
           }
 
     setFilters(next)
@@ -105,6 +108,7 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
     searchParams.endTime,
     searchParams.channel,
     searchParams.filter,
+    searchParams.upstreamTaskId,
   ])
 
   const handleChange = useCallback(
@@ -163,7 +167,10 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
     props.logCategory === 'drawing'
       ? t('Filter by Midjourney task ID')
       : t('Filter by task ID')
-  const hasAdditionalFilters = !!filterValue || !!filters.channel
+  const hasAdditionalFilters =
+    !!filterValue ||
+    !!filters.channel ||
+    !!(props.logCategory === 'task' && (filters as TaskLogFilters).upstreamTaskId)
   const dateRangeFilter = (
     <LogsFilterField wide>
       <CompactDateTimeRangePicker
@@ -198,6 +205,18 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
     </LogsFilterField>
   ) : null
 
+  const upstreamTaskIdFilter =
+    isAdmin && props.logCategory === 'task' ? (
+      <LogsFilterField>
+        <LogsFilterInput
+          placeholder={t('Upstream Task ID')}
+          value={(filters as TaskLogFilters).upstreamTaskId || ''}
+          onChange={(e) => handleChange('upstreamTaskId', e.target.value)}
+          onKeyDown={handleKeyDown}
+        />
+      </LogsFilterField>
+    ) : null
+
   return (
     <LogsFilterToolbar
       table={props.table}
@@ -206,6 +225,7 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
           {dateRangeFilter}
           {taskIdFilter}
           {channelFilter}
+          {upstreamTaskIdFilter}
         </>
       }
       mobilePinnedFilters={dateRangeFilter}
@@ -213,9 +233,14 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
         <>
           {taskIdFilter}
           {channelFilter}
+          {upstreamTaskIdFilter}
         </>
       }
-      mobileFilterCount={[filterValue, filters.channel].filter(Boolean).length}
+      mobileFilterCount={
+        [filterValue, filters.channel, (filters as TaskLogFilters).upstreamTaskId].filter(
+          Boolean
+        ).length
+      }
       hasActiveFilters={hasAdditionalFilters}
       onSearch={handleApply}
       searchLoading={fetchingLogs > 0}

@@ -170,6 +170,7 @@ type SyncTaskQueryParams struct {
 	StartTimestamp int64
 	EndTimestamp   int64
 	UserIDs        []int
+	UpstreamTaskID string
 }
 
 func InitTask(platform constant.TaskPlatform, relayInfo *commonRelay.RelayInfo) *Task {
@@ -237,6 +238,7 @@ func TaskGetAllUserTask(userId int, startIdx int, num int, queryParams SyncTaskQ
 	if queryParams.EndTimestamp != 0 {
 		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
 	}
+	// 普通用户不支持 upstream_task_id 筛选，已在 controller 层限制
 
 	// 获取数据
 	err = query.Omit("channel_id").Order("id desc").Limit(num).Offset(startIdx).Find(&tasks).Error
@@ -281,6 +283,16 @@ func TaskGetAllTasks(startIdx int, num int, queryParams SyncTaskQueryParams) []*
 	}
 	if queryParams.EndTimestamp != 0 {
 		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
+	}
+	if queryParams.UpstreamTaskID != "" {
+		// 查询 private_data JSON 字段中的 upstream_task_id
+		if common.UsingPostgreSQL {
+			query = query.Where("private_data->>'upstream_task_id' = ?", queryParams.UpstreamTaskID)
+		} else if common.UsingMySQL {
+			query = query.Where("JSON_UNQUOTE(JSON_EXTRACT(private_data, '$.upstream_task_id')) = ?", queryParams.UpstreamTaskID)
+		} else {
+			query = query.Where("json_extract(private_data, '$.upstream_task_id') = ?", queryParams.UpstreamTaskID)
+		}
 	}
 
 	// 获取数据
@@ -479,6 +491,16 @@ func TaskCountAllTasks(queryParams SyncTaskQueryParams) int64 {
 	}
 	if queryParams.EndTimestamp != 0 {
 		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
+	}
+	if queryParams.UpstreamTaskID != "" {
+		// 查询 private_data JSON 字段中的 upstream_task_id
+		if common.UsingPostgreSQL {
+			query = query.Where("private_data->>'upstream_task_id' = ?", queryParams.UpstreamTaskID)
+		} else if common.UsingMySQL {
+			query = query.Where("JSON_UNQUOTE(JSON_EXTRACT(private_data, '$.upstream_task_id')) = ?", queryParams.UpstreamTaskID)
+		} else {
+			query = query.Where("json_extract(private_data, '$.upstream_task_id') = ?", queryParams.UpstreamTaskID)
+		}
 	}
 	_ = query.Count(&total).Error
 	return total

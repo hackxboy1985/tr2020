@@ -296,7 +296,12 @@ export async function fetchLogsByCategory(
       ? { mj_id: searchParams.filter as string | undefined }
       : {}),
     ...(logCategory === 'task'
-      ? { task_id: searchParams.filter as string | undefined }
+      ? {
+          task_id: searchParams.filter as string | undefined,
+          ...(isAdmin && searchParams.upstreamTaskId
+            ? { upstream_task_id: String(searchParams.upstreamTaskId) }
+            : {}),
+        }
       : {}),
   }
 
