@@ -221,6 +221,9 @@ export function buildApiParams(config: {
     ...(searchParams.taskId
       ? { task_id: String(searchParams.taskId) }
       : {}),
+    ...(isAdmin && searchParams.upstreamTaskId
+      ? { upstream_task_id: String(searchParams.upstreamTaskId) }
+      : {}),
     ...buildTimeRangeParams(searchParams, false),
   }
 

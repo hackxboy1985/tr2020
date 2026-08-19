@@ -55,6 +55,7 @@ type Log struct {
 	RequestId         string `json:"request_id,omitempty" gorm:"type:varchar(64);index:idx_logs_request_id;default:''"`
 	UpstreamRequestId string `json:"upstream_request_id,omitempty" gorm:"type:varchar(128);index:idx_logs_upstream_request_id;default:''"`
 	TaskId            string `json:"task_id,omitempty" gorm:"type:varchar(64);index:idx_logs_task_id;default:''"`
+	UpstreamTaskId    string `json:"upstream_task_id,omitempty" gorm:"type:varchar(128);index:idx_logs_upstream_task_id;default:''"`
 	Other             string `json:"other"`
 	PromptText        string `json:"prompt_text,omitempty" gorm:"-"`
 	RequestBody       string `json:"request_body,omitempty" gorm:"-"`
@@ -330,7 +331,16 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		RequestId:         requestId,
 		UpstreamRequestId: upstreamRequestId,
 		TaskId:            params.TaskId,
-		Other:             otherStr,
+		UpstreamTaskId: func() string {
+			// 从 Other 字段中提取 upstream_task_id 写入独立字段
+			if params.Other != nil {
+				if upstreamTaskId, ok := params.Other["upstream_task_id"].(string); ok {
+					return upstreamTaskId
+				}
+			}
+			return ""
+		}(),
+		Other: otherStr,
 	}
 	err := LOG_DB.Create(log).Error
 	if err != nil {
@@ -429,6 +439,15 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 		Other:             common.MapToJsonStr(params.Other),
 		UpstreamRequestId: params.UpstreamRequestId,
 		TaskId:            params.TaskId,
+		UpstreamTaskId: func() string {
+			// 从 Other 字段中提取 upstream_task_id 写入独立字段
+			if params.Other != nil {
+				if upstreamTaskId, ok := params.Other["upstream_task_id"].(string); ok {
+					return upstreamTaskId
+				}
+			}
+			return ""
+		}(),
 	}
 	err := LOG_DB.Create(log).Error
 	if err != nil {
@@ -439,7 +458,7 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 	}
 }
 
-func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, channelType int, group string, requestId string, upstreamRequestId string, taskId string) (logs []*Log, total int64, err error) {
+func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, channelType int, group string, requestId string, upstreamRequestId string, taskId string, upstreamTaskId string) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
 		tx = LOG_DB
@@ -464,6 +483,17 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 	}
 	if taskId != "" {
 		tx = tx.Where("logs.task_id = ?", taskId)
+	}
+	if upstreamTaskId != "" {
+		// 混合查询：优先使用独立字段，回退到JSON查询（兼容存量数据）
+		if common.UsingPostgreSQL {
+			tx = tx.Where("(logs.upstream_task_id = ? OR (logs.upstream_task_id = '' AND logs.other IS NOT NULL AND logs.other::text != '' AND logs.other->>'upstream_task_id' = ?))", upstreamTaskId, upstreamTaskId)
+		} else if common.UsingMySQL {
+			tx = tx.Where("(logs.upstream_task_id = ? OR (logs.upstream_task_id = '' AND logs.other IS NOT NULL AND logs.other != '' AND JSON_UNQUOTE(JSON_EXTRACT(logs.other, '$.upstream_task_id')) = ?))", upstreamTaskId, upstreamTaskId)
+		} else {
+			// SQLite
+			tx = tx.Where("(logs.upstream_task_id = ? OR (logs.upstream_task_id = '' AND logs.other IS NOT NULL AND logs.other != '' AND json_extract(logs.other, '$.upstream_task_id') = ?))", upstreamTaskId, upstreamTaskId)
+		}
 	}
 	if startTimestamp != 0 {
 		tx = tx.Where("logs.created_at >= ?", startTimestamp)
@@ -534,7 +564,7 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 
 const logSearchCountLimit = 10000
 
-func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, startIdx int, num int, group string, requestId string, upstreamRequestId string, taskId string) (logs []*Log, total int64, err error) {
+func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, startIdx int, num int, group string, requestId string, upstreamRequestId string, taskId string, upstreamTaskId string) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
 		tx = LOG_DB.Where("logs.user_id = ?", userId)
@@ -556,6 +586,17 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 	}
 	if taskId != "" {
 		tx = tx.Where("logs.task_id = ?", taskId)
+	}
+	if upstreamTaskId != "" {
+		// 混合查询：优先使用独立字段，回退到JSON查询（兼容存量数据）
+		if common.UsingPostgreSQL {
+			tx = tx.Where("(logs.upstream_task_id = ? OR (logs.upstream_task_id = '' AND logs.other IS NOT NULL AND logs.other::text != '' AND logs.other->>'upstream_task_id' = ?))", upstreamTaskId, upstreamTaskId)
+		} else if common.UsingMySQL {
+			tx = tx.Where("(logs.upstream_task_id = ? OR (logs.upstream_task_id = '' AND logs.other IS NOT NULL AND logs.other != '' AND JSON_UNQUOTE(JSON_EXTRACT(logs.other, '$.upstream_task_id')) = ?))", upstreamTaskId, upstreamTaskId)
+		} else {
+			// SQLite
+			tx = tx.Where("(logs.upstream_task_id = ? OR (logs.upstream_task_id = '' AND logs.other IS NOT NULL AND logs.other != '' AND json_extract(logs.other, '$.upstream_task_id') = ?))", upstreamTaskId, upstreamTaskId)
+		}
 	}
 	if startTimestamp != 0 {
 		tx = tx.Where("logs.created_at >= ?", startTimestamp)
@@ -587,7 +628,7 @@ type Stat struct {
 	Tpm   int `json:"tpm"`
 }
 
-func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, channelType int, group string, requestId string, upstreamRequestId string, taskId string) (stat Stat, err error) {
+func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, channelType int, group string, requestId string, upstreamRequestId string, taskId string, upstreamTaskId string) (stat Stat, err error) {
 	tx := LOG_DB.Table("logs").Select("sum(quota) quota")
 
 	// 为rpm和tpm创建单独的查询
@@ -614,6 +655,20 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 	if taskId != "" {
 		tx = tx.Where("task_id = ?", taskId)
 		rpmTpmQuery = rpmTpmQuery.Where("task_id = ?", taskId)
+	}
+	if upstreamTaskId != "" {
+		// 混合查询：优先使用独立字段，回退到JSON查询（兼容存量数据）
+		if common.UsingPostgreSQL {
+			tx = tx.Where("(upstream_task_id = ? OR (upstream_task_id = '' AND other IS NOT NULL AND other::text != '' AND other->>'upstream_task_id' = ?))", upstreamTaskId, upstreamTaskId)
+			rpmTpmQuery = rpmTpmQuery.Where("(upstream_task_id = ? OR (upstream_task_id = '' AND other IS NOT NULL AND other::text != '' AND other->>'upstream_task_id' = ?))", upstreamTaskId, upstreamTaskId)
+		} else if common.UsingMySQL {
+			tx = tx.Where("(upstream_task_id = ? OR (upstream_task_id = '' AND other IS NOT NULL AND other != '' AND JSON_UNQUOTE(JSON_EXTRACT(other, '$.upstream_task_id')) = ?))", upstreamTaskId, upstreamTaskId)
+			rpmTpmQuery = rpmTpmQuery.Where("(upstream_task_id = ? OR (upstream_task_id = '' AND other IS NOT NULL AND other != '' AND JSON_UNQUOTE(JSON_EXTRACT(other, '$.upstream_task_id')) = ?))", upstreamTaskId, upstreamTaskId)
+		} else {
+			// SQLite
+			tx = tx.Where("(upstream_task_id = ? OR (upstream_task_id = '' AND other IS NOT NULL AND other != '' AND json_extract(other, '$.upstream_task_id') = ?))", upstreamTaskId, upstreamTaskId)
+			rpmTpmQuery = rpmTpmQuery.Where("(upstream_task_id = ? OR (upstream_task_id = '' AND other IS NOT NULL AND other != '' AND json_extract(other, '$.upstream_task_id') = ?))", upstreamTaskId, upstreamTaskId)
+		}
 	}
 	if startTimestamp != 0 {
 		tx = tx.Where("created_at >= ?", startTimestamp)

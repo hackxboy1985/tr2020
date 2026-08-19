@@ -99,6 +99,7 @@ export function CommonLogsFilterBar<TData>(
       requestId: searchParams.requestId || undefined,
       upstreamRequestId: searchParams.upstreamRequestId || undefined,
       taskId: searchParams.taskId || undefined,
+      upstreamTaskId: searchParams.upstreamTaskId || undefined,
     })
 
     const typeArr = searchParams.type
@@ -121,6 +122,7 @@ export function CommonLogsFilterBar<TData>(
     searchParams.requestId,
     searchParams.upstreamRequestId,
     searchParams.taskId,
+    searchParams.upstreamTaskId,
     searchParams.type,
   ])
 
@@ -189,6 +191,7 @@ export function CommonLogsFilterBar<TData>(
     if (filterParams.requestId) queryParams.set('request_id', String(filterParams.requestId))
     if (filterParams.upstreamRequestId) queryParams.set('upstream_request_id', String(filterParams.upstreamRequestId))
     if (filterParams.taskId) queryParams.set('task_id', String(filterParams.taskId))
+    if (filterParams.upstreamTaskId) queryParams.set('upstream_task_id', String(filterParams.upstreamTaskId))
     if (logType !== LOG_TYPE_ALL_VALUE) queryParams.set('type', logType)
 
     try {
@@ -249,7 +252,8 @@ export function CommonLogsFilterBar<TData>(
     !!filters.channel ||
     !!filters.requestId ||
     !!filters.upstreamRequestId ||
-    !!filters.taskId
+    !!filters.taskId ||
+    !!filters.upstreamTaskId
 
   const hasTypeFilter = logType !== LOG_TYPE_ALL_VALUE
   const hasAdditionalFilters =
@@ -262,6 +266,7 @@ export function CommonLogsFilterBar<TData>(
     filters.requestId,
     filters.upstreamRequestId,
     filters.taskId,
+    isAdmin ? filters.upstreamTaskId : undefined,
   ].filter(Boolean).length
   const sensitiveType = sensitiveVisible ? 'text' : 'password'
   const logTypeItems = useMemo(
@@ -459,6 +464,16 @@ export function CommonLogsFilterBar<TData>(
           onKeyDown={handleKeyDown}
         />
       </LogsFilterField>
+      {isAdmin && (
+        <LogsFilterField>
+          <LogsFilterInput
+            placeholder={t('Upstream Task ID')}
+            value={filters.upstreamTaskId || ''}
+            onChange={(e) => handleChange('upstreamTaskId', e.target.value)}
+            onKeyDown={handleKeyDown}
+          />
+        </LogsFilterField>
+      )}
     </>
   )
 

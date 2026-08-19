@@ -43,6 +43,12 @@ func exportLogs(c *gin.Context, isAdmin bool) {
 	requestId := c.Query("request_id")
 	upstreamRequestId := c.Query("upstream_request_id")
 	taskId := c.Query("task_id")
+	upstreamTaskId := c.Query("upstream_task_id")
+
+	// 普通用户不允许使用 upstream_task_id 筛选
+	if !isAdmin {
+		upstreamTaskId = ""
+	}
 
 	// 导出逻辑：如果 logType=0（所有类型），只导出消费(2)和退款(6)
 	var logs []*model.Log
@@ -50,14 +56,14 @@ func exportLogs(c *gin.Context, isAdmin bool) {
 
 	if logType == 0 {
 		// 查询消费记录
-		logsConsume, _, errConsume := model.GetAllLogs(2, startTimestamp, endTimestamp, modelName, username, tokenName, 0, 999999, channel, channelType, group, requestId, upstreamRequestId, taskId)
+		logsConsume, _, errConsume := model.GetAllLogs(2, startTimestamp, endTimestamp, modelName, username, tokenName, 0, 999999, channel, channelType, group, requestId, upstreamRequestId, taskId, upstreamTaskId)
 		if errConsume != nil {
 			common.ApiError(c, errConsume)
 			return
 		}
 
 		// 查询退款记录
-		logsRefund, _, errRefund := model.GetAllLogs(6, startTimestamp, endTimestamp, modelName, username, tokenName, 0, 999999, channel, channelType, group, requestId, upstreamRequestId, taskId)
+		logsRefund, _, errRefund := model.GetAllLogs(6, startTimestamp, endTimestamp, modelName, username, tokenName, 0, 999999, channel, channelType, group, requestId, upstreamRequestId, taskId, upstreamTaskId)
 		if errRefund != nil {
 			common.ApiError(c, errRefund)
 			return
@@ -71,7 +77,7 @@ func exportLogs(c *gin.Context, isAdmin bool) {
 		})
 	} else {
 		// 查询指定类型的日志
-		logs, _, err = model.GetAllLogs(logType, startTimestamp, endTimestamp, modelName, username, tokenName, 0, 999999, channel, channelType, group, requestId, upstreamRequestId, taskId)
+		logs, _, err = model.GetAllLogs(logType, startTimestamp, endTimestamp, modelName, username, tokenName, 0, 999999, channel, channelType, group, requestId, upstreamRequestId, taskId, upstreamTaskId)
 		if err != nil {
 			common.ApiError(c, err)
 			return

@@ -55,6 +55,7 @@ export interface CommonLogFilters extends CommonFilters {
   requestId?: string
   upstreamRequestId?: string
   taskId?: string
+  upstreamTaskId?: string
 }
 
 /**
@@ -274,6 +275,7 @@ export interface GetLogsParams {
   request_id?: string
   upstream_request_id?: string
   task_id?: string
+  upstream_task_id?: string
 }
 
 export interface GetLogsResponse {
@@ -298,6 +300,8 @@ export interface GetLogStatsParams {
   group?: string
   request_id?: string
   upstream_request_id?: string
+  task_id?: string
+  upstream_task_id?: string
 }
 
 export interface GetLogStatsResponse {

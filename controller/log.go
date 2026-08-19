@@ -44,7 +44,8 @@ func GetAllLogs(c *gin.Context) {
 	requestId := c.Query("request_id")
 	upstreamRequestId := c.Query("upstream_request_id")
 	taskId := c.Query("task_id")
-	logs, total, err := model.GetAllLogs(logType, startTimestamp, endTimestamp, modelName, username, tokenName, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), channel, channelType, group, requestId, upstreamRequestId, taskId)
+	upstreamTaskId := c.Query("upstream_task_id")
+	logs, total, err := model.GetAllLogs(logType, startTimestamp, endTimestamp, modelName, username, tokenName, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), channel, channelType, group, requestId, upstreamRequestId, taskId, upstreamTaskId)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -94,7 +95,8 @@ func GetUserLogs(c *gin.Context) {
 	requestId := c.Query("request_id")
 	upstreamRequestId := c.Query("upstream_request_id")
 	taskId := c.Query("task_id")
-	logs, total, err := model.GetUserLogs(userId, logType, startTimestamp, endTimestamp, modelName, tokenName, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), group, requestId, upstreamRequestId, taskId)
+	// 普通用户不允许使用 upstream_task_id 筛选
+	logs, total, err := model.GetUserLogs(userId, logType, startTimestamp, endTimestamp, modelName, tokenName, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), group, requestId, upstreamRequestId, taskId, "")
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -158,7 +160,8 @@ func GetLogsStat(c *gin.Context) {
 	requestId := c.Query("request_id")
 	upstreamRequestId := c.Query("upstream_request_id")
 	taskId := c.Query("task_id")
-	stat, err := model.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, username, tokenName, channel, channelType, group, requestId, upstreamRequestId, taskId)
+	upstreamTaskId := c.Query("upstream_task_id")
+	stat, err := model.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, username, tokenName, channel, channelType, group, requestId, upstreamRequestId, taskId, upstreamTaskId)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -195,7 +198,8 @@ func GetLogsSelfStat(c *gin.Context) {
 	requestId := c.Query("request_id")
 	upstreamRequestId := c.Query("upstream_request_id")
 	taskId := c.Query("task_id")
-	quotaNum, err := model.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, username, tokenName, channel, channelType, group, requestId, upstreamRequestId, taskId)
+	// 普通用户不允许使用 upstream_task_id 筛选
+	quotaNum, err := model.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, username, tokenName, channel, channelType, group, requestId, upstreamRequestId, taskId, "")
 	if err != nil {
 		common.ApiError(c, err)
 		return
