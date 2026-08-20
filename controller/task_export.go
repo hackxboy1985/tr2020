@@ -180,7 +180,7 @@ func ExportAllTasks(c *gin.Context) {
 
 	// 设置表头
 	headers := []string{
-		"任务ID", "上游任务ID", "用户名", "分组", "渠道ID", "渠道类型", "状态", "提交时间",
+		"任务ID", "上游任务ID", "用户名", "分组", "渠道类型", "状态", "提交时间",
 		"预扣配额", "预扣金额(元)", "补扣/退款配额", "补扣/退款金额(元)", "最终配额", "最终金额(元)",
 		"分组倍率",
 	}
@@ -209,17 +209,16 @@ func ExportAllTasks(c *gin.Context) {
 		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), task.UpstreamTaskID)
 		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), task.Username)
 		f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), task.Group)
-		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), task.ChannelID)
-		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), channelTypeText)
-		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), task.Status)
-		f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), task.SubmitTime)
-		f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), task.ConsumeQuota)
-		f.SetCellValue(sheetName, fmt.Sprintf("J%d", row), fmt.Sprintf("%.4f", consumeAmount))
-		f.SetCellValue(sheetName, fmt.Sprintf("K%d", row), task.RefundQuota)
-		f.SetCellValue(sheetName, fmt.Sprintf("L%d", row), fmt.Sprintf("%.4f", refundAmount))
-		f.SetCellValue(sheetName, fmt.Sprintf("M%d", row), finalQuota)
-		f.SetCellValue(sheetName, fmt.Sprintf("N%d", row), fmt.Sprintf("%.4f", finalAmount))
-		f.SetCellValue(sheetName, fmt.Sprintf("O%d", row), task.GroupRatio)
+		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), channelTypeText)
+		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), task.Status)
+		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), task.SubmitTime)
+		f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), task.ConsumeQuota)
+		f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), fmt.Sprintf("%.4f", consumeAmount))
+		f.SetCellValue(sheetName, fmt.Sprintf("J%d", row), task.RefundQuota)
+		f.SetCellValue(sheetName, fmt.Sprintf("K%d", row), fmt.Sprintf("%.4f", refundAmount))
+		f.SetCellValue(sheetName, fmt.Sprintf("L%d", row), finalQuota)
+		f.SetCellValue(sheetName, fmt.Sprintf("M%d", row), fmt.Sprintf("%.4f", finalAmount))
+		f.SetCellValue(sheetName, fmt.Sprintf("N%d", row), task.GroupRatio)
 		row++
 	}
 
