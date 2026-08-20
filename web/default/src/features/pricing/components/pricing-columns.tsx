@@ -51,6 +51,7 @@ export interface PricingColumnsOptions {
   priceRate?: number
   usdExchangeRate?: number
   showRechargePrice?: boolean
+  usableGroups?: Record<string, string>
 }
 
 function renderLimitedTags(
@@ -92,6 +93,7 @@ export function usePricingColumns(
     priceRate = 1,
     usdExchangeRate = 1,
     showRechargePrice = false,
+    usableGroups = {},
   } = options
 
   const tokenUnitLabel = tokenUnit === 'K' ? '1K' : '1M'
@@ -438,7 +440,12 @@ export function usePricingColumns(
       meta: { label: t('Groups') },
       header: t('Groups'),
       cell: ({ row }) => {
-        const groups = row.original.enable_groups || []
+        const allGroups = row.original.enable_groups || []
+        // 只显示用户可用的分组
+        const groups = allGroups.filter((g) =>
+          g === 'all' || Object.prototype.hasOwnProperty.call(usableGroups, g)
+        )
+
         if (groups.length === 0) {
           return <span className='text-muted-foreground/50 text-xs'>—</span>
         }
