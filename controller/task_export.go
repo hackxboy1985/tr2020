@@ -1,78 +1,150 @@
 package controller
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/xuri/excelize/v2"
+	"gorm.io/gorm"
 
 	"github.com/gin-gonic/gin"
 )
 
-// ExportAllTasks 管理员导出任务
+// ExportAllTasks 管理员导出任务（基于 Logs 表）
 func ExportAllTasks(c *gin.Context) {
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	channelID := c.Query("channel_id")
+	upstreamTaskID := c.Query("upstream_task_id")
+	taskIDFilter := c.Query("task_id")
 
-	queryParams := model.SyncTaskQueryParams{
-		Platform:       constant.TaskPlatform(c.Query("platform")),
-		TaskID:         c.Query("task_id"),
-		Status:         c.Query("status"),
-		Action:         c.Query("action"),
-		StartTimestamp: startTimestamp,
-		EndTimestamp:   endTimestamp,
-		ChannelID:      c.Query("channel_id"),
-		UpstreamTaskID: c.Query("upstream_task_id"),
+	// 分别查询：1. task_id 有值的记录，2. task_id 为空但 other 中有 task_id 的记录
+	type LogRecord struct {
+		TaskID         string `json:"task_id"`
+		UpstreamTaskID string `json:"upstream_task_id"`
+		Username       string `json:"username"`
+		Group          string `json:"group"`
+		Channel        int    `json:"channel"`
+		Type           int    `json:"type"`
+		Quota          int    `json:"quota"`
+		Other          string `json:"other"`
+		CreatedAt      int64  `json:"created_at"`
 	}
 
-	// 查询所有任务（不分页，仅导出成功的任务）
-	queryParams.Status = "" // 清空用户传来的status，使用自定义过滤
-	allTasks := model.TaskGetAllTasks(0, 999999, queryParams)
+	// 构建基础查询条件
+	baseQuery := func() *gorm.DB {
+		query := model.LOG_DB.Table("logs").
+			Where("type IN (?, ?)", model.LogTypeConsume, model.LogTypeRefund).
+			Where("channel_type = ?", model.ChannelTypeVideo)
 
-	// 仅保留成功的任务
-	tasks := make([]*model.Task, 0, len(allTasks))
-	for _, task := range allTasks {
-		if task.Status == model.TaskStatusSuccess {
-			tasks = append(tasks, task)
+		if startTimestamp > 0 {
+			query = query.Where("created_at >= ?", startTimestamp)
+		}
+		if endTimestamp > 0 {
+			query = query.Where("created_at <= ?", endTimestamp)
+		}
+		if channelID != "" {
+			query = query.Where("channel = ?", channelID)
+		}
+		return query
+	}
+
+	var allRecords []LogRecord
+
+	// 查询1：task_id 字段有值的记录
+	query1 := baseQuery().Where("task_id != ''")
+	if taskIDFilter != "" {
+		query1 = query1.Where("task_id = ?", taskIDFilter)
+	}
+	if upstreamTaskID != "" {
+		query1 = query1.Where("upstream_task_id = ?", upstreamTaskID)
+	}
+	var records1 []LogRecord
+	query1.Find(&records1)
+	allRecords = append(allRecords, records1...)
+
+	// 查询2：task_id 字段为空，从 other 字段提取
+	query2 := baseQuery().Where("task_id = '' OR task_id IS NULL").Where("other != ''")
+	var records2 []LogRecord
+	query2.Find(&records2)
+
+	// 从 other 提取 task_id 并过滤
+	for _, r := range records2 {
+		var otherData map[string]interface{}
+		if err := json.Unmarshal([]byte(r.Other), &otherData); err == nil {
+			if tid, ok := otherData["task_id"].(string); ok && tid != "" {
+				r.TaskID = tid
+				if utid, ok := otherData["upstream_task_id"].(string); ok {
+					r.UpstreamTaskID = utid
+				}
+
+				// 应用筛选
+				if taskIDFilter != "" && r.TaskID != taskIDFilter {
+					continue
+				}
+				if upstreamTaskID != "" && r.UpstreamTaskID != upstreamTaskID {
+					continue
+				}
+
+				allRecords = append(allRecords, r)
+			}
 		}
 	}
 
-	common.SysLog(fmt.Sprintf("ExportAllTasks: found %d successful tasks", len(tasks)))
+	common.SysLog(fmt.Sprintf("ExportAllTasks: found %d log records", len(allRecords)))
 
-	// 收集所有任务ID，批量查询logs
-	taskIDMap := make(map[string]*model.Task)
-	taskIDs := make([]string, 0, len(tasks))
-	for _, task := range tasks {
-		taskIDs = append(taskIDs, task.TaskID)
-		taskIDMap[task.TaskID] = task
+	// 按任务聚合消费和退款
+	type TaskSummary struct {
+		TaskID         string
+		UpstreamTaskID string
+		Username       string
+		Group          string
+		Status         string
+		SubmitTime     string
+		ConsumeQuota   int
+		RefundQuota    int
+		GroupRatio     string
 	}
 
-	// 批量查询消费记录和退款记录
-	type TaskLogSum struct {
-		TaskID string
-		Type   int
-		Quota  int
-	}
-	var logSums []TaskLogSum
-	if len(taskIDs) > 0 {
-		model.DB.Table("logs").
-			Select("task_id, type, SUM(quota) as quota").
-			Where("task_id IN (?) AND type IN (?, ?)", taskIDs, model.LogTypeConsume, model.LogTypeRefund).
-			Group("task_id, type").
-			Find(&logSums)
-	}
+	taskMap := make(map[string]*TaskSummary)
 
-	// 构建每个任务的消耗/退款映射
-	taskLogMap := make(map[string]map[int]int) // taskID -> {type -> quota}
-	for _, logSum := range logSums {
-		if taskLogMap[logSum.TaskID] == nil {
-			taskLogMap[logSum.TaskID] = make(map[int]int)
+	for _, log := range allRecords {
+		if log.TaskID == "" {
+			continue
 		}
-		taskLogMap[logSum.TaskID][logSum.Type] = logSum.Quota
+
+		// 初始化任务汇总
+		if taskMap[log.TaskID] == nil {
+			taskMap[log.TaskID] = &TaskSummary{
+				TaskID:         log.TaskID,
+				UpstreamTaskID: log.UpstreamTaskID,
+				Username:       log.Username,
+				Group:          log.Group,
+				SubmitTime:     time.Unix(log.CreatedAt, 0).Format("2006-01-02 15:04:05"),
+				Status:         "SUCCESS",
+			}
+
+			// 尝试从 other 提取 group_ratio
+			if log.Other != "" {
+				var otherData map[string]interface{}
+				if err := json.Unmarshal([]byte(log.Other), &otherData); err == nil {
+					if gr, ok := otherData["group_ratio"].(float64); ok {
+						taskMap[log.TaskID].GroupRatio = fmt.Sprintf("%.2f", gr)
+					}
+				}
+			}
+		}
+
+		// 累加配额
+		if log.Type == model.LogTypeConsume {
+			taskMap[log.TaskID].ConsumeQuota += log.Quota
+		} else if log.Type == model.LogTypeRefund {
+			taskMap[log.TaskID].RefundQuota += log.Quota
+		}
 	}
 
 	// 创建 Excel 文件
@@ -93,9 +165,9 @@ func ExportAllTasks(c *gin.Context) {
 
 	// 设置表头
 	headers := []string{
-		"任务ID", "上游任务ID", "用户名", "分组", "状态", "提交时间", "开始时间", "完成时间",
+		"任务ID", "上游任务ID", "用户名", "分组", "状态", "提交时间",
 		"预扣配额", "预扣金额(元)", "补扣/退款配额", "补扣/退款金额(元)", "最终配额", "最终金额(元)",
-		"分组倍率", "失败原因",
+		"分组倍率",
 	}
 
 	for i, header := range headers {
@@ -104,61 +176,31 @@ func ExportAllTasks(c *gin.Context) {
 	}
 
 	// 填充数据
-	for i, task := range tasks {
-		row := i + 2
-
-		// 获取上游任务ID
-		upstreamTaskID := task.GetUpstreamTaskID()
-
-		// 获取分组倍率
-		groupRatio := ""
-		if task.PrivateData.BillingContext != nil {
-			groupRatio = fmt.Sprintf("%.2f", task.PrivateData.BillingContext.GroupRatio)
-		}
-
-		// 获取该任务的消耗和退款记录
-		consumeQuota := 0
-		refundQuota := 0
-		if logs, ok := taskLogMap[task.TaskID]; ok {
-			consumeQuota = logs[model.LogTypeConsume]
-			refundQuota = logs[model.LogTypeRefund]
-		}
-
-		// 计算金额（配额/500000）
-		consumeAmount := float64(consumeQuota) / 500000
-		refundAmount := float64(refundQuota) / 500000
-		finalQuota := consumeQuota + refundQuota // refundQuota 是负数
+	row := 2
+	for _, task := range taskMap {
+		// 计算金额
+		consumeAmount := float64(task.ConsumeQuota) / 500000
+		refundAmount := float64(task.RefundQuota) / 500000
+		finalQuota := task.ConsumeQuota + task.RefundQuota
 		finalAmount := float64(finalQuota) / 500000
 
-		// 时间格式化
-		submitTime := time.Unix(task.SubmitTime, 0).Format("2006-01-02 15:04:05")
-		startTime := ""
-		if task.StartTime > 0 {
-			startTime = time.Unix(task.StartTime, 0).Format("2006-01-02 15:04:05")
-		}
-		finishTime := ""
-		if task.FinishTime > 0 {
-			finishTime = time.Unix(task.FinishTime, 0).Format("2006-01-02 15:04:05")
-		}
-
-		// 填充行数据（精简版：移除渠道ID、平台、动作）
 		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), task.TaskID)
-		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), upstreamTaskID)
+		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), task.UpstreamTaskID)
 		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), task.Username)
 		f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), task.Group)
 		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), task.Status)
-		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), submitTime)
-		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), startTime)
-		f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), finishTime)
-		f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), consumeQuota)
-		f.SetCellValue(sheetName, fmt.Sprintf("J%d", row), fmt.Sprintf("%.4f", consumeAmount))
-		f.SetCellValue(sheetName, fmt.Sprintf("K%d", row), refundQuota)
-		f.SetCellValue(sheetName, fmt.Sprintf("L%d", row), fmt.Sprintf("%.4f", refundAmount))
-		f.SetCellValue(sheetName, fmt.Sprintf("M%d", row), finalQuota)
-		f.SetCellValue(sheetName, fmt.Sprintf("N%d", row), fmt.Sprintf("%.4f", finalAmount))
-		f.SetCellValue(sheetName, fmt.Sprintf("O%d", row), groupRatio)
-		f.SetCellValue(sheetName, fmt.Sprintf("P%d", row), task.FailReason)
+		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), task.SubmitTime)
+		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), task.ConsumeQuota)
+		f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), fmt.Sprintf("%.4f", consumeAmount))
+		f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), task.RefundQuota)
+		f.SetCellValue(sheetName, fmt.Sprintf("J%d", row), fmt.Sprintf("%.4f", refundAmount))
+		f.SetCellValue(sheetName, fmt.Sprintf("K%d", row), finalQuota)
+		f.SetCellValue(sheetName, fmt.Sprintf("L%d", row), fmt.Sprintf("%.4f", finalAmount))
+		f.SetCellValue(sheetName, fmt.Sprintf("M%d", row), task.GroupRatio)
+		row++
 	}
+
+	common.SysLog(fmt.Sprintf("ExportAllTasks: exported %d tasks from logs", len(taskMap)))
 
 	// 设置响应头
 	filename := fmt.Sprintf("tasks_%s.xlsx", time.Now().Format("20060102_150405"))
