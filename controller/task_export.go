@@ -29,19 +29,19 @@ func ExportAllTasks(c *gin.Context) {
 		UpstreamTaskID: c.Query("upstream_task_id"),
 	}
 
-	// 查询所有任务（不分页，排除失败任务）
+	// 查询所有任务（不分页，仅导出成功的任务）
 	queryParams.Status = "" // 清空用户传来的status，使用自定义过滤
 	allTasks := model.TaskGetAllTasks(0, 999999, queryParams)
 
-	// 过滤掉失败的任务
+	// 仅保留成功的任务
 	tasks := make([]*model.Task, 0, len(allTasks))
 	for _, task := range allTasks {
-		if task.Status != model.TaskStatusFailure {
+		if task.Status == model.TaskStatusSuccess {
 			tasks = append(tasks, task)
 		}
 	}
 
-	common.SysLog(fmt.Sprintf("ExportAllTasks: found %d tasks (excluded failures)", len(tasks)))
+	common.SysLog(fmt.Sprintf("ExportAllTasks: found %d successful tasks", len(tasks)))
 
 	// 收集所有任务ID，批量查询logs
 	taskIDMap := make(map[string]*model.Task)
@@ -94,7 +94,7 @@ func ExportAllTasks(c *gin.Context) {
 	// 设置表头
 	headers := []string{
 		"任务ID", "上游任务ID", "用户名", "分组", "渠道ID", "平台",
-		"动作", "状态", "进度", "提交时间", "开始时间", "完成时间",
+		"动作", "状态", "提交时间", "开始时间", "完成时间",
 		"预扣配额", "预扣金额(元)", "补扣/退款配额", "补扣/退款金额(元)", "最终配额", "最终金额(元)",
 		"分组倍率", "失败原因",
 	}
@@ -142,7 +142,7 @@ func ExportAllTasks(c *gin.Context) {
 			finishTime = time.Unix(task.FinishTime, 0).Format("2006-01-02 15:04:05")
 		}
 
-		// 填充行数据（按新的表头顺序）
+		// 填充行数据（按新的表头顺序，不含进度）
 		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), task.TaskID)
 		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), upstreamTaskID)
 		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), task.Username)
@@ -151,18 +151,17 @@ func ExportAllTasks(c *gin.Context) {
 		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), task.Platform)
 		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), task.Action)
 		f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), task.Status)
-		f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), task.Progress)
-		f.SetCellValue(sheetName, fmt.Sprintf("J%d", row), submitTime)
-		f.SetCellValue(sheetName, fmt.Sprintf("K%d", row), startTime)
-		f.SetCellValue(sheetName, fmt.Sprintf("L%d", row), finishTime)
-		f.SetCellValue(sheetName, fmt.Sprintf("M%d", row), consumeQuota)
-		f.SetCellValue(sheetName, fmt.Sprintf("N%d", row), fmt.Sprintf("%.4f", consumeAmount))
-		f.SetCellValue(sheetName, fmt.Sprintf("O%d", row), refundQuota)
-		f.SetCellValue(sheetName, fmt.Sprintf("P%d", row), fmt.Sprintf("%.4f", refundAmount))
-		f.SetCellValue(sheetName, fmt.Sprintf("Q%d", row), finalQuota)
-		f.SetCellValue(sheetName, fmt.Sprintf("R%d", row), fmt.Sprintf("%.4f", finalAmount))
-		f.SetCellValue(sheetName, fmt.Sprintf("S%d", row), groupRatio)
-		f.SetCellValue(sheetName, fmt.Sprintf("T%d", row), task.FailReason)
+		f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), submitTime)
+		f.SetCellValue(sheetName, fmt.Sprintf("J%d", row), startTime)
+		f.SetCellValue(sheetName, fmt.Sprintf("K%d", row), finishTime)
+		f.SetCellValue(sheetName, fmt.Sprintf("L%d", row), consumeQuota)
+		f.SetCellValue(sheetName, fmt.Sprintf("M%d", row), fmt.Sprintf("%.4f", consumeAmount))
+		f.SetCellValue(sheetName, fmt.Sprintf("N%d", row), refundQuota)
+		f.SetCellValue(sheetName, fmt.Sprintf("O%d", row), fmt.Sprintf("%.4f", refundAmount))
+		f.SetCellValue(sheetName, fmt.Sprintf("P%d", row), finalQuota)
+		f.SetCellValue(sheetName, fmt.Sprintf("Q%d", row), fmt.Sprintf("%.4f", finalAmount))
+		f.SetCellValue(sheetName, fmt.Sprintf("R%d", row), groupRatio)
+		f.SetCellValue(sheetName, fmt.Sprintf("S%d", row), task.FailReason)
 	}
 
 	// 设置响应头
