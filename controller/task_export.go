@@ -54,6 +54,14 @@ func ExportAllTasks(c *gin.Context) {
 		return query
 	}
 
+	// 调试：测试不带 channel_type 的查询
+	var testCount int64
+	model.LOG_DB.Table("logs").
+		Where("type IN (?, ?)", model.LogTypeConsume, model.LogTypeRefund).
+		Where("created_at >= ? AND created_at <= ?", startTimestamp, endTimestamp).
+		Count(&testCount)
+	common.SysLog(fmt.Sprintf("ExportAllTasks: total logs without channel_type filter: %d", testCount))
+
 	var allRecords []LogRecord
 
 	// 查询1：task_id 字段有值的记录
@@ -66,12 +74,14 @@ func ExportAllTasks(c *gin.Context) {
 	}
 	var records1 []LogRecord
 	query1.Find(&records1)
+	common.SysLog(fmt.Sprintf("ExportAllTasks: query1 found %d records (task_id != '')", len(records1)))
 	allRecords = append(allRecords, records1...)
 
 	// 查询2：task_id 字段为空，从 other 字段提取
 	query2 := baseQuery().Where("task_id = '' OR task_id IS NULL").Where("other != ''")
 	var records2 []LogRecord
 	query2.Find(&records2)
+	common.SysLog(fmt.Sprintf("ExportAllTasks: query2 found %d records (task_id empty, other not empty)", len(records2)))
 
 	// 从 other 提取 task_id 并过滤
 	for _, r := range records2 {
