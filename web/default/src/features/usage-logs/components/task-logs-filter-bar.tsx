@@ -282,7 +282,7 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
       onSearch={handleApply}
       searchLoading={fetchingLogs > 0}
       onReset={handleReset}
-      onExport={props.logCategory === 'task' ? handleExport : undefined}
+      onExport={isAdmin && props.logCategory === 'task' ? handleExport : undefined}
     />
   )
 }
