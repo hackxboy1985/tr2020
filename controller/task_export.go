@@ -3,6 +3,7 @@ package controller
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"time"
 
@@ -110,17 +111,18 @@ func ExportAllTasks(c *gin.Context) {
 
 	// 按任务聚合消费和退款
 	type TaskSummary struct {
-		TaskID         string
-		UpstreamTaskID string
-		Username       string
-		Group          string
-		ChannelID      int
-		ChannelType    int
-		Status         string
-		SubmitTime     string
-		ConsumeQuota   int
-		RefundQuota    int
-		GroupRatio     string
+		TaskID          string
+		UpstreamTaskID  string
+		Username        string
+		Group           string
+		ChannelID       int
+		ChannelType     int
+		Status          string
+		SubmitTime      string
+		SubmitTimestamp int64 // 用于排序
+		ConsumeQuota    int
+		RefundQuota     int
+		GroupRatio      string
 	}
 
 	taskMap := make(map[string]*TaskSummary)
@@ -131,14 +133,21 @@ func ExportAllTasks(c *gin.Context) {
 		}
 
 		// 尝试从 other 提取更多信息（包括 upstream_task_id）
+		upstreamTaskID := log.UpstreamTaskID
+		var groupRatio string
+
 		if log.Other != "" {
 			var otherData map[string]interface{}
 			if err := json.Unmarshal([]byte(log.Other), &otherData); err == nil {
 				// 如果 UpstreamTaskID 字段为空，从 other 中提取
-				if log.UpstreamTaskID == "" {
+				if upstreamTaskID == "" {
 					if utid, ok := otherData["upstream_task_id"].(string); ok {
-						log.UpstreamTaskID = utid
+						upstreamTaskID = utid
 					}
+				}
+				// 提取 group_ratio
+				if gr, ok := otherData["group_ratio"].(float64); ok {
+					groupRatio = fmt.Sprintf("%.2f", gr)
 				}
 			}
 		}
@@ -146,24 +155,25 @@ func ExportAllTasks(c *gin.Context) {
 		// 初始化任务汇总
 		if taskMap[log.TaskID] == nil {
 			taskMap[log.TaskID] = &TaskSummary{
-				TaskID:         log.TaskID,
-				UpstreamTaskID: log.UpstreamTaskID,
-				Username:       log.Username,
-				Group:          log.Group,
-				ChannelID:      log.Channel,
-				ChannelType:    log.ChannelType,
-				SubmitTime:     time.Unix(log.CreatedAt, 0).Format("2006-01-02 15:04:05"),
-				Status:         "SUCCESS",
+				TaskID:          log.TaskID,
+				UpstreamTaskID:  upstreamTaskID,
+				Username:        log.Username,
+				Group:           log.Group,
+				ChannelID:       log.Channel,
+				ChannelType:     log.ChannelType,
+				SubmitTime:      time.Unix(log.CreatedAt, 0).Format("2006-01-02 15:04:05"),
+				SubmitTimestamp: log.CreatedAt,
+				Status:          "SUCCESS",
+				GroupRatio:      groupRatio,
 			}
-
-			// 提取 group_ratio
-			if log.Other != "" {
-				var otherData map[string]interface{}
-				if err := json.Unmarshal([]byte(log.Other), &otherData); err == nil {
-					if gr, ok := otherData["group_ratio"].(float64); ok {
-						taskMap[log.TaskID].GroupRatio = fmt.Sprintf("%.2f", gr)
-					}
-				}
+		} else {
+			// 任务已存在，更新 upstream_task_id（如果当前为空且新值不为空）
+			if taskMap[log.TaskID].UpstreamTaskID == "" && upstreamTaskID != "" {
+				taskMap[log.TaskID].UpstreamTaskID = upstreamTaskID
+			}
+			// 更新 group_ratio（如果当前为空且新值不为空）
+			if taskMap[log.TaskID].GroupRatio == "" && groupRatio != "" {
+				taskMap[log.TaskID].GroupRatio = groupRatio
 			}
 		}
 
@@ -203,9 +213,19 @@ func ExportAllTasks(c *gin.Context) {
 		f.SetCellValue(sheetName, cell, header)
 	}
 
+	// 将 map 转为 slice 并按时间排序
+	tasks := make([]*TaskSummary, 0, len(taskMap))
+	for _, task := range taskMap {
+		tasks = append(tasks, task)
+	}
+	// 按提交时间戳降序排序（最新的在前）
+	sort.Slice(tasks, func(i, j int) bool {
+		return tasks[i].SubmitTimestamp > tasks[j].SubmitTimestamp
+	})
+
 	// 填充数据
 	row := 2
-	for _, task := range taskMap {
+	for _, task := range tasks {
 		// 计算金额
 		consumeAmount := float64(task.ConsumeQuota) / 500000
 		refundAmount := float64(task.RefundQuota) / 500000
