@@ -54,11 +54,16 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 		other["request_body"] = TruncateBody(requestBody)
 	}
 	if responseBody := c.GetString(string(constant.ContextKeyVideoResponseBody)); responseBody != "" {
-		// 先从完整 responseBody 中提取 "id" 字段作为 upstream_task_id，再截断保存
+		// 先从完整 responseBody 中提取字段，再截断保存
 		var respData map[string]interface{}
 		if err := common.Unmarshal([]byte(responseBody), &respData); err == nil {
+			// "id" 字段 -> upstream_task_id（上游任务ID）
 			if taskID, ok := respData["id"].(string); ok && taskID != "" {
 				other["upstream_task_id"] = taskID
+			}
+			// "upstream_task_id" 字段 -> ori_task_id（上游的上游任务ID，如豆包的 cgt-xxx）
+			if oriTaskID, ok := respData["upstream_task_id"].(string); ok && oriTaskID != "" {
+				other["ori_task_id"] = oriTaskID
 			}
 		}
 		other["response_body"] = TruncateBody(responseBody)
