@@ -93,8 +93,7 @@ func ExportAllTasks(c *gin.Context) {
 
 	// 设置表头
 	headers := []string{
-		"任务ID", "上游任务ID", "用户名", "分组", "渠道ID", "平台",
-		"动作", "状态", "提交时间", "开始时间", "完成时间",
+		"任务ID", "上游任务ID", "用户名", "分组", "状态", "提交时间", "开始时间", "完成时间",
 		"预扣配额", "预扣金额(元)", "补扣/退款配额", "补扣/退款金额(元)", "最终配额", "最终金额(元)",
 		"分组倍率", "失败原因",
 	}
@@ -142,26 +141,23 @@ func ExportAllTasks(c *gin.Context) {
 			finishTime = time.Unix(task.FinishTime, 0).Format("2006-01-02 15:04:05")
 		}
 
-		// 填充行数据（按新的表头顺序，不含进度）
+		// 填充行数据（精简版：移除渠道ID、平台、动作）
 		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), task.TaskID)
 		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), upstreamTaskID)
 		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), task.Username)
 		f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), task.Group)
-		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), task.ChannelId)
-		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), task.Platform)
-		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), task.Action)
-		f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), task.Status)
-		f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), submitTime)
-		f.SetCellValue(sheetName, fmt.Sprintf("J%d", row), startTime)
-		f.SetCellValue(sheetName, fmt.Sprintf("K%d", row), finishTime)
-		f.SetCellValue(sheetName, fmt.Sprintf("L%d", row), consumeQuota)
-		f.SetCellValue(sheetName, fmt.Sprintf("M%d", row), fmt.Sprintf("%.4f", consumeAmount))
-		f.SetCellValue(sheetName, fmt.Sprintf("N%d", row), refundQuota)
-		f.SetCellValue(sheetName, fmt.Sprintf("O%d", row), fmt.Sprintf("%.4f", refundAmount))
-		f.SetCellValue(sheetName, fmt.Sprintf("P%d", row), finalQuota)
-		f.SetCellValue(sheetName, fmt.Sprintf("Q%d", row), fmt.Sprintf("%.4f", finalAmount))
-		f.SetCellValue(sheetName, fmt.Sprintf("R%d", row), groupRatio)
-		f.SetCellValue(sheetName, fmt.Sprintf("S%d", row), task.FailReason)
+		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), task.Status)
+		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), submitTime)
+		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), startTime)
+		f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), finishTime)
+		f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), consumeQuota)
+		f.SetCellValue(sheetName, fmt.Sprintf("J%d", row), fmt.Sprintf("%.4f", consumeAmount))
+		f.SetCellValue(sheetName, fmt.Sprintf("K%d", row), refundQuota)
+		f.SetCellValue(sheetName, fmt.Sprintf("L%d", row), fmt.Sprintf("%.4f", refundAmount))
+		f.SetCellValue(sheetName, fmt.Sprintf("M%d", row), finalQuota)
+		f.SetCellValue(sheetName, fmt.Sprintf("N%d", row), fmt.Sprintf("%.4f", finalAmount))
+		f.SetCellValue(sheetName, fmt.Sprintf("O%d", row), groupRatio)
+		f.SetCellValue(sheetName, fmt.Sprintf("P%d", row), task.FailReason)
 	}
 
 	// 设置响应头
