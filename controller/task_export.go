@@ -29,6 +29,7 @@ func ExportAllTasks(c *gin.Context) {
 		Username       string `json:"username"`
 		Group          string `json:"group"`
 		Channel        int    `json:"channel"`
+		ChannelType    int    `json:"channel_type"`
 		Type           int    `json:"type"`
 		Quota          int    `json:"quota"`
 		Other          string `json:"other"`
@@ -113,6 +114,8 @@ func ExportAllTasks(c *gin.Context) {
 		UpstreamTaskID string
 		Username       string
 		Group          string
+		ChannelID      int
+		ChannelType    int
 		Status         string
 		SubmitTime     string
 		ConsumeQuota   int
@@ -134,6 +137,8 @@ func ExportAllTasks(c *gin.Context) {
 				UpstreamTaskID: log.UpstreamTaskID,
 				Username:       log.Username,
 				Group:          log.Group,
+				ChannelID:      log.Channel,
+				ChannelType:    log.ChannelType,
 				SubmitTime:     time.Unix(log.CreatedAt, 0).Format("2006-01-02 15:04:05"),
 				Status:         "SUCCESS",
 			}
@@ -175,7 +180,7 @@ func ExportAllTasks(c *gin.Context) {
 
 	// 设置表头
 	headers := []string{
-		"任务ID", "上游任务ID", "用户名", "分组", "状态", "提交时间",
+		"任务ID", "上游任务ID", "用户名", "分组", "渠道ID", "渠道类型", "状态", "提交时间",
 		"预扣配额", "预扣金额(元)", "补扣/退款配额", "补扣/退款金额(元)", "最终配额", "最终金额(元)",
 		"分组倍率",
 	}
@@ -194,19 +199,27 @@ func ExportAllTasks(c *gin.Context) {
 		finalQuota := task.ConsumeQuota + task.RefundQuota
 		finalAmount := float64(finalQuota) / 500000
 
+		// 渠道类型文本
+		channelTypeText := "通用渠道"
+		if task.ChannelType == 2 {
+			channelTypeText = "视频渠道"
+		}
+
 		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), task.TaskID)
 		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), task.UpstreamTaskID)
 		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), task.Username)
 		f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), task.Group)
-		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), task.Status)
-		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), task.SubmitTime)
-		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), task.ConsumeQuota)
-		f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), fmt.Sprintf("%.4f", consumeAmount))
-		f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), task.RefundQuota)
-		f.SetCellValue(sheetName, fmt.Sprintf("J%d", row), fmt.Sprintf("%.4f", refundAmount))
-		f.SetCellValue(sheetName, fmt.Sprintf("K%d", row), finalQuota)
-		f.SetCellValue(sheetName, fmt.Sprintf("L%d", row), fmt.Sprintf("%.4f", finalAmount))
-		f.SetCellValue(sheetName, fmt.Sprintf("M%d", row), task.GroupRatio)
+		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), task.ChannelID)
+		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), channelTypeText)
+		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), task.Status)
+		f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), task.SubmitTime)
+		f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), task.ConsumeQuota)
+		f.SetCellValue(sheetName, fmt.Sprintf("J%d", row), fmt.Sprintf("%.4f", consumeAmount))
+		f.SetCellValue(sheetName, fmt.Sprintf("K%d", row), task.RefundQuota)
+		f.SetCellValue(sheetName, fmt.Sprintf("L%d", row), fmt.Sprintf("%.4f", refundAmount))
+		f.SetCellValue(sheetName, fmt.Sprintf("M%d", row), finalQuota)
+		f.SetCellValue(sheetName, fmt.Sprintf("N%d", row), fmt.Sprintf("%.4f", finalAmount))
+		f.SetCellValue(sheetName, fmt.Sprintf("O%d", row), task.GroupRatio)
 		row++
 	}
 
