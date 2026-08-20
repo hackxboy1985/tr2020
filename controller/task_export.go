@@ -112,6 +112,13 @@ func ExportAllTasks(c *gin.Context) {
 						otherTaskLogMap[tid] = make(map[int]int)
 					}
 					otherTaskLogMap[tid][log.Type] += log.Quota
+
+					// 如果是退款/补扣记录，且找不到消费记录，从 other 提取 pre_consumed_quota
+					if log.Type == model.LogTypeRefund && otherTaskLogMap[tid][model.LogTypeConsume] == 0 {
+						if preQuota, ok := otherData["pre_consumed_quota"].(float64); ok && preQuota > 0 {
+							otherTaskLogMap[tid][model.LogTypeConsume] = int(preQuota)
+						}
+					}
 				}
 			}
 		}
@@ -176,6 +183,11 @@ func ExportAllTasks(c *gin.Context) {
 		if logs, ok := taskLogMap[task.TaskID]; ok {
 			consumeQuota = logs[model.LogTypeConsume]
 			refundQuota = logs[model.LogTypeRefund]
+		}
+
+		// 如果 logs 表找不到消费记录，使用 tasks 表的 quota 字段
+		if consumeQuota == 0 && task.Quota > 0 {
+			consumeQuota = task.Quota
 		}
 
 		// 计算金额（配额/500000）
