@@ -29,10 +29,19 @@ func ExportAllTasks(c *gin.Context) {
 		UpstreamTaskID: c.Query("upstream_task_id"),
 	}
 
-	// 查询所有任务（不分页）
-	tasks := model.TaskGetAllTasks(0, 999999, queryParams)
+	// 查询所有任务（不分页，排除失败任务）
+	queryParams.Status = "" // 清空用户传来的status，使用自定义过滤
+	allTasks := model.TaskGetAllTasks(0, 999999, queryParams)
 
-	common.SysLog(fmt.Sprintf("ExportAllTasks: found %d tasks", len(tasks)))
+	// 过滤掉失败的任务
+	tasks := make([]*model.Task, 0, len(allTasks))
+	for _, task := range allTasks {
+		if task.Status != model.TaskStatusFailure {
+			tasks = append(tasks, task)
+		}
+	}
+
+	common.SysLog(fmt.Sprintf("ExportAllTasks: found %d tasks (excluded failures)", len(tasks)))
 
 	// 收集所有任务ID，批量查询logs
 	taskIDMap := make(map[string]*model.Task)
