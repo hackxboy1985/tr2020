@@ -38,7 +38,8 @@ func ExportAllTasks(c *gin.Context) {
 	// 构建基础查询条件
 	baseQuery := func() *gorm.DB {
 		query := model.LOG_DB.Table("logs").
-			Where("type IN (?, ?)", model.LogTypeConsume, model.LogTypeRefund)
+			Where("type IN (?, ?)", model.LogTypeConsume, model.LogTypeRefund).
+			Where("channel_type = ?", model.ChannelTypeVideo)
 
 		if startTimestamp > 0 {
 			query = query.Where("created_at >= ?", startTimestamp)
@@ -47,7 +48,8 @@ func ExportAllTasks(c *gin.Context) {
 			query = query.Where("created_at <= ?", endTimestamp)
 		}
 		if channelID != "" {
-			query = query.Where("channel = ?", channelID)
+			channelIDInt, _ := strconv.Atoi(channelID)
+			query = query.Where("channel_id = ?", channelIDInt)
 		}
 		return query
 	}
