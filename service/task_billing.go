@@ -55,6 +55,13 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 	}
 	if responseBody := c.GetString(string(constant.ContextKeyVideoResponseBody)); responseBody != "" {
 		other["response_body"] = TruncateBody(responseBody)
+		// 从 responseBody 中提取 "id" 字段作为 upstream_task_id
+		var respData map[string]interface{}
+		if err := common.Unmarshal([]byte(responseBody), &respData); err == nil {
+			if taskID, ok := respData["id"].(string); ok && taskID != "" {
+				other["upstream_task_id"] = taskID
+			}
+		}
 	}
 	model.RecordConsumeLog(c, info.UserId, model.RecordConsumeLogParams{
 		ChannelId: info.ChannelId,
