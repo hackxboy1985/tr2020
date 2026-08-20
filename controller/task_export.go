@@ -116,15 +116,13 @@ func ExportAllTasks(c *gin.Context) {
 			}
 		}
 
-		// 补充到 taskLogMap
+		// 补充到 taskLogMap（累加而不是替换）
 		for taskID, logs := range otherTaskLogMap {
 			if taskLogMap[taskID] == nil {
 				taskLogMap[taskID] = make(map[int]int)
 			}
 			for typ, quota := range logs {
-				if taskLogMap[taskID][typ] == 0 {
-					taskLogMap[taskID][typ] = quota
-				}
+				taskLogMap[taskID][typ] += quota  // 累加
 			}
 		}
 
