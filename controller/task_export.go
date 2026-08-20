@@ -38,8 +38,7 @@ func ExportAllTasks(c *gin.Context) {
 	// 构建基础查询条件
 	baseQuery := func() *gorm.DB {
 		query := model.LOG_DB.Table("logs").
-			Where("type IN (?, ?)", model.LogTypeConsume, model.LogTypeRefund).
-			Where("channel_type = ?", model.ChannelTypeVideo)
+			Where("type IN (?, ?)", model.LogTypeConsume, model.LogTypeRefund)
 
 		if startTimestamp > 0 {
 			query = query.Where("created_at >= ?", startTimestamp)
@@ -54,13 +53,13 @@ func ExportAllTasks(c *gin.Context) {
 		return query
 	}
 
-	// 调试：测试不带 channel_type 的查询
+	// 调试：测试总记录数
 	var testCount int64
 	model.LOG_DB.Table("logs").
 		Where("type IN (?, ?)", model.LogTypeConsume, model.LogTypeRefund).
 		Where("created_at >= ? AND created_at <= ?", startTimestamp, endTimestamp).
 		Count(&testCount)
-	common.SysLog(fmt.Sprintf("ExportAllTasks: total logs without channel_type filter: %d", testCount))
+	common.SysLog(fmt.Sprintf("ExportAllTasks: total logs in time range: %d", testCount))
 
 	var allRecords []LogRecord
 
