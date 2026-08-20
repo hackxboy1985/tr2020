@@ -130,6 +130,19 @@ func ExportAllTasks(c *gin.Context) {
 			continue
 		}
 
+		// 尝试从 other 提取更多信息（包括 upstream_task_id）
+		if log.Other != "" {
+			var otherData map[string]interface{}
+			if err := json.Unmarshal([]byte(log.Other), &otherData); err == nil {
+				// 如果 UpstreamTaskID 字段为空，从 other 中提取
+				if log.UpstreamTaskID == "" {
+					if utid, ok := otherData["upstream_task_id"].(string); ok {
+						log.UpstreamTaskID = utid
+					}
+				}
+			}
+		}
+
 		// 初始化任务汇总
 		if taskMap[log.TaskID] == nil {
 			taskMap[log.TaskID] = &TaskSummary{
@@ -143,7 +156,7 @@ func ExportAllTasks(c *gin.Context) {
 				Status:         "SUCCESS",
 			}
 
-			// 尝试从 other 提取 group_ratio
+			// 提取 group_ratio
 			if log.Other != "" {
 				var otherData map[string]interface{}
 				if err := json.Unmarshal([]byte(log.Other), &otherData); err == nil {
