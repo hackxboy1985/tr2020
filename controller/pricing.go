@@ -4,7 +4,6 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
@@ -58,27 +57,9 @@ func GetPricing(c *gin.Context) {
 
 	usableGroup = service.GetUserUsableGroups(group)
 	pricing = filterPricingByUsableGroups(pricing, usableGroup)
-
-	// 模型广场只显示：用户可用的分组 且 在这些分组中有模型
-	// 不显示模型EnableGroup中包含但用户不可用的分组
-	visibleGroups := make(map[string]string)
-	for g, desc := range usableGroup {
-		// 检查是否有模型在这个分组中
-		hasModel := false
-		for _, item := range pricing {
-			if common.StringsContains(item.EnableGroup, "all") || common.StringsContains(item.EnableGroup, g) {
-				hasModel = true
-				break
-			}
-		}
-		if hasModel {
-			visibleGroups[g] = desc
-		}
-	}
-
-	// check groupRatio contains visibleGroups
+	// check groupRatio contains usableGroup
 	for group := range ratio_setting.GetGroupRatioCopy() {
-		if _, ok := visibleGroups[group]; !ok {
+		if _, ok := usableGroup[group]; !ok {
 			delete(groupRatio, group)
 		}
 	}
@@ -88,7 +69,7 @@ func GetPricing(c *gin.Context) {
 		"data":               pricing,
 		"vendors":            model.GetVendors(),
 		"group_ratio":        groupRatio,
-		"usable_group":       visibleGroups,
+		"usable_group":       usableGroup,
 		"supported_endpoint": model.GetSupportedEndpointMap(),
 		"auto_groups":        service.GetUserAutoGroup(group),
 		"pricing_version":    "a42d372ccf0b5dd13ecf71203521f9d2",
