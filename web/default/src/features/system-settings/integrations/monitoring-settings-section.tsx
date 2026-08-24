@@ -66,6 +66,7 @@ const monitoringSchema = z
     AutomaticDisableStatusCodes: z.string(),
     AutomaticRetryStatusCodes: z.string(),
     NotifyOnChannelStatusChange: z.boolean(),
+    ZeroTpsThreshold: z.coerce.number().int().min(1).max(10),
     monitor_setting: z.object({
       auto_test_channel_enabled: z.boolean(),
       auto_test_channel_minutes: z.coerce
@@ -115,6 +116,7 @@ type MonitoringSettingsSectionProps = {
     AutomaticDisableStatusCodes: string
     AutomaticRetryStatusCodes: string
     NotifyOnChannelStatusChange: boolean
+    ZeroTpsThreshold: number
     'monitor_setting.auto_test_channel_enabled': boolean
     'monitor_setting.auto_test_channel_minutes': number
   }
@@ -133,6 +135,7 @@ type NormalizedMonitoringValues = {
   AutomaticDisableStatusCodes: string
   AutomaticRetryStatusCodes: string
   NotifyOnChannelStatusChange: boolean
+  ZeroTpsThreshold: number
   'monitor_setting.auto_test_channel_enabled': boolean
   'monitor_setting.auto_test_channel_minutes': number
 }
@@ -150,6 +153,7 @@ const buildFormDefaults = (
   AutomaticDisableStatusCodes: defaults.AutomaticDisableStatusCodes ?? '',
   AutomaticRetryStatusCodes: defaults.AutomaticRetryStatusCodes ?? '',
   NotifyOnChannelStatusChange: defaults.NotifyOnChannelStatusChange ?? true,
+  ZeroTpsThreshold: defaults.ZeroTpsThreshold ?? 5,
   monitor_setting: {
     auto_test_channel_enabled:
       defaults['monitor_setting.auto_test_channel_enabled'],
@@ -175,6 +179,7 @@ const normalizeDefaults = (
     defaults.AutomaticRetryStatusCodes ?? ''
   ).normalized,
   NotifyOnChannelStatusChange: defaults.NotifyOnChannelStatusChange ?? true,
+  ZeroTpsThreshold: defaults.ZeroTpsThreshold ?? 5,
   'monitor_setting.auto_test_channel_enabled':
     defaults['monitor_setting.auto_test_channel_enabled'],
   'monitor_setting.auto_test_channel_minutes':
@@ -198,6 +203,7 @@ const normalizeFormValues = (
     values.AutomaticRetryStatusCodes
   ).normalized,
   NotifyOnChannelStatusChange: values.NotifyOnChannelStatusChange,
+  ZeroTpsThreshold: values.ZeroTpsThreshold,
   'monitor_setting.auto_test_channel_enabled':
     values.monitor_setting.auto_test_channel_enabled,
   'monitor_setting.auto_test_channel_minutes':
@@ -534,6 +540,37 @@ export function MonitoringSettingsSection({
       <Separator className='my-6' />
 
       <div className='space-y-6'>
+        {/* 0 t/s 阈值配置 */}
+        <Form {...form}>
+          <SettingsForm onSubmit={form.handleSubmit(onSubmit)}>
+            <FormField
+              control={form.control}
+              name='ZeroTpsThreshold'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    {t('10条 t/s 有几个为 0 则禁用')}
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      type='number'
+                      min={1}
+                      max={10}
+                      {...field}
+                      onChange={(e) => field.onChange(Number(e.target.value))}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t('检查渠道最近10条流式请求的 tokens/s，如果有指定次数为 0，则自动禁用该渠道。默认值：5')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <SettingsPageFormActions />
+          </SettingsForm>
+        </Form>
+
         {/* 邮件通知开关 */}
         <Form {...form}>
           <SettingsForm onSubmit={form.handleSubmit(onSubmit)}>

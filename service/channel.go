@@ -52,7 +52,7 @@ func EnableChannel(channelId int, usingKey string, channelName string) {
 	}
 }
 
-func ShouldDisableChannel(err *types.NewAPIError) bool {
+func ShouldDisableChannel(err *types.NewAPIError, channelId int) bool {
 	if !common.AutomaticDisableChannelEnabled {
 		return false
 	}

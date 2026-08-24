@@ -338,6 +338,20 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	if err == nil && log.Id > 0 {
 		savePrompt(c, log.Id, userId)
 	}
+
+	// 新增：记录 t/s 到 Redis（仅流式请求）
+	if params.IsStream && params.CompletionTokens > 0 && params.UseTimeSeconds > 0 {
+		tps := float64(params.CompletionTokens) / float64(params.UseTimeSeconds)
+		channelId := params.ChannelId
+		channelName := c.GetString("channel_name") // 从 context 获取渠道名称
+		usingKey := c.GetString("using_key")       // 从 context 获取 using_key
+
+		gopool.Go(func() {
+			recordChannelTps(channelId, tps)
+			// 检查并执行 0 t/s 禁用逻辑
+			checkAndDisableByZeroTps(channelId, channelName, usingKey)
+		})
+	}
 }
 
 // savePrompt checks settings and enqueues prompt text for storage.
@@ -755,4 +769,77 @@ func DeleteOldLog(ctx context.Context, targetTimestamp int64, limit int) (int64,
 	}
 
 	return total, nil
+}
+
+// recordChannelTps 将渠道的 t/s 记录到 Redis，保持最近10条
+func recordChannelTps(channelId int, tps float64) {
+	if !common.RedisEnabled {
+		return // Redis 未启用
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	key := fmt.Sprintf("channel_tps:%d", channelId)
+
+	// 使用 Pipeline 优化性能
+	pipe := common.RDB.Pipeline()
+	pipe.LPush(ctx, key, fmt.Sprintf("%.2f", tps))
+	pipe.LTrim(ctx, key, 0, 9) // 只保留最新10条
+	pipe.Expire(ctx, key, 7*24*time.Hour) // 7天过期
+
+	if _, err := pipe.Exec(ctx); err != nil {
+		common.SysLog(fmt.Sprintf("写入渠道 #%d t/s 到 Redis 失败: %s", channelId, err.Error()))
+	}
+}
+
+// checkAndDisableByZeroTps 检查渠道 t/s 并在满足条件时直接禁用
+func checkAndDisableByZeroTps(channelId int, channelName string, usingKey string) {
+	if !common.AutomaticDisableChannelEnabled || !common.RedisEnabled {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	key := fmt.Sprintf("channel_tps:%d", channelId)
+	vals, err := common.RDB.LRange(ctx, key, 0, 9).Result()
+
+	if err != nil {
+		return // Redis 不可用时不处理
+	}
+
+	// 必须有10条数据才判断
+	if len(vals) < 10 {
+		return
+	}
+
+	// 统计值为 "0" 或 "0.00" 的次数
+	zeroCount := 0
+	for _, v := range vals {
+		if v == "0" || v == "0.00" {
+			zeroCount++
+		}
+	}
+
+	// 如果 0 的次数达到阈值，打印详细日志并禁用
+	if zeroCount >= common.ZeroTpsThreshold {
+		common.SysLog(fmt.Sprintf("【0 t/s 自动禁用】渠道「%s」（#%d）最近 10 次流式请求中有 %d 次为 0 t/s（阈值：%d）",
+			channelName, channelId, zeroCount, common.ZeroTpsThreshold))
+		common.SysLog(fmt.Sprintf("【0 t/s 自动禁用】渠道「%s」（#%d）详细数据：%v", channelName, channelId, vals))
+
+		// 构造禁用原因
+		reason := fmt.Sprintf("最近 10 次流式请求中有 %d 次为 0 tokens/s（阈值：%d），疑似渠道响应异常", zeroCount, common.ZeroTpsThreshold)
+
+		// 直接禁用渠道
+		success := UpdateChannelStatus(channelId, usingKey, common.ChannelStatusAutoDisabled, reason)
+		if success && common.NotifyOnChannelStatusChange {
+			// 发送邮件通知（邮件内容包含详细数据）
+			subject := fmt.Sprintf("通道「%s」（#%d）因 0 t/s 异常已被自动禁用", channelName, channelId)
+			common.SysLog(fmt.Sprintf("通道「%s」（#%d）因 0 t/s 已被禁用，邮件通知标题：%s", channelName, channelId, subject))
+			// TODO: 调用邮件通知（避免循环依赖，这里只打印日志）
+		} else if success {
+			common.SysLog(fmt.Sprintf("通道「%s」（#%d）因 0 t/s 已被禁用，但邮件通知已关闭", channelName, channelId))
+		}
+	}
 }

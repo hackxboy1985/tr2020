@@ -956,7 +956,7 @@ func testAllChannels(notify bool) error {
 			newAPIError := result.newAPIError
 			// request error disables the channel
 			if newAPIError != nil {
-				shouldBanChannel = service.ShouldDisableChannel(result.newAPIError)
+				shouldBanChannel = service.ShouldDisableChannel(result.newAPIError, channel.Id)
 			}
 
 			// 当错误检查通过，才检查响应时间

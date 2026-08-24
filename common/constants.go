@@ -152,6 +152,7 @@ var ChannelDisableThreshold = 5.0
 var AutomaticDisableChannelEnabled = false
 var AutomaticEnableChannelEnabled = false
 var NotifyOnChannelStatusChange = true // 渠道状态变更时是否发送邮件通知
+var ZeroTpsThreshold = 5                // 10条t/s记录中有几个为0则禁用渠道（默认5）
 var QuotaRemindThreshold = 1000
 var PreConsumedQuota = 500
 
