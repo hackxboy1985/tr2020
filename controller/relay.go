@@ -845,44 +845,18 @@ func RelayTaskDelete(c *gin.Context) {
 		return
 	}
 
-	// Update task status to cancelled
-	task.Status = model.TaskStatusCancelled
-	task.FailReason = "cancelled by user"
-	if err := task.Update(); err != nil {
-		c.JSON(http.StatusInternalServerError, &dto.TaskError{
-			Code:       "update_task_failed",
-			Message:    err.Error(),
-			StatusCode: http.StatusInternalServerError,
-		})
-		return
-	}
-
-	// Check if doubao official format
-	isDoubaoOfficialAPI := strings.Contains(c.Request.RequestURI, "/api/v3/contents/generations/tasks")
-
-	if isDoubaoOfficialAPI {
-		// Doubao official format: return task data with cancelled status
-		var taskData map[string]interface{}
-		_ = common.Unmarshal(task.Data, &taskData)
-		if taskData != nil {
-			taskData["status"] = "cancelled"
-			if taskData["error"] == nil {
-				taskData["error"] = map[string]string{
-					"code":    "task_cancelled",
-					"message": "cancelled by user",
-				}
-			}
-			// 删除 upstream_task_id 字段，保持与 doubao 官方格式一致
-			delete(taskData, "upstream_task_id")
-		}
-		c.JSON(http.StatusOK, taskData)
-	} else {
-		// Generic format
-		c.JSON(http.StatusOK, dto.TaskResponse[interface{}]{
-			Code: "success",
-			Data: relay.TaskModel2Dto(task),
-		})
-	}
+	// TODO: 当前未实现上游取消接口调用
+	// 正确的逻辑应该是：
+	// 1. 先调用上游（doubao）的取消任务接口
+	// 2. 如果上游取消成功，再更新本地状态为 CANCELLED
+	// 3. 如果上游取消失败，返回错误信息
+	//
+	// 暂时返回不支持取消任务
+	c.JSON(http.StatusNotImplemented, &dto.TaskError{
+		Code:       "not_implemented",
+		Message:    "cancel task is not implemented yet, need to call upstream cancel API first",
+		StatusCode: http.StatusNotImplemented,
+	})
 }
 
 // respondTaskError 统一输出 Task 错误响应（含 429 限流提示改写）
