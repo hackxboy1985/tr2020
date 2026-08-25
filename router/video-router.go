@@ -47,6 +47,8 @@ func SetVideoRouter(router *gin.Engine) {
 	{
 		doubaoOfficialGroup.POST("/tasks", controller.RelayTask)
 		doubaoOfficialGroup.GET("/tasks/:task_id", controller.RelayTaskFetch)
+		doubaoOfficialGroup.GET("/tasks", controller.RelayTaskFetchList)
+		doubaoOfficialGroup.DELETE("/tasks/:task_id", controller.RelayTaskDelete)
 	}
 
 	// Jimeng official API routes

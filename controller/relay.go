@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -631,6 +632,149 @@ func RelayTask(c *gin.Context) {
 
 	if taskErr != nil {
 		respondTaskError(c, taskErr)
+	}
+}
+
+// RelayTaskFetchList handles GET /api/v3/contents/generations/tasks (query task list)
+func RelayTaskFetchList(c *gin.Context) {
+	userId := c.GetInt("id")
+
+	// Parse query parameters
+	page := c.DefaultQuery("page", "1")
+	pageSize := c.DefaultQuery("page_size", "20")
+	status := c.Query("status")
+
+	pageInt, _ := strconv.Atoi(page)
+	pageSizeInt, _ := strconv.Atoi(pageSize)
+	if pageInt < 1 {
+		pageInt = 1
+	}
+	if pageSizeInt < 1 || pageSizeInt > 100 {
+		pageSizeInt = 20
+	}
+
+	startIdx := (pageInt - 1) * pageSizeInt
+
+	queryParams := model.SyncTaskQueryParams{}
+	if status != "" {
+		queryParams.Status = status
+	}
+
+	// Check if doubao official format
+	isDoubaoOfficialAPI := strings.Contains(c.Request.RequestURI, "/api/v3/contents/generations/tasks")
+
+	tasks := model.TaskGetAllUserTask(userId, startIdx, pageSizeInt, queryParams)
+
+	if isDoubaoOfficialAPI {
+		// Doubao official format: return array of responseTask
+		var result []map[string]interface{}
+		for _, task := range tasks {
+			var taskData map[string]interface{}
+			_ = common.Unmarshal(task.Data, &taskData)
+			// 删除 upstream_task_id 字段，保持与 doubao 官方格式一致
+			delete(taskData, "upstream_task_id")
+			result = append(result, taskData)
+		}
+		c.JSON(http.StatusOK, map[string]interface{}{
+			"data": result,
+			"page": pageInt,
+			"page_size": pageSizeInt,
+		})
+	} else {
+		// Generic format
+		var taskDtos []*dto.TaskDto
+		for _, task := range tasks {
+			taskDtos = append(taskDtos, relay.TaskModel2Dto(task))
+		}
+		c.JSON(http.StatusOK, dto.TaskResponse[interface{}]{
+			Code: "success",
+			Data: taskDtos,
+		})
+	}
+}
+
+// RelayTaskDelete handles DELETE /api/v3/contents/generations/tasks/:task_id (cancel task)
+func RelayTaskDelete(c *gin.Context) {
+	taskId := c.Param("task_id")
+	userId := c.GetInt("id")
+
+	if taskId == "" {
+		c.JSON(http.StatusBadRequest, &dto.TaskError{
+			Code:       "invalid_request",
+			Message:    "task_id is required",
+			StatusCode: http.StatusBadRequest,
+		})
+		return
+	}
+
+	// Get task from database
+	task, exist, err := model.GetByTaskId(userId, taskId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, &dto.TaskError{
+			Code:       "get_task_failed",
+			Message:    err.Error(),
+			StatusCode: http.StatusInternalServerError,
+		})
+		return
+	}
+	if !exist {
+		c.JSON(http.StatusNotFound, &dto.TaskError{
+			Code:       "task_not_found",
+			Message:    "task not found",
+			StatusCode: http.StatusNotFound,
+		})
+		return
+	}
+
+	// Check if task can be cancelled (only queued/in_progress tasks)
+	if task.Status != model.TaskStatusQueued &&
+	   task.Status != model.TaskStatusSubmitted &&
+	   task.Status != model.TaskStatusInProgress {
+		c.JSON(http.StatusBadRequest, &dto.TaskError{
+			Code:       "task_not_cancellable",
+			Message:    fmt.Sprintf("task status is %s, cannot be cancelled", task.Status),
+			StatusCode: http.StatusBadRequest,
+		})
+		return
+	}
+
+	// Update task status to cancelled/failed
+	task.Status = model.TaskStatusFailure
+	task.FailReason = "cancelled by user"
+	if err := task.Update(); err != nil {
+		c.JSON(http.StatusInternalServerError, &dto.TaskError{
+			Code:       "update_task_failed",
+			Message:    err.Error(),
+			StatusCode: http.StatusInternalServerError,
+		})
+		return
+	}
+
+	// Check if doubao official format
+	isDoubaoOfficialAPI := strings.Contains(c.Request.RequestURI, "/api/v3/contents/generations/tasks")
+
+	if isDoubaoOfficialAPI {
+		// Doubao official format: return task data with cancelled status
+		var taskData map[string]interface{}
+		_ = common.Unmarshal(task.Data, &taskData)
+		if taskData != nil {
+			taskData["status"] = "failed"
+			if taskData["error"] == nil {
+				taskData["error"] = map[string]string{
+					"code":    "task_cancelled",
+					"message": "cancelled by user",
+				}
+			}
+			// 删除 upstream_task_id 字段，保持与 doubao 官方格式一致
+			delete(taskData, "upstream_task_id")
+		}
+		c.JSON(http.StatusOK, taskData)
+	} else {
+		// Generic format
+		c.JSON(http.StatusOK, dto.TaskResponse[interface{}]{
+			Code: "success",
+			Data: relay.TaskModel2Dto(task),
+		})
 	}
 }
 

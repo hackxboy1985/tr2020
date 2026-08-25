@@ -389,7 +389,15 @@ func videoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *d
 	// Doubao official API 格式: 返回 doubao responseTask 格式
 	if isDoubaoOfficialAPI {
 		// 直接返回存储的上游响应数据（doubao 官方格式）
-		respBody = originTask.Data
+		// 但需要删除 upstream_task_id 字段（官方格式中不存在）
+		var taskData map[string]interface{}
+		if err := common.Unmarshal(originTask.Data, &taskData); err == nil {
+			// 删除 upstream_task_id 字段，保持与 doubao 官方格式一致
+			delete(taskData, "upstream_task_id")
+			respBody, _ = common.Marshal(taskData)
+		} else {
+			respBody = originTask.Data
+		}
 		return
 	}
 
