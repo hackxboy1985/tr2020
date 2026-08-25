@@ -51,6 +51,14 @@ func SetVideoRouter(router *gin.Engine) {
 		doubaoOfficialGroup.DELETE("/tasks/:task_id", controller.RelayTaskDelete)
 	}
 
+	// Seedance Asset API routes (使用 Action 参数)
+	seedanceAssetGroup := router.Group("/api/seedance/assets/v2")
+	seedanceAssetGroup.Use(middleware.RouteTag("relay"))
+	seedanceAssetGroup.Use(middleware.TokenAuth(), middleware.Distribute())
+	{
+		seedanceAssetGroup.POST("/", controller.RelayAsset)
+	}
+
 	// Jimeng official API routes
 	jimengOfficialGroup := router.Group("jimeng")
 	jimengOfficialGroup.Use(middleware.RouteTag("relay"))
