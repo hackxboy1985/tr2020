@@ -635,6 +635,24 @@ func RelayTask(c *gin.Context) {
 	}
 }
 
+// convertDoubaoStatusToInternal converts doubao official status to internal status
+func convertDoubaoStatusToInternal(doubaoStatus string) string {
+	switch doubaoStatus {
+	case "queued":
+		return string(model.TaskStatusQueued)
+	case "running":
+		return string(model.TaskStatusInProgress)
+	case "succeeded":
+		return string(model.TaskStatusSuccess)
+	case "failed":
+		return string(model.TaskStatusFailure)
+	case "cancelled":
+		return string(model.TaskStatusFailure) // 取消的任务也标记为 FAILURE
+	default:
+		return doubaoStatus // 如果无法识别，原样返回
+	}
+}
+
 // RelayTaskFetchList handles GET /api/v3/contents/generations/tasks (query task list)
 func RelayTaskFetchList(c *gin.Context) {
 	userId := c.GetInt("id")
@@ -656,6 +674,11 @@ func RelayTaskFetchList(c *gin.Context) {
 	filterModel := c.Query("filter.model")
 	filterServiceTier := c.Query("filter.service_tier")
 	filterTaskIds := c.QueryArray("filter.task_ids")
+
+	// 状态值转换：doubao 官方格式 -> 系统内部格式
+	if filterStatus != "" {
+		filterStatus = convertDoubaoStatusToInternal(filterStatus)
+	}
 
 	pageInt, _ := strconv.Atoi(pageNum)
 	pageSizeInt, _ := strconv.Atoi(pageSize)
