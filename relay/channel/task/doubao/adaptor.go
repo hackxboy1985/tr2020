@@ -244,13 +244,20 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		return
 	}
 
-	ov := dto.NewOpenAIVideo()
-	ov.ID = info.PublicTaskID
-	ov.TaskID = info.PublicTaskID
-	ov.CreatedAt = time.Now().Unix()
-	ov.Model = info.OriginModelName
+	// Check if should return Doubao official format
+	if c.GetBool("doubao_official_format") {
+		// Return Doubao official format: just {"id": "task_id"}
+		c.JSON(http.StatusOK, responsePayload{ID: dResp.ID})
+	} else {
+		// Return OpenAI Video format (default)
+		ov := dto.NewOpenAIVideo()
+		ov.ID = info.PublicTaskID
+		ov.TaskID = info.PublicTaskID
+		ov.CreatedAt = time.Now().Unix()
+		ov.Model = info.OriginModelName
+		c.JSON(http.StatusOK, ov)
+	}
 
-	c.JSON(http.StatusOK, ov)
 	c.Set(string(constant.ContextKeyVideoResponseBody), string(responseBody))
 	return dResp.ID, responseBody, nil
 }

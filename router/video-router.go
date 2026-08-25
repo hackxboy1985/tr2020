@@ -40,6 +40,15 @@ func SetVideoRouter(router *gin.Engine) {
 		klingV1Router.GET("/videos/image2video/:task_id", controller.RelayTaskFetch)
 	}
 
+	// Doubao official API routes
+	doubaoOfficialGroup := router.Group("/api/v3/contents/generations")
+	doubaoOfficialGroup.Use(middleware.RouteTag("relay"))
+	doubaoOfficialGroup.Use(middleware.TokenAuth(), middleware.Distribute())
+	{
+		doubaoOfficialGroup.POST("/tasks", controller.RelayTask)
+		doubaoOfficialGroup.GET("/tasks/:task_id", controller.RelayTaskFetch)
+	}
+
 	// Jimeng official API routes
 	jimengOfficialGroup := router.Group("jimeng")
 	jimengOfficialGroup.Use(middleware.RouteTag("relay"))

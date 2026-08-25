@@ -378,10 +378,18 @@ func videoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *d
 	}
 
 	isOpenAIVideoAPI := strings.HasPrefix(c.Request.RequestURI, "/v1/videos/")
+	isDoubaoOfficialAPI := strings.Contains(c.Request.RequestURI, "/api/v3/contents/generations/tasks")
 
 	// Gemini/Vertex 支持实时查询：用户 fetch 时直接从上游拉取最新状态
 	if realtimeResp := tryRealtimeFetch(originTask, isOpenAIVideoAPI); len(realtimeResp) > 0 {
 		respBody = realtimeResp
+		return
+	}
+
+	// Doubao official API 格式: 返回 doubao responseTask 格式
+	if isDoubaoOfficialAPI {
+		// 直接返回存储的上游响应数据（doubao 官方格式）
+		respBody = originTask.Data
 		return
 	}
 
