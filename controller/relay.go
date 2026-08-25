@@ -639,46 +639,128 @@ func RelayTask(c *gin.Context) {
 func RelayTaskFetchList(c *gin.Context) {
 	userId := c.GetInt("id")
 
-	// Parse query parameters
-	page := c.DefaultQuery("page", "1")
+	// Parse query parameters - 支持 doubao 官方参数
+	pageNum := c.DefaultQuery("page_num", "1")
 	pageSize := c.DefaultQuery("page_size", "20")
-	status := c.Query("status")
 
-	pageInt, _ := strconv.Atoi(page)
+	// 兼容旧参数名
+	if pageNum == "1" && c.Query("page") != "" {
+		pageNum = c.Query("page")
+	}
+	if pageSize == "20" && c.Query("page_size") != "" {
+		pageSize = c.Query("page_size")
+	}
+
+	// 筛选参数
+	filterStatus := c.Query("filter.status")
+	filterModel := c.Query("filter.model")
+	filterServiceTier := c.Query("filter.service_tier")
+	filterTaskIds := c.QueryArray("filter.task_ids")
+
+	pageInt, _ := strconv.Atoi(pageNum)
 	pageSizeInt, _ := strconv.Atoi(pageSize)
 	if pageInt < 1 {
 		pageInt = 1
 	}
-	if pageSizeInt < 1 || pageSizeInt > 100 {
+	if pageSizeInt < 1 || pageSizeInt > 500 {
 		pageSizeInt = 20
 	}
 
 	startIdx := (pageInt - 1) * pageSizeInt
 
 	queryParams := model.SyncTaskQueryParams{}
-	if status != "" {
-		queryParams.Status = status
+	if filterStatus != "" {
+		queryParams.Status = filterStatus
 	}
 
 	// Check if doubao official format
 	isDoubaoOfficialAPI := strings.Contains(c.Request.RequestURI, "/api/v3/contents/generations/tasks")
 
+	// 如果指定了 task_ids，直接查询这些任务
+	if len(filterTaskIds) > 0 {
+		taskIds := make([]any, len(filterTaskIds))
+		for i, id := range filterTaskIds {
+			taskIds[i] = id
+		}
+		tasks, err := model.GetByTaskIds(userId, taskIds)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, &dto.TaskError{
+				Code:       "get_tasks_failed",
+				Message:    err.Error(),
+				StatusCode: http.StatusInternalServerError,
+			})
+			return
+		}
+
+		if isDoubaoOfficialAPI {
+			// Doubao official format
+			var items []map[string]interface{}
+			for _, task := range tasks {
+				var taskData map[string]interface{}
+				_ = common.Unmarshal(task.Data, &taskData)
+				// 删除内部字段
+				delete(taskData, "upstream_task_id")
+
+				// 筛选条件（如果指定）
+				if filterModel != "" {
+					if model, ok := taskData["model"].(string); !ok || model != filterModel {
+						continue
+					}
+				}
+				if filterServiceTier != "" {
+					if tier, ok := taskData["service_tier"].(string); !ok || tier != filterServiceTier {
+						continue
+					}
+				}
+				items = append(items, taskData)
+			}
+			c.JSON(http.StatusOK, map[string]interface{}{
+				"items": items,
+				"total": len(items),
+			})
+		} else {
+			// Generic format
+			var taskDtos []*dto.TaskDto
+			for _, task := range tasks {
+				taskDtos = append(taskDtos, relay.TaskModel2Dto(task))
+			}
+			c.JSON(http.StatusOK, dto.TaskResponse[interface{}]{
+				Code: "success",
+				Data: taskDtos,
+			})
+		}
+		return
+	}
+
+	// 正常分页查询
 	tasks := model.TaskGetAllUserTask(userId, startIdx, pageSizeInt, queryParams)
+	total := model.TaskCountAllUserTask(userId, queryParams)
 
 	if isDoubaoOfficialAPI {
-		// Doubao official format: return array of responseTask
-		var result []map[string]interface{}
+		// Doubao official format: return items array
+		var items []map[string]interface{}
 		for _, task := range tasks {
 			var taskData map[string]interface{}
 			_ = common.Unmarshal(task.Data, &taskData)
-			// 删除 upstream_task_id 字段，保持与 doubao 官方格式一致
+			// 删除内部字段
 			delete(taskData, "upstream_task_id")
-			result = append(result, taskData)
+
+			// 筛选条件（如果指定）
+			if filterModel != "" {
+				if model, ok := taskData["model"].(string); !ok || model != filterModel {
+					continue
+				}
+			}
+			if filterServiceTier != "" {
+				if tier, ok := taskData["service_tier"].(string); !ok || tier != filterServiceTier {
+					continue
+				}
+			}
+			items = append(items, taskData)
 		}
 		c.JSON(http.StatusOK, map[string]interface{}{
-			"data": result,
-			"page": pageInt,
-			"page_size": pageSizeInt,
+			"items": items,
+			"total": total,
 		})
 	} else {
 		// Generic format
