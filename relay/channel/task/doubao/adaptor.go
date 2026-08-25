@@ -70,32 +70,40 @@ type responseTask struct {
 	Model   string `json:"model"`
 	Status  string `json:"status"`
 	Content struct {
-		VideoURL string `json:"video_url"`
+		VideoURL      string `json:"video_url"`
+		LastFrameURL  string `json:"last_frame_url,omitempty"`
 	} `json:"content"`
 	// Metadata 兼容下游为 new-api 时返回的 OpenAIVideo 格式（metadata.url 存视频地址）
-	Metadata        map[string]interface{} `json:"metadata,omitempty"`
-	Seed            int                    `json:"seed"`
-	Resolution      string                 `json:"resolution"`
-	Duration        int                    `json:"duration"`
-	Ratio           string                 `json:"ratio"`
-	FramesPerSecond int                    `json:"framespersecond"`
-	ServiceTier     string                 `json:"service_tier"`
+	Metadata               map[string]interface{} `json:"metadata,omitempty"`
+	Seed                   int                    `json:"seed,omitempty"`
+	Resolution             string                 `json:"resolution,omitempty"`
+	Duration               int                    `json:"duration,omitempty"`
+	Frames                 int                    `json:"frames,omitempty"`
+	Ratio                  string                 `json:"ratio,omitempty"`
+	FramesPerSecond        int                    `json:"framespersecond,omitempty"`
+	ServiceTier            string                 `json:"service_tier,omitempty"`
+	GenerateAudio          bool                   `json:"generate_audio,omitempty"`
+	OutputFormat           string                 `json:"output_format,omitempty"`
+	Draft                  bool                   `json:"draft,omitempty"`
+	DraftTaskID            string                 `json:"draft_task_id,omitempty"`
+	SafetyIdentifier       string                 `json:"safety_identifier,omitempty"`
+	ExecutionExpiresAfter  int                    `json:"execution_expires_after,omitempty"`
 	// UpstreamTaskID 是豆包内部的源头任务 ID（如 cgt-... 格式）
 	UpstreamTaskID string `json:"upstream_task_id,omitempty"`
 	Tools          []struct {
 		Type string `json:"type"`
-	} `json:"tools"`
+	} `json:"tools,omitempty"`
 	Usage struct {
 		CompletionTokens int `json:"completion_tokens"`
 		TotalTokens      int `json:"total_tokens"`
 		ToolUsage        struct {
-			WebSearch int `json:"web_search"`
-		} `json:"tool_usage"`
+			WebSearch int `json:"web_search,omitempty"`
+		} `json:"tool_usage,omitempty"`
 	} `json:"usage"`
 	Error struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
-	} `json:"error"`
+	} `json:"error,omitempty"`
 	CreatedAt int64 `json:"created_at"`
 	UpdatedAt int64 `json:"updated_at"`
 }
