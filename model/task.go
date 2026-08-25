@@ -25,10 +25,48 @@ func (t TaskStatus) ToVideoStatus() string {
 		status = dto.VideoStatusCompleted
 	case TaskStatusFailure:
 		status = dto.VideoStatusFailed
+	case TaskStatusCancelled:
+		status = dto.VideoStatusFailed // Cancelled 映射为 failed
 	default:
 		status = dto.VideoStatusUnknown // Default fallback
 	}
 	return status
+}
+
+// ToDoubaoStatus converts internal status to doubao official status
+func (t TaskStatus) ToDoubaoStatus() string {
+	switch t {
+	case TaskStatusQueued, TaskStatusSubmitted, TaskStatusNotStart:
+		return "queued"
+	case TaskStatusInProgress:
+		return "running"
+	case TaskStatusSuccess:
+		return "succeeded"
+	case TaskStatusFailure:
+		return "failed"
+	case TaskStatusCancelled:
+		return "cancelled"
+	default:
+		return "unknown"
+	}
+}
+
+// DoubaoStatusToInternal converts doubao official status to internal status
+func DoubaoStatusToInternal(doubaoStatus string) TaskStatus {
+	switch doubaoStatus {
+	case "queued":
+		return TaskStatusQueued
+	case "running":
+		return TaskStatusInProgress
+	case "succeeded":
+		return TaskStatusSuccess
+	case "failed":
+		return TaskStatusFailure
+	case "cancelled":
+		return TaskStatusCancelled
+	default:
+		return TaskStatusUnknown
+	}
 }
 
 const (
@@ -38,6 +76,7 @@ const (
 	TaskStatusInProgress            = "IN_PROGRESS"
 	TaskStatusFailure               = "FAILURE"
 	TaskStatusSuccess               = "SUCCESS"
+	TaskStatusCancelled             = "CANCELLED"
 	TaskStatusUnknown               = "UNKNOWN"
 )
 

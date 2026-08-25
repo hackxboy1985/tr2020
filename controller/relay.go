@@ -637,20 +637,12 @@ func RelayTask(c *gin.Context) {
 
 // convertDoubaoStatusToInternal converts doubao official status to internal status
 func convertDoubaoStatusToInternal(doubaoStatus string) string {
-	switch doubaoStatus {
-	case "queued":
-		return string(model.TaskStatusQueued)
-	case "running":
-		return string(model.TaskStatusInProgress)
-	case "succeeded":
-		return string(model.TaskStatusSuccess)
-	case "failed":
-		return string(model.TaskStatusFailure)
-	case "cancelled":
-		return string(model.TaskStatusFailure) // 取消的任务也标记为 FAILURE
-	default:
-		return doubaoStatus // 如果无法识别，原样返回
-	}
+	return string(model.DoubaoStatusToInternal(doubaoStatus))
+}
+
+// convertInternalStatusToDoubao converts internal status to doubao official status
+func convertInternalStatusToDoubao(internalStatus string) string {
+	return model.TaskStatus(internalStatus).ToDoubaoStatus()
 }
 
 // RelayTaskFetchList handles GET /api/v3/contents/generations/tasks (query task list)
@@ -724,6 +716,11 @@ func RelayTaskFetchList(c *gin.Context) {
 				// 删除内部字段
 				delete(taskData, "upstream_task_id")
 
+				// 转换状态值：系统内部 -> doubao 官方
+				if status, ok := taskData["status"].(string); ok {
+					taskData["status"] = convertInternalStatusToDoubao(status)
+				}
+
 				// 筛选条件（如果指定）
 				if filterModel != "" {
 					if model, ok := taskData["model"].(string); !ok || model != filterModel {
@@ -767,6 +764,11 @@ func RelayTaskFetchList(c *gin.Context) {
 			_ = common.Unmarshal(task.Data, &taskData)
 			// 删除内部字段
 			delete(taskData, "upstream_task_id")
+
+			// 转换状态值：系统内部 -> doubao 官方
+			if status, ok := taskData["status"].(string); ok {
+				taskData["status"] = convertInternalStatusToDoubao(status)
+			}
 
 			// 筛选条件（如果指定）
 			if filterModel != "" {
@@ -843,8 +845,8 @@ func RelayTaskDelete(c *gin.Context) {
 		return
 	}
 
-	// Update task status to cancelled/failed
-	task.Status = model.TaskStatusFailure
+	// Update task status to cancelled
+	task.Status = model.TaskStatusCancelled
 	task.FailReason = "cancelled by user"
 	if err := task.Update(); err != nil {
 		c.JSON(http.StatusInternalServerError, &dto.TaskError{
@@ -863,7 +865,7 @@ func RelayTaskDelete(c *gin.Context) {
 		var taskData map[string]interface{}
 		_ = common.Unmarshal(task.Data, &taskData)
 		if taskData != nil {
-			taskData["status"] = "failed"
+			taskData["status"] = "cancelled"
 			if taskData["error"] == nil {
 				taskData["error"] = map[string]string{
 					"code":    "task_cancelled",
