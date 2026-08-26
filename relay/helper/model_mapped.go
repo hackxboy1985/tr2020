@@ -28,41 +28,27 @@ func ModelMappedHelper(c *gin.Context, info *common.RelayInfo, request dto.Reque
 	// map model name
 	modelMapping := c.GetString("model_mapping")
 	if modelMapping != "" && modelMapping != "{}" {
-		modelMap := make(map[string]string)
-		err := json.Unmarshal([]byte(modelMapping), &modelMap)
-		if err != nil {
-			return fmt.Errorf("unmarshal_model_mapping_failed")
-		}
-
-		// 支持链式模型重定向，最终使用链尾的模型
-		currentModel := mappingModelName
-		visitedModels := map[string]bool{
-			currentModel: true,
-		}
-		for {
-			if mappedModel, exists := modelMap[currentModel]; exists && mappedModel != "" {
-				// 模型重定向循环检测，避免无限循环
-				if visitedModels[mappedModel] {
-					if mappedModel == currentModel {
-						if currentModel == info.OriginModelName {
-							info.IsModelMapped = false
-							return nil
-						} else {
-							info.IsModelMapped = true
-							break
-						}
-					}
-					return errors.New("model_mapping_contains_cycle")
-				}
-				visitedModels[mappedModel] = true
-				currentModel = mappedModel
-				info.IsModelMapped = true
-			} else {
-				break
+		// 检测版本
+		if isV2Mapping(modelMapping) {
+			// 使用V2规则引擎
+			generalRequest, ok := request.(*dto.GeneralOpenAIRequest)
+			if !ok {
+				// 非GeneralOpenAIRequest类型，降级到V1
+				return applyModelMappingV1(modelMapping, mappingModelName, info)
 			}
-		}
-		if info.IsModelMapped {
-			info.UpstreamModelName = currentModel
+
+			mappedModel, isModelMapped, err := applyModelMappingV2(modelMapping, generalRequest, mappingModelName)
+			if err != nil {
+				return err
+			}
+
+			if isModelMapped {
+				info.IsModelMapped = true
+				info.UpstreamModelName = mappedModel
+			}
+		} else {
+			// 使用V1简单映射
+			return applyModelMappingV1(modelMapping, mappingModelName, info)
 		}
 	}
 
@@ -77,5 +63,47 @@ func ModelMappedHelper(c *gin.Context, info *common.RelayInfo, request dto.Reque
 	if request != nil {
 		request.SetModelName(info.UpstreamModelName)
 	}
+	return nil
+}
+
+// applyModelMappingV1 V1简单映射逻辑（原有逻辑）
+func applyModelMappingV1(modelMapping string, mappingModelName string, info *common.RelayInfo) error {
+	modelMap := make(map[string]string)
+	err := json.Unmarshal([]byte(modelMapping), &modelMap)
+	if err != nil {
+		return fmt.Errorf("unmarshal_model_mapping_failed")
+	}
+
+	// 支持链式模型重定向，最终使用链尾的模型
+	currentModel := mappingModelName
+	visitedModels := map[string]bool{
+		currentModel: true,
+	}
+	for {
+		if mappedModel, exists := modelMap[currentModel]; exists && mappedModel != "" {
+			// 模型重定向循环检测，避免无限循环
+			if visitedModels[mappedModel] {
+				if mappedModel == currentModel {
+					if currentModel == info.OriginModelName {
+						info.IsModelMapped = false
+						return nil
+					} else {
+						info.IsModelMapped = true
+						break
+					}
+				}
+				return errors.New("model_mapping_contains_cycle")
+			}
+			visitedModels[mappedModel] = true
+			currentModel = mappedModel
+			info.IsModelMapped = true
+		} else {
+			break
+		}
+	}
+	if info.IsModelMapped {
+		info.UpstreamModelName = currentModel
+	}
+
 	return nil
 }

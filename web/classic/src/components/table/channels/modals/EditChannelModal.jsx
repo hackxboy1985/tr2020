@@ -63,6 +63,7 @@ import OllamaModelModal from './OllamaModelModal';
 import CodexOAuthModal from './CodexOAuthModal';
 import ParamOverrideEditorModal from './ParamOverrideEditorModal';
 import JSONEditor from '../../../common/ui/JSONEditor';
+import ModelMappingV2Editor from '../../../common/ui/ModelMappingV2Editor';
 import SecureVerificationModal from '../../../common/modals/SecureVerificationModal';
 import StatusCodeRiskGuardModal from './StatusCodeRiskGuardModal';
 import ChannelKeyDisplay from '../../../common/ui/ChannelKeyDisplay';
@@ -3595,49 +3596,17 @@ const EditChannelModal = (props) => {
                   />
 
                   {/* Model Mapping - Core Config */}
-                  <JSONEditor
-                    key={`model_mapping-${isEdit ? channelId : 'new'}`}
+                  <Form.Field
                     field='model_mapping'
                     label={t('模型重定向')}
-                    placeholder={
-                      t(
-                        '此项可选，用于修改请求体中的模型名称，为一个 JSON 字符串，键为请求中模型名称，值为要替换的模型名称，例如：',
-                      ) +
-                      `\n${JSON.stringify(MODEL_MAPPING_EXAMPLE, null, 2)}`
-                    }
-                    value={inputs.model_mapping || ''}
-                    onChange={(value) =>
-                      handleInputChange('model_mapping', value)
-                    }
-                    template={MODEL_MAPPING_EXAMPLE}
-                    templateLabel={t('填入模板')}
-                    editorType='keyValue'
-                    formApi={formApiRef.current}
-                    renderStringValueSuffix={({ pairKey, value }) => {
-                      if (!MODEL_FETCHABLE_CHANNEL_TYPES.has(inputs.type)) {
-                        return null;
-                      }
-                      const disabled = !String(pairKey ?? '').trim();
-                      return (
-                        <Tooltip content={t('选择模型')}>
-                          <Button
-                            type='tertiary'
-                            theme='borderless'
-                            size='small'
-                            icon={<IconSearch size={14} />}
-                            disabled={disabled}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openModelMappingValueModal({ pairKey, value });
-                            }}
-                          />
-                        </Tooltip>
-                      );
-                    }}
-                    extraText={t(
-                      '键为请求中的模型名称，值为要替换的模型名称',
+                  >
+                    {({ value, onChange }) => (
+                      <ModelMappingV2Editor
+                        value={value || ''}
+                        onChange={onChange}
+                      />
                     )}
-                  />
+                  </Form.Field>
 
                   {/* Auto Ban - Core Config */}
                   <Form.Switch
