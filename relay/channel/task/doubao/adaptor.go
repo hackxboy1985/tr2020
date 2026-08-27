@@ -423,15 +423,53 @@ func (a *TaskAdaptor) ConvertToOpenAIVideo(originTask *model.Task) ([]byte, erro
 	openAIVideo.TaskID = originTask.TaskID
 	openAIVideo.Status = originTask.Status.ToVideoStatus()
 	openAIVideo.SetProgressStr(originTask.Progress)
+	openAIVideo.CreatedAt = originTask.CreatedAt
+	openAIVideo.CompletedAt = originTask.UpdatedAt
+	openAIVideo.Model = originTask.Properties.OriginModelName
+
+	// Set metadata with all doubao-specific fields
 	openAIVideo.SetMetadata("url", dResp.Content.VideoURL)
 	if dResp.Content.VideoURL == "" {
 		if u, ok := dResp.Metadata["url"].(string); ok {
 			openAIVideo.SetMetadata("url", u)
 		}
 	}
-	openAIVideo.CreatedAt = originTask.CreatedAt
-	openAIVideo.CompletedAt = originTask.UpdatedAt
-	openAIVideo.Model = originTask.Properties.OriginModelName
+
+	if dResp.Content.LastFrameURL != "" {
+		openAIVideo.SetMetadata("last_frame_url", dResp.Content.LastFrameURL)
+	}
+	if dResp.UpdatedAt > 0 {
+		openAIVideo.SetMetadata("updated_at", dResp.UpdatedAt)
+	}
+	if dResp.Duration > 0 {
+		openAIVideo.SetMetadata("duration", dResp.Duration)
+	}
+	if dResp.Ratio != "" {
+		openAIVideo.SetMetadata("ratio", dResp.Ratio)
+	}
+	if dResp.Resolution != "" {
+		openAIVideo.SetMetadata("resolution", dResp.Resolution)
+	}
+	if dResp.FramesPerSecond > 0 {
+		openAIVideo.SetMetadata("framespersecond", dResp.FramesPerSecond)
+	}
+	if dResp.Seed > 0 {
+		openAIVideo.SetMetadata("seed", dResp.Seed)
+	}
+	if dResp.OutputFormat != "" {
+		openAIVideo.SetMetadata("output_format", dResp.OutputFormat)
+	}
+	if dResp.ServiceTier != "" {
+		openAIVideo.SetMetadata("service_tier", dResp.ServiceTier)
+	}
+	openAIVideo.SetMetadata("generate_audio", dResp.GenerateAudio)
+	openAIVideo.SetMetadata("draft", dResp.Draft)
+	if dResp.DraftTaskID != "" {
+		openAIVideo.SetMetadata("draft_task_id", dResp.DraftTaskID)
+	}
+	if dResp.ExecutionExpiresAfter > 0 {
+		openAIVideo.SetMetadata("execution_expires_after", dResp.ExecutionExpiresAfter)
+	}
 
 	if dResp.Status == "failed" {
 		openAIVideo.Error = &dto.OpenAIVideoError{
