@@ -5,7 +5,7 @@
 ## 接口地址
 
 ```text
-Base URL: https://your-domain.com
+Base URL: http://open.mints-id.com
 ```
 
 | 操作 | 方法和路径 | 状态 |
@@ -296,11 +296,6 @@ curl -X DELETE \
 ---
 
 ## 支持的模型
-
-- `doubao-seedance-1-0-pro-250528`
-- `doubao-seedance-1-0-lite-t2v`
-- `doubao-seedance-1-0-lite-i2v`
-- `doubao-seedance-1-5-pro-251215`
 - `doubao-seedance-2-0-260128`
 - `doubao-seedance-2-0-fast-260128`
 
@@ -451,7 +446,6 @@ const getTask = async (taskId) => {
 
 ## 相关文档
 
-- [ARK Video API 文档](./ARK-VIDEO-API.zh-CN.md) - 火山方舟原生兼容接口（旧版）
 - [豆包官方文档](https://docs.volcengine.com/docs/82379/1521675) - 豆包视频生成 API 官方文档
 
 ---
@@ -463,7 +457,7 @@ const getTask = async (taskId) => {
 ### 接口地址
 
 ```text
-Base URL: https://your-domain.com/api/seedance/assets/v2
+Base URL: http://open.mints-id.com/api/seedance/assets/v2
 ```
 
 ### 统一请求方式
@@ -590,11 +584,167 @@ curl -X POST \
 }
 ```
 
-#### 4. 删除素材
+#### 4. 查询素材组列表
 
 ```bash
 curl -X POST \
-  'https://your-domain.com/api/seedance/assets/v2/?Action=DeleteAsset&Version=2024-01-01' \
+  'http://open.mints-id.com/api/seedance/assets/v2/?Action=ListAssetGroups&Version=2024-01-01' \
+  -H 'Authorization: Bearer sk-<NewAPI Token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "PageNumber": 1,
+    "PageSize": 20
+  }'
+```
+
+**响应示例：**
+
+```json
+{
+  "Groups": [
+    {
+      "GroupId": "group_xxxxxxxx",
+      "Name": "我的素材组",
+      "Description": "用于存放项目素材",
+      "AssetCount": 5,
+      "CreatedAt": 1787912449,
+      "UpdatedAt": 1787912449
+    }
+  ],
+  "Total": 1,
+  "PageNumber": 1,
+  "PageSize": 20
+}
+```
+
+#### 5. 获取素材组详情
+
+```bash
+curl -X POST \
+  'http://open.mints-id.com/api/seedance/assets/v2/?Action=GetAssetGroup&Version=2024-01-01' \
+  -H 'Authorization: Bearer sk-<NewAPI Token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "GroupId": "group_xxxxxxxx"
+  }'
+```
+
+**响应示例：**
+
+```json
+{
+  "GroupId": "group_xxxxxxxx",
+  "Name": "我的素材组",
+  "Description": "用于存放项目素材",
+  "AssetCount": 5,
+  "CreatedAt": 1787912449,
+  "UpdatedAt": 1787912449
+}
+```
+
+#### 6. 更新素材组
+
+```bash
+curl -X POST \
+  'http://open.mints-id.com/api/seedance/assets/v2/?Action=UpdateAssetGroup&Version=2024-01-01' \
+  -H 'Authorization: Bearer sk-<NewAPI Token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "GroupId": "group_xxxxxxxx",
+    "Name": "更新后的素材组名称",
+    "Description": "更新后的描述"
+  }'
+```
+
+**响应示例：**
+
+```json
+{
+  "GroupId": "group_xxxxxxxx",
+  "Name": "更新后的素材组名称",
+  "Description": "更新后的描述",
+  "UpdatedAt": 1787912550
+}
+```
+
+#### 7. 删除素材组
+
+```bash
+curl -X POST \
+  'http://open.mints-id.com/api/seedance/assets/v2/?Action=DeleteAssetGroup&Version=2024-01-01' \
+  -H 'Authorization: Bearer sk-<NewAPI Token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "GroupId": "group_xxxxxxxx"
+  }'
+```
+
+**响应示例：**
+
+```json
+{
+  "Success": true
+}
+```
+
+#### 8. 获取素材详情
+
+```bash
+curl -X POST \
+  'http://open.mints-id.com/api/seedance/assets/v2/?Action=GetAsset&Version=2024-01-01' \
+  -H 'Authorization: Bearer sk-<NewAPI Token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "AssetId": "asset_xxxxxxxx"
+  }'
+```
+
+**响应示例：**
+
+```json
+{
+  "AssetId": "asset_xxxxxxxx",
+  "GroupId": "group_xxxxxxxx",
+  "Type": "image",
+  "Url": "https://example.com/image.jpg",
+  "Name": "参考图片",
+  "Tags": ["参考", "人物"],
+  "Size": 1024000,
+  "CreatedAt": 1787912449,
+  "UpdatedAt": 1787912449
+}
+```
+
+#### 9. 更新素材
+
+```bash
+curl -X POST \
+  'http://open.mints-id.com/api/seedance/assets/v2/?Action=UpdateAsset&Version=2024-01-01' \
+  -H 'Authorization: Bearer sk-<NewAPI Token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "AssetId": "asset_xxxxxxxx",
+    "Name": "更新后的素材名称",
+    "Tags": ["更新", "新标签"]
+  }'
+```
+
+**响应示例：**
+
+```json
+{
+  "AssetId": "asset_xxxxxxxx",
+  "Name": "更新后的素材名称",
+  "Tags": ["更新", "新标签"],
+  "UpdatedAt": 1787912550
+}
+```
+
+#### 10. 删除素材
+
+```bash
+curl -X POST \
+  'http://open.mints-id.com/api/seedance/assets/v2/?Action=DeleteAsset&Version=2024-01-01' \
   -H 'Authorization: Bearer sk-<NewAPI Token>' \
   -H 'Content-Type: application/json' \
   -d '{
