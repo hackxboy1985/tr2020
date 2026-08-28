@@ -389,13 +389,12 @@ func videoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *d
 	// Doubao official API 格式: 返回 doubao responseTask 格式
 	if isDoubaoOfficialAPI {
 		// 直接返回存储的上游响应数据（doubao 官方格式）
-		// 但需要删除 upstream_task_id 字段（官方格式中不存在）
+		// task.Data 中的 status 已经是官方格式（succeeded/running/queued等），不需要转换
 		var taskData map[string]interface{}
 		if err := common.Unmarshal(originTask.Data, &taskData); err == nil {
 			// 删除 upstream_task_id 字段，保持与 doubao 官方格式一致
 			delete(taskData, "upstream_task_id")
-			// 转换状态值：使用数据库中的状态（已经过轮询同步），而不是 Data 中可能过时的状态
-			taskData["status"] = originTask.Status.ToDoubaoStatus()
+			// 不需要转换 status：task.Data 存储的是上游原始响应，status 已经是官方格式
 			respBody, _ = common.Marshal(taskData)
 		} else {
 			respBody = originTask.Data
