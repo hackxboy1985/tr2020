@@ -10,9 +10,10 @@
 
 # 配置
 BASE_URL="http://book2:3000"
-API_KEY="sk-your-api-key-here"
+API_KEY="sk-60oOqvQYb8vziFfg2hPHlTKW3X80Pc6sIBDC5EFHCY0sn5NY"
 GROUP_NAME="doubao-test-group"
-TEST_IMAGE_URL="https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=800"
+TEST_IMAGE_URL="https://static.horse-world.mints-id.com/gy/general/1/image/2026-07-08/1783497394035_4147.png"
+#TEST_IMAGE_URL="https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=800"
 
 # 颜色输出
 GREEN='\033[0;32m'

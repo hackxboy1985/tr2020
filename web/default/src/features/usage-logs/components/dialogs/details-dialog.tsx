@@ -534,7 +534,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
                   mono
                 />
               )}
-              {!isRefund && other?.upstream_task_id && (
+              {props.isAdmin && !isRefund && other?.upstream_task_id && (
                 <DetailRow
                   label={t('Upstream Task ID')}
                   value={other.upstream_task_id}
@@ -717,12 +717,12 @@ export function DetailsDialog(props: DetailsDialogProps) {
             )}
 
             {/* Refund details (type=6) */}
-            {isRefund && (props.log.upstream_request_id || (other && (other.task_id || other.upstream_task_id || other.reason))) && (
+            {isRefund && (props.log.upstream_request_id || (other && (other.task_id || (props.isAdmin && other.upstream_task_id) || other.reason))) && (
               <DetailSection label={t('Refund Details')}>
                 {other?.task_id && (
                   <DetailRow label={t('Task ID')} value={other.task_id} mono />
                 )}
-                {other?.upstream_task_id && (
+                {props.isAdmin && other?.upstream_task_id && (
                   <DetailRow label={t('Upstream Task ID')} value={other.upstream_task_id} mono />
                 )}
                 {props.log.upstream_request_id && (
