@@ -287,8 +287,8 @@ print_section "2. 上传图片素材"
 
 print_test "上传测试图片到素材库"
 
-local asset_url="${BASE_URL}/api/seedance/assets"
-local asset_body=$(cat <<EOF
+asset_url="${BASE_URL}/api/seedance/assets"
+asset_body=$(cat <<EOF
 {
   "url": "${TEST_IMAGE_URL}",
   "name": "test-image-$(date +%s).jpg"
@@ -321,8 +321,8 @@ print_section "3. 创建视频生成任务"
 
 print_test "使用素材创建视频任务"
 
-local create_url="${BASE_URL}/api/v3/contents/generations/tasks"
-local create_body=$(cat <<EOF
+create_url="${BASE_URL}/api/v3/contents/generations/tasks"
+create_body=$(cat <<EOF
 {
   "model": "doubao-seedance-2-0-mini-260615",
   "content": [
@@ -426,7 +426,7 @@ print_section "5. 查询任务列表"
 
 print_test "查询最近的任务列表"
 
-local list_url="${BASE_URL}/api/v3/contents/generations/tasks?page_num=1&page_size=5"
+list_url="${BASE_URL}/api/v3/contents/generations/tasks?page_num=1&page_size=5"
 print_request "GET" "$list_url"
 
 list_response=$(curl -s -X GET "$list_url" \
@@ -445,7 +445,7 @@ print_section "6. 测试任务列表筛选"
 
 print_test "按模型筛选"
 
-local filter_url="${BASE_URL}/api/v3/contents/generations/tasks?filter.model=doubao-seedance-2-0-mini-260615&page_size=5"
+filter_url="${BASE_URL}/api/v3/contents/generations/tasks?filter.model=doubao-seedance-2-0-mini-260615&page_size=5"
 print_request "GET" "$filter_url"
 
 filter_response=$(curl -s -X GET "$filter_url" \
@@ -463,8 +463,8 @@ print_section "7. 测试取消任务接口"
 
 print_test "创建一个新任务用于测试取消"
 
-local cancel_create_url="${BASE_URL}/api/v3/contents/generations/tasks"
-local cancel_create_body=$(cat <<EOF
+cancel_create_url="${BASE_URL}/api/v3/contents/generations/tasks"
+cancel_create_body=$(cat <<EOF
 {
   "model": "doubao-seedance-2-0-mini-260615",
   "content": [
