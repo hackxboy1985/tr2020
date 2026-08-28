@@ -261,7 +261,7 @@ curl -X DELETE \
 ```json
 {
   "code": "task_not_cancellable",
-  "message": "Cannot delete task `cgt-...` because it is currently running. Request id: ...",
+  "message": "task is running, cannot cancel",
   "status_code": 409
 }
 ```
@@ -278,20 +278,19 @@ curl -X DELETE \
 
 ### 计费说明
 
-- 调用取消接口会立即向上游发送取消请求
-- 本地任务状态不会立即改变，由定时轮询任务自动同步
-- 当轮询检测到任务状态变为 `cancelled` 时：
-  - ✅ 自动退还预扣的全部配额
-  - ✅ 退还用户余额/订阅额度
-  - ✅ 记录退款日志，便于对账
+- 取消成功后，任务状态会变为 `cancelled`
+- 系统会自动退还预扣的全部配额
+- 退款包括：
+  - ✅ 用户余额/订阅额度
+  - ✅ 完整的退款记录，便于对账
 - 取消仅对 `queued` 状态有效，任务通常在提交后数秒内进入 `running`
 - 如需取消，应在创建任务后立即发起
 
 ### 使用要点
 
-- 根据豆包官方 API 限制，只有 `queued` 状态的任务可以取消
+- 根据官方 API 限制，只有 `queued` 状态的任务可以取消
 - 任务进入 `running` 状态后无法取消（会返回 409 错误）
-- 取消成功后，不会立即看到本地状态变化，需等待定时轮询（最多 15 秒）
+- 取消成功后，任务状态会更新为 `cancelled`
 - 已取消的任务记录会保留在系统中，不会被删除
 
 ---
