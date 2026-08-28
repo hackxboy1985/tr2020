@@ -51,7 +51,7 @@ create_response=$(curl -s -X POST \
     -H "Authorization: Bearer ${API_KEY}" \
     -H "Content-Type: application/json" \
     -d '{
-      "model": "doubao-seedance-2-0-260128",
+      "model": "doubao-seedance-2-0-mini-260128",
       "content": [
         {
           "type": "text",
@@ -148,10 +148,10 @@ echo ""
 # 5. 查询任务列表（按模型筛选）
 print_section "5. 查询任务列表（按模型筛选）"
 
-print_test "请求: GET /api/v3/contents/generations/tasks?filter.model=doubao-seedance-2-0-260128"
+print_test "请求: GET /api/v3/contents/generations/tasks?filter.model=doubao-seedance-2-0-mini-260128"
 
 model_filter_response=$(curl -s -X GET \
-    "${BASE_URL}/api/v3/contents/generations/tasks?filter.model=doubao-seedance-2-0-260128&page_size=5" \
+    "${BASE_URL}/api/v3/contents/generations/tasks?filter.model=doubao-seedance-2-0-mini-260128&page_size=5" \
     -H "Authorization: Bearer ${API_KEY}")
 
 echo "响应:"
@@ -175,19 +175,102 @@ echo "响应:"
 echo "$multi_filter_response" | jq '.'
 echo ""
 
-# 7. 测试取消任务（预期返回 501）
-print_section "7. 测试取消任务（预期不支持）"
+# 7. 测试取消任务
+print_section "7. 测试取消任务"
 
-print_test "请求: DELETE /api/v3/contents/generations/tasks/${TASK_ID}"
+# 7.1 创建一个新任务用于测试取消
+print_test "7.1 创建一个新任务用于测试取消"
 
-cancel_response=$(curl -s -X DELETE \
-    "${BASE_URL}/api/v3/contents/generations/tasks/${TASK_ID}" \
-    -H "Authorization: Bearer ${API_KEY}")
+cancel_test_response=$(curl -s -X POST \
+    "${BASE_URL}/api/v3/contents/generations/tasks" \
+    -H "Authorization: Bearer ${API_KEY}" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "model": "doubao-seedance-2-0-mini-260128",
+      "content": [
+        {
+          "type": "text",
+          "text": "测试取消任务"
+        }
+      ],
+      "duration": 5
+    }')
 
 echo "响应:"
-echo "$cancel_response" | jq '.'
-echo ""
-echo -e "${YELLOW}注意: 取消任务功能暂不支持，预期返回 501 Not Implemented${NC}"
+echo "$cancel_test_response" | jq '.'
+
+CANCEL_TASK_ID=$(echo "$cancel_test_response" | jq -r '.id // empty')
+
+if [ -z "$CANCEL_TASK_ID" ]; then
+    echo -e "${RED}错误: 未能获取任务 ID${NC}"
+else
+    echo ""
+    echo -e "${YELLOW}任务创建成功! Task ID: ${CANCEL_TASK_ID}${NC}"
+    echo ""
+
+    # 7.2 立即尝试取消任务
+    print_test "7.2 取消刚创建的任务: DELETE /api/v3/contents/generations/tasks/${CANCEL_TASK_ID}"
+
+    cancel_response=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X DELETE \
+        "${BASE_URL}/api/v3/contents/generations/tasks/${CANCEL_TASK_ID}" \
+        -H "Authorization: Bearer ${API_KEY}")
+
+    # 分离响应体和状态码
+    response_body=$(echo "$cancel_response" | sed -e 's/HTTP_STATUS\:.*//g')
+    http_status=$(echo "$cancel_response" | grep -o "HTTP_STATUS:[0-9]*" | cut -d: -f2)
+
+    echo "HTTP Status: ${http_status}"
+    echo "响应:"
+    if [ -n "$response_body" ]; then
+        echo "$response_body" | jq '.' 2>/dev/null || echo "$response_body"
+    else
+        echo "{}"
+    fi
+    echo ""
+
+    case $http_status in
+        200)
+            echo -e "${GREEN}✓ 取消成功 (HTTP 200)${NC}"
+            echo "说明: 任务已发送取消请求到上游，状态将由轮询同步更新"
+            ;;
+        404)
+            echo -e "${YELLOW}✓ 任务不存在 (HTTP 404)${NC}"
+            ;;
+        409)
+            echo -e "${YELLOW}✓ 任务运行中，无法取消 (HTTP 409)${NC}"
+            echo "说明: 只有 queued 状态的任务可以取消"
+            ;;
+        400)
+            echo -e "${YELLOW}✓ 任务状态不支持取消 (HTTP 400)${NC}"
+            ;;
+        *)
+            echo -e "${RED}✗ 未预期的状态码: ${http_status}${NC}"
+            ;;
+    esac
+
+    echo ""
+    echo -e "${BLUE}等待几秒后查询任务状态...${NC}"
+    sleep 3
+
+    # 7.3 查询任务状态，确认是否变为 cancelled
+    print_test "7.3 查询任务状态"
+
+    status_check_response=$(curl -s -X GET \
+        "${BASE_URL}/api/v3/contents/generations/tasks/${CANCEL_TASK_ID}" \
+        -H "Authorization: Bearer ${API_KEY}")
+
+    echo "响应:"
+    echo "$status_check_response" | jq '.'
+
+    final_status=$(echo "$status_check_response" | jq -r '.status // empty')
+    echo ""
+    echo -e "${YELLOW}当前状态: ${final_status}${NC}"
+
+    if [ "$final_status" = "cancelled" ]; then
+        echo -e "${GREEN}✓ 任务状态已更新为 cancelled${NC}"
+    fi
+fi
+
 echo ""
 
 # 8. 测试参数验证
