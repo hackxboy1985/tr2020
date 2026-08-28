@@ -26,7 +26,7 @@ func (t TaskStatus) ToVideoStatus() string {
 	case TaskStatusFailure:
 		status = dto.VideoStatusFailed
 	case TaskStatusCancelled:
-		status = dto.VideoStatusFailed // Cancelled 映射为 failed
+		status = dto.VideoStatusCancelled
 	default:
 		status = dto.VideoStatusUnknown // Default fallback
 	}
