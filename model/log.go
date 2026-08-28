@@ -82,12 +82,18 @@ const (
 func formatUserLogs(logs []*Log, startIdx int) {
 	for i := range logs {
 		logs[i].ChannelName = ""
-		// 普通用户隐藏管理员敏感字段（admin_info、request_body），保留计费信息
+		// 普通用户隐藏上游任务 ID
+		logs[i].UpstreamTaskId = ""
+		logs[i].UpstreamRequestId = ""
+		// 普通用户隐藏管理员敏感字段（admin_info、request_body）和上游敏感字段（ori_task_id、upstream_task_id、response_body），保留计费信息
 		if logs[i].Other != "" {
 			var m map[string]interface{}
 			if err := common.UnmarshalJsonStr(logs[i].Other, &m); err == nil {
 				delete(m, "admin_info")
 				delete(m, "request_body")
+				delete(m, "ori_task_id")
+				delete(m, "upstream_task_id")
+				delete(m, "response_body")
 				if b, err2 := common.Marshal(m); err2 == nil {
 					logs[i].Other = string(b)
 				}
