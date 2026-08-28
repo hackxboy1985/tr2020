@@ -409,7 +409,7 @@ echo ""
 for i in {1..12}; do
     print_test "第 ${i} 次查询 (${i}0秒)"
 
-    local query_url="${BASE_URL}/api/v3/contents/generations/tasks/${TASK_ID}"
+    query_url="${BASE_URL}/api/v3/contents/generations/tasks/${TASK_ID}"
 
     if [ $i -eq 1 ]; then
         # 第一次查询时打印请求详情
@@ -530,7 +530,7 @@ if [ -n "$CANCEL_TASK_ID" ]; then
 
     print_test "立即尝试取消任务"
 
-    local cancel_url="${BASE_URL}/api/v3/contents/generations/tasks/${CANCEL_TASK_ID}"
+    cancel_url="${BASE_URL}/api/v3/contents/generations/tasks/${CANCEL_TASK_ID}"
     print_request "DELETE" "$cancel_url"
 
     cancel_response=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X DELETE "$cancel_url" \
