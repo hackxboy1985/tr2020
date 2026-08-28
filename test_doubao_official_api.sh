@@ -51,7 +51,7 @@ create_response=$(curl -s -X POST \
     -H "Authorization: Bearer ${API_KEY}" \
     -H "Content-Type: application/json" \
     -d '{
-      "model": "doubao-seedance-2-0-mini-260128",
+      "model": "doubao-seedance-2-0-mini-260615",
       "content": [
         {
           "type": "text",
@@ -148,10 +148,10 @@ echo ""
 # 5. 查询任务列表（按模型筛选）
 print_section "5. 查询任务列表（按模型筛选）"
 
-print_test "请求: GET /api/v3/contents/generations/tasks?filter.model=doubao-seedance-2-0-mini-260128"
+print_test "请求: GET /api/v3/contents/generations/tasks?filter.model=doubao-seedance-2-0-mini-260615"
 
 model_filter_response=$(curl -s -X GET \
-    "${BASE_URL}/api/v3/contents/generations/tasks?filter.model=doubao-seedance-2-0-mini-260128&page_size=5" \
+    "${BASE_URL}/api/v3/contents/generations/tasks?filter.model=doubao-seedance-2-0-mini-260615&page_size=5" \
     -H "Authorization: Bearer ${API_KEY}")
 
 echo "响应:"
@@ -165,10 +165,10 @@ echo ""
 # 6. 查询任务列表（多条件筛选）
 print_section "6. 查询任务列表（多条件筛选）"
 
-print_test "请求: GET /api/v3/contents/generations/tasks?filter.status=succeeded&filter.model=doubao-seedance-2-0-260128"
+print_test "请求: GET /api/v3/contents/generations/tasks?filter.status=succeeded&filter.model=doubao-seedance-2-0-260615"
 
 multi_filter_response=$(curl -s -X GET \
-    "${BASE_URL}/api/v3/contents/generations/tasks?filter.status=succeeded&filter.model=doubao-seedance-2-0-260128&page_num=1&page_size=5" \
+    "${BASE_URL}/api/v3/contents/generations/tasks?filter.status=succeeded&filter.model=doubao-seedance-2-0-260615&page_num=1&page_size=5" \
     -H "Authorization: Bearer ${API_KEY}")
 
 echo "响应:"
@@ -186,7 +186,7 @@ cancel_test_response=$(curl -s -X POST \
     -H "Authorization: Bearer ${API_KEY}" \
     -H "Content-Type: application/json" \
     -d '{
-      "model": "doubao-seedance-2-0-mini-260128",
+      "model": "doubao-seedance-2-0-mini-260615",
       "content": [
         {
           "type": "text",

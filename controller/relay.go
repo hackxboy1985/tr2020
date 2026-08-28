@@ -833,10 +833,21 @@ func RelayTaskDelete(c *gin.Context) {
 		return
 	}
 
-	// Check if task can be cancelled (only queued/in_progress tasks)
+	// Check if task can be cancelled
+	// 根据官方文档：只有 queued 状态可以取消，running 状态会被上游拒绝
+	if task.Status == model.TaskStatusInProgress {
+		// running 状态：上游必定返回 409，在本地直接拒绝避免浪费 API 调用
+		c.JSON(http.StatusConflict, &dto.TaskError{
+			Code:       "task_not_cancellable",
+			Message:    "task is running, cannot cancel",
+			StatusCode: http.StatusConflict,
+		})
+		return
+	}
+
 	if task.Status != model.TaskStatusQueued &&
-	   task.Status != model.TaskStatusSubmitted &&
-	   task.Status != model.TaskStatusInProgress {
+	   task.Status != model.TaskStatusSubmitted {
+		// 已完成/失败/已取消的任务不能取消
 		c.JSON(http.StatusBadRequest, &dto.TaskError{
 			Code:       "task_not_cancellable",
 			Message:    fmt.Sprintf("task status is %s, cannot be cancelled", task.Status),
