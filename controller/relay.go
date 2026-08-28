@@ -716,10 +716,8 @@ func RelayTaskFetchList(c *gin.Context) {
 				// 删除内部字段
 				delete(taskData, "upstream_task_id")
 
-				// 转换状态值：系统内部 -> doubao 官方
-				if status, ok := taskData["status"].(string); ok {
-					taskData["status"] = convertInternalStatusToDoubao(status)
-				}
+				// 转换状态值：使用数据库中的状态（已经过轮询同步），而不是 Data 中可能过时的状态
+				taskData["status"] = task.Status.ToDoubaoStatus()
 
 				// 筛选条件（如果指定）
 				if filterModel != "" {
@@ -765,10 +763,8 @@ func RelayTaskFetchList(c *gin.Context) {
 			// 删除内部字段
 			delete(taskData, "upstream_task_id")
 
-			// 转换状态值：系统内部 -> doubao 官方
-			if status, ok := taskData["status"].(string); ok {
-				taskData["status"] = convertInternalStatusToDoubao(status)
-			}
+			// 转换状态值：使用数据库中的状态（已经过轮询同步），而不是 Data 中可能过时的状态
+			taskData["status"] = task.Status.ToDoubaoStatus()
 
 			// 筛选条件（如果指定）
 			if filterModel != "" {

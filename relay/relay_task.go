@@ -394,10 +394,8 @@ func videoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *d
 		if err := common.Unmarshal(originTask.Data, &taskData); err == nil {
 			// 删除 upstream_task_id 字段，保持与 doubao 官方格式一致
 			delete(taskData, "upstream_task_id")
-			// 转换状态值：系统内部 -> doubao 官方
-			if status, ok := taskData["status"].(string); ok {
-				taskData["status"] = model.TaskStatus(status).ToDoubaoStatus()
-			}
+			// 转换状态值：使用数据库中的状态（已经过轮询同步），而不是 Data 中可能过时的状态
+			taskData["status"] = originTask.Status.ToDoubaoStatus()
 			respBody, _ = common.Marshal(taskData)
 		} else {
 			respBody = originTask.Data
