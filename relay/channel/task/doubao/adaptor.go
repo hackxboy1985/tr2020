@@ -462,10 +462,11 @@ func (a *TaskAdaptor) CancelTask(upstreamTaskID string) error {
 			Error struct {
 				Code    string `json:"code"`
 				Message string `json:"message"`
+				Param   string `json:"param"`
+				Type    string `json:"type"`
 			} `json:"error"`
 		}
-		_ = common.Unmarshal(responseBody, &errResp)
-		if errResp.Error.Message != "" {
+		if err := common.Unmarshal(responseBody, &errResp); err == nil && errResp.Error.Message != "" {
 			return errors.New(errResp.Error.Message)
 		}
 		return errors.New("task is running, cannot cancel")
