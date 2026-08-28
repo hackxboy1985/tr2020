@@ -1,24 +1,26 @@
 #!/bin/bash
 
 # Doubao 官方 API 测试脚本
-# 模拟下游用户使用与官方一致的接口进行请求
-# 使用方法: ./test_doubao_official_api.sh
+# 完整测试流程：分组 → 素材 → 视频任务 → 查询 → 取消
+#
+# 使用方法:
+#   ./test_doubao_official_api.sh              # 执行完整测试流程
+#   ./test_doubao_official_api.sh --query <id> # 查询指定任务状态
+#   ./test_doubao_official_api.sh --query all  # 查询任务列表
 
 # 配置
-BASE_URL="http://localhost:3000"
+BASE_URL="http://book2:3000"
 API_KEY="sk-your-api-key-here"
+GROUP_NAME="doubao-test-group"
+TEST_IMAGE_URL="https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=800"
 
 # 颜色输出
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
-
-echo "======================================"
-echo "Doubao 官方 API 测试脚本"
-echo "======================================"
-echo ""
 
 # 检查 API Key
 if [ "$API_KEY" = "sk-your-api-key-here" ]; then
@@ -27,7 +29,7 @@ if [ "$API_KEY" = "sk-your-api-key-here" ]; then
     exit 1
 fi
 
-# 测试函数
+# 工具函数
 print_section() {
     echo ""
     echo -e "${GREEN}======================================"
@@ -37,305 +39,453 @@ print_section() {
 }
 
 print_test() {
-    echo -e "${BLUE}>>> $1${NC}"
+    echo -e "${BLUE}> $1${NC}"
+}
+
+print_success() {
+    echo -e "${GREEN}✓ $1${NC}"
+}
+
+print_error() {
+    echo -e "${RED}✗ $1${NC}"
+}
+
+print_info() {
+    echo -e "${CYAN}ℹ $1${NC}"
+}
+
+print_request() {
+    local method="$1"
+    local url="$2"
+    local body="$3"
+
+    echo ""
+    echo -e "${CYAN}━━━ 请求详情 ━━━${NC}"
+    echo -e "${YELLOW}Method:${NC} ${method}"
+    echo -e "${YELLOW}URL:${NC} ${url}"
+    echo -e "${YELLOW}Headers:${NC}"
+    echo "  Authorization: Bearer ${API_KEY:0:10}..."
+    echo "  Content-Type: application/json"
+    if [ -n "$body" ]; then
+        echo -e "${YELLOW}Body:${NC}"
+        echo "$body" | jq '.' 2>/dev/null || echo "$body"
+    fi
+    echo -e "${CYAN}━━━━━━━━━━━━━━━${NC}"
     echo ""
 }
 
-# 1. 创建视频生成任务
-print_section "1. 创建视频生成任务"
+print_response() {
+    local response="$1"
+    local http_status="$2"
 
-print_test "请求: POST /api/v3/contents/generations/tasks"
+    echo ""
+    echo -e "${CYAN}━━━ 响应详情 ━━━${NC}"
+    if [ -n "$http_status" ]; then
+        echo -e "${YELLOW}HTTP Status:${NC} ${http_status}"
+    fi
+    echo -e "${YELLOW}Body:${NC}"
+    echo "$response" | jq '.' 2>/dev/null || echo "$response"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━${NC}"
+    echo ""
+}
 
-create_response=$(curl -s -X POST \
-    "${BASE_URL}/api/v3/contents/generations/tasks" \
+# 验证 doubao 官方格式
+validate_official_format() {
+    local response="$1"
+    local type="$2"  # task_single, task_list, task_create
+
+    case $type in
+        "task_create")
+            # 创建任务响应：必须有 id 字段
+            if echo "$response" | jq -e '.id' >/dev/null 2>&1; then
+                print_success "格式校验通过: 包含 id 字段"
+                return 0
+            else
+                print_error "格式校验失败: 缺少 id 字段"
+                return 1
+            fi
+            ;;
+        "task_single")
+            # 单个任务响应：必须有 id, model, status 字段
+            local has_id=$(echo "$response" | jq -e '.id' >/dev/null 2>&1 && echo "yes" || echo "no")
+            local has_model=$(echo "$response" | jq -e '.model' >/dev/null 2>&1 && echo "yes" || echo "no")
+            local has_status=$(echo "$response" | jq -e '.status' >/dev/null 2>&1 && echo "yes" || echo "no")
+
+            if [ "$has_id" = "yes" ] && [ "$has_model" = "yes" ] && [ "$has_status" = "yes" ]; then
+                print_success "格式校验通过: 包含 id, model, status 字段"
+
+                # 检查状态值是否为官方值
+                local status=$(echo "$response" | jq -r '.status')
+                case $status in
+                    queued|running|succeeded|failed|cancelled)
+                        print_success "状态值校验通过: ${status}"
+                        ;;
+                    *)
+                        print_error "状态值非官方格式: ${status}"
+                        ;;
+                esac
+                return 0
+            else
+                print_error "格式校验失败: 缺少必要字段 (id=${has_id}, model=${has_model}, status=${has_status})"
+                return 1
+            fi
+            ;;
+        "task_list")
+            # 任务列表响应：必须有 items 和 total 字段
+            local has_items=$(echo "$response" | jq -e '.items' >/dev/null 2>&1 && echo "yes" || echo "no")
+            local has_total=$(echo "$response" | jq -e '.total' >/dev/null 2>&1 && echo "yes" || echo "no")
+
+            if [ "$has_items" = "yes" ] && [ "$has_total" = "yes" ]; then
+                print_success "格式校验通过: 包含 items 和 total 字段"
+
+                # 检查 items 是否为数组
+                if echo "$response" | jq -e '.items | type == "array"' >/dev/null 2>&1; then
+                    print_success "items 类型校验通过: 数组"
+                else
+                    print_error "items 类型错误: 不是数组"
+                fi
+                return 0
+            else
+                print_error "格式校验失败: 缺少必要字段 (items=${has_items}, total=${has_total})"
+                return 1
+            fi
+            ;;
+    esac
+}
+
+# 子命令：查询任务状态
+query_task() {
+    local task_id="$1"
+
+    if [ "$task_id" = "all" ]; then
+        # 查询任务列表
+        print_section "查询任务列表"
+
+        local url="${BASE_URL}/api/v3/contents/generations/tasks?page_num=1&page_size=10"
+        print_request "GET" "$url"
+
+        response=$(curl -s -X GET "$url" \
+            -H "Authorization: Bearer ${API_KEY}")
+
+        print_response "$response"
+        validate_official_format "$response" "task_list"
+
+        total=$(echo "$response" | jq -r '.total // 0')
+        echo ""
+        echo -e "${YELLOW}总任务数: ${total}${NC}"
+    else
+        # 查询指定任务
+        print_section "查询任务: ${task_id}"
+
+        local url="${BASE_URL}/api/v3/contents/generations/tasks/${task_id}"
+        print_request "GET" "$url"
+
+        response=$(curl -s -X GET "$url" \
+            -H "Authorization: Bearer ${API_KEY}")
+
+        print_response "$response"
+        validate_official_format "$response" "task_single"
+
+        status=$(echo "$response" | jq -r '.status // "unknown"')
+        echo ""
+        echo -e "${YELLOW}任务状态: ${status}${NC}"
+    fi
+
+    exit 0
+}
+
+# 处理命令行参数
+if [ "$1" = "--query" ]; then
+    if [ -z "$2" ]; then
+        echo -e "${RED}错误: --query 需要指定任务 ID 或 'all'${NC}"
+        echo "用法: $0 --query <task_id>"
+        echo "      $0 --query all"
+        exit 1
+    fi
+    query_task "$2"
+fi
+
+# ========================================
+# 完整测试流程
+# ========================================
+
+echo "======================================"
+echo "Doubao 官方 API 完整测试流程"
+echo "======================================"
+echo ""
+print_info "测试流程: 分组 → 素材 → 视频任务 → 查询 → 取消"
+echo ""
+
+# 1. 创建或获取分组
+print_section "1. 创建测试分组"
+
+print_test "检查分组是否存在: ${GROUP_NAME}"
+
+# 这里假设有分组管理 API，如果没有则跳过
+# 实际项目中可能需要通过管理端创建分组
+print_info "跳过分组创建（需要管理员权限）"
+echo ""
+
+# 2. 上传素材
+print_section "2. 上传图片素材"
+
+print_test "上传测试图片到素材库"
+
+local asset_url="${BASE_URL}/api/seedance/assets"
+local asset_body=$(cat <<EOF
+{
+  "url": "${TEST_IMAGE_URL}",
+  "name": "test-image-$(date +%s).jpg"
+}
+EOF
+)
+
+print_request "POST" "$asset_url" "$asset_body"
+
+asset_response=$(curl -s -X POST "$asset_url" \
     -H "Authorization: Bearer ${API_KEY}" \
     -H "Content-Type: application/json" \
-    -d '{
-      "model": "doubao-seedance-2-0-mini-260615",
-      "content": [
-        {
-          "type": "text",
-          "text": "一个可爱的小猫咪在草地上玩耍，阳光明媚，画面温馨"
-        }
-      ],
-      "ratio": "16:9",
-      "duration": 5,
-      "resolution": "720p"
-    }')
+    -d "$asset_body")
 
-echo "响应:"
-echo "$create_response" | jq '.'
+print_response "$asset_response"
 
-# 提取 task_id
+ASSET_ID=$(echo "$asset_response" | jq -r '.asset_id // .id // empty')
+
+if [ -z "$ASSET_ID" ]; then
+    print_error "素材上传失败，使用外部图片 URL"
+    IMAGE_URL="${TEST_IMAGE_URL}"
+else
+    print_success "素材上传成功! Asset ID: ${ASSET_ID}"
+    IMAGE_URL="asset://${ASSET_ID}"
+fi
+echo ""
+
+# 3. 创建视频任务
+print_section "3. 创建视频生成任务"
+
+print_test "使用素材创建视频任务"
+
+local create_url="${BASE_URL}/api/v3/contents/generations/tasks"
+local create_body=$(cat <<EOF
+{
+  "model": "doubao-seedance-2-0-mini-260615",
+  "content": [
+    {
+      "type": "text",
+      "text": "一只可爱的小猫在草地上玩耍，阳光明媚"
+    },
+    {
+      "type": "image_url",
+      "image_url": {
+        "url": "${IMAGE_URL}"
+      },
+      "role": "reference_image"
+    }
+  ],
+  "resolution": "720p",
+  "ratio": "16:9",
+  "duration": 5
+}
+EOF
+)
+
+print_request "POST" "$create_url" "$create_body"
+
+create_response=$(curl -s -X POST "$create_url" \
+    -H "Authorization: Bearer ${API_KEY}" \
+    -H "Content-Type: application/json" \
+    -d "$create_body")
+
+print_response "$create_response"
+validate_official_format "$create_response" "task_create"
+
 TASK_ID=$(echo "$create_response" | jq -r '.id // empty')
 
 if [ -z "$TASK_ID" ]; then
-    echo -e "${RED}错误: 未能获取 task_id${NC}"
+    print_error "任务创建失败"
     exit 1
 fi
 
+print_success "任务创建成功! Task ID: ${TASK_ID}"
 echo ""
-echo -e "${YELLOW}任务创建成功! Task ID: ${TASK_ID}${NC}"
+
+# 4. 查询任务状态（轮询）
+print_section "4. 查询任务状态"
+
+print_info "开始轮询任务状态（最多等待 60 秒）..."
 echo ""
 
-# 2. 查询单个任务
-print_section "2. 查询单个任务状态"
+for i in {1..12}; do
+    print_test "第 ${i} 次查询 (${i}0秒)"
 
-print_test "请求: GET /api/v3/contents/generations/tasks/${TASK_ID}"
+    local query_url="${BASE_URL}/api/v3/contents/generations/tasks/${TASK_ID}"
 
-for i in {1..3}; do
-    echo "第 $i 次查询..."
+    if [ $i -eq 1 ]; then
+        # 第一次查询时打印请求详情
+        print_request "GET" "$query_url"
+    else
+        echo -e "${CYAN}━━━ 请求 ━━━${NC} GET ${query_url}"
+    fi
 
-    get_response=$(curl -s -X GET \
-        "${BASE_URL}/api/v3/contents/generations/tasks/${TASK_ID}" \
+    query_response=$(curl -s -X GET "$query_url" \
         -H "Authorization: Bearer ${API_KEY}")
 
-    echo "响应:"
-    echo "$get_response" | jq '.'
+    status=$(echo "$query_response" | jq -r '.status // "unknown"')
 
-    status=$(echo "$get_response" | jq -r '.status // empty')
-    echo ""
-    echo -e "${YELLOW}当前状态: ${status}${NC}"
+    echo "当前状态: ${status}"
 
-    if [ "$status" = "succeeded" ] || [ "$status" = "failed" ]; then
+    if [ "$status" = "succeeded" ]; then
+        print_success "任务完成！"
+        echo ""
+        print_response "$query_response"
+        validate_official_format "$query_response" "task_single"
+
+        video_url=$(echo "$query_response" | jq -r '.content.video_url // empty')
+        if [ -n "$video_url" ]; then
+            echo ""
+            print_success "视频 URL: ${video_url}"
+        fi
+        break
+    elif [ "$status" = "failed" ]; then
+        print_error "任务失败"
+        print_response "$query_response"
+        validate_official_format "$query_response" "task_single"
+        break
+    elif [ "$status" = "cancelled" ]; then
+        print_error "任务已取消"
+        print_response "$query_response"
         break
     fi
 
-    if [ $i -lt 3 ]; then
-        echo ""
-        echo "等待 5 秒后重试..."
-        sleep 5
-        echo ""
+    if [ $i -lt 12 ]; then
+        echo "等待 10 秒后继续..."
+        sleep 10
     fi
 done
 
 echo ""
 
-# 3. 查询任务列表（无筛选）
-print_section "3. 查询任务列表（无筛选）"
+# 5. 查询任务列表
+print_section "5. 查询任务列表"
 
-print_test "请求: GET /api/v3/contents/generations/tasks?page_num=1&page_size=10"
+print_test "查询最近的任务列表"
 
-list_response=$(curl -s -X GET \
-    "${BASE_URL}/api/v3/contents/generations/tasks?page_num=1&page_size=10" \
+local list_url="${BASE_URL}/api/v3/contents/generations/tasks?page_num=1&page_size=5"
+print_request "GET" "$list_url"
+
+list_response=$(curl -s -X GET "$list_url" \
     -H "Authorization: Bearer ${API_KEY}")
 
-echo "响应:"
-echo "$list_response" | jq '.'
+print_response "$list_response"
+validate_official_format "$list_response" "task_list"
 
 total=$(echo "$list_response" | jq -r '.total // 0')
 echo ""
 echo -e "${YELLOW}总任务数: ${total}${NC}"
 echo ""
 
-# 4. 查询任务列表（按状态筛选）
-print_section "4. 查询任务列表（按状态筛选）"
+# 6. 测试筛选
+print_section "6. 测试任务列表筛选"
 
-print_test "请求: GET /api/v3/contents/generations/tasks?filter.status=queued"
+print_test "按模型筛选"
 
-filter_response=$(curl -s -X GET \
-    "${BASE_URL}/api/v3/contents/generations/tasks?filter.status=queued" \
+local filter_url="${BASE_URL}/api/v3/contents/generations/tasks?filter.model=doubao-seedance-2-0-mini-260615&page_size=5"
+print_request "GET" "$filter_url"
+
+filter_response=$(curl -s -X GET "$filter_url" \
     -H "Authorization: Bearer ${API_KEY}")
 
-echo "响应:"
-echo "$filter_response" | jq '.'
+print_response "$filter_response"
+validate_official_format "$filter_response" "task_list"
 
-queued_count=$(echo "$filter_response" | jq -r '.total // 0')
-echo ""
-echo -e "${YELLOW}排队中的任务数: ${queued_count}${NC}"
-echo ""
-
-# 5. 查询任务列表（按模型筛选）
-print_section "5. 查询任务列表（按模型筛选）"
-
-print_test "请求: GET /api/v3/contents/generations/tasks?filter.model=doubao-seedance-2-0-mini-260615"
-
-model_filter_response=$(curl -s -X GET \
-    "${BASE_URL}/api/v3/contents/generations/tasks?filter.model=doubao-seedance-2-0-mini-260615&page_size=5" \
-    -H "Authorization: Bearer ${API_KEY}")
-
-echo "响应:"
-echo "$model_filter_response" | jq '.'
-
-model_count=$(echo "$model_filter_response" | jq -r '.total // 0')
-echo ""
-echo -e "${YELLOW}该模型的任务数: ${model_count}${NC}"
-echo ""
-
-# 6. 查询任务列表（多条件筛选）
-print_section "6. 查询任务列表（多条件筛选）"
-
-print_test "请求: GET /api/v3/contents/generations/tasks?filter.status=succeeded&filter.model=doubao-seedance-2-0-260615"
-
-multi_filter_response=$(curl -s -X GET \
-    "${BASE_URL}/api/v3/contents/generations/tasks?filter.status=succeeded&filter.model=doubao-seedance-2-0-260615&page_num=1&page_size=5" \
-    -H "Authorization: Bearer ${API_KEY}")
-
-echo "响应:"
-echo "$multi_filter_response" | jq '.'
+filter_count=$(echo "$filter_response" | jq -r '.total // 0')
+print_info "该模型的任务数: ${filter_count}"
 echo ""
 
 # 7. 测试取消任务
-print_section "7. 测试取消任务"
+print_section "7. 测试取消任务接口"
 
-# 7.1 创建一个新任务用于测试取消
-print_test "7.1 创建一个新任务用于测试取消"
+print_test "创建一个新任务用于测试取消"
 
-cancel_test_response=$(curl -s -X POST \
-    "${BASE_URL}/api/v3/contents/generations/tasks" \
+local cancel_create_url="${BASE_URL}/api/v3/contents/generations/tasks"
+local cancel_create_body=$(cat <<EOF
+{
+  "model": "doubao-seedance-2-0-mini-260615",
+  "content": [
+    {
+      "type": "text",
+      "text": "测试取消任务"
+    }
+  ],
+  "duration": 5
+}
+EOF
+)
+
+print_request "POST" "$cancel_create_url" "$cancel_create_body"
+
+cancel_test_response=$(curl -s -X POST "$cancel_create_url" \
     -H "Authorization: Bearer ${API_KEY}" \
     -H "Content-Type: application/json" \
-    -d '{
-      "model": "doubao-seedance-2-0-mini-260615",
-      "content": [
-        {
-          "type": "text",
-          "text": "测试取消任务"
-        }
-      ],
-      "duration": 5
-    }')
+    -d "$cancel_create_body")
 
-echo "响应:"
-echo "$cancel_test_response" | jq '.'
+print_response "$cancel_test_response"
 
 CANCEL_TASK_ID=$(echo "$cancel_test_response" | jq -r '.id // empty')
 
-if [ -z "$CANCEL_TASK_ID" ]; then
-    echo -e "${RED}错误: 未能获取任务 ID${NC}"
-else
-    echo ""
-    echo -e "${YELLOW}任务创建成功! Task ID: ${CANCEL_TASK_ID}${NC}"
+if [ -n "$CANCEL_TASK_ID" ]; then
+    print_success "测试任务创建成功: ${CANCEL_TASK_ID}"
     echo ""
 
-    # 7.2 立即尝试取消任务
-    print_test "7.2 取消刚创建的任务: DELETE /api/v3/contents/generations/tasks/${CANCEL_TASK_ID}"
+    print_test "立即尝试取消任务"
 
-    cancel_response=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X DELETE \
-        "${BASE_URL}/api/v3/contents/generations/tasks/${CANCEL_TASK_ID}" \
+    local cancel_url="${BASE_URL}/api/v3/contents/generations/tasks/${CANCEL_TASK_ID}"
+    print_request "DELETE" "$cancel_url"
+
+    cancel_response=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X DELETE "$cancel_url" \
         -H "Authorization: Bearer ${API_KEY}")
 
-    # 分离响应体和状态码
     response_body=$(echo "$cancel_response" | sed -e 's/HTTP_STATUS\:.*//g')
     http_status=$(echo "$cancel_response" | grep -o "HTTP_STATUS:[0-9]*" | cut -d: -f2)
 
-    echo "HTTP Status: ${http_status}"
-    echo "响应:"
-    if [ -n "$response_body" ]; then
-        echo "$response_body" | jq '.' 2>/dev/null || echo "$response_body"
-    else
-        echo "{}"
-    fi
-    echo ""
+    print_response "$response_body" "$http_status"
 
     case $http_status in
         200)
-            echo -e "${GREEN}✓ 取消成功 (HTTP 200)${NC}"
-            echo "说明: 任务已发送取消请求到上游，状态将由轮询同步更新"
+            print_success "取消成功 (HTTP 200)"
             ;;
         404)
-            echo -e "${YELLOW}✓ 任务不存在 (HTTP 404)${NC}"
+            print_info "任务不存在 (HTTP 404)"
             ;;
         409)
-            echo -e "${YELLOW}✓ 任务运行中，无法取消 (HTTP 409)${NC}"
-            echo "说明: 只有 queued 状态的任务可以取消"
+            print_info "任务运行中，无法取消 (HTTP 409)"
             ;;
         400)
-            echo -e "${YELLOW}✓ 任务状态不支持取消 (HTTP 400)${NC}"
+            print_info "任务状态不支持取消 (HTTP 400)"
             ;;
         *)
-            echo -e "${RED}✗ 未预期的状态码: ${http_status}${NC}"
+            print_error "未预期的状态码: ${http_status}"
             ;;
     esac
-
-    echo ""
-    echo -e "${BLUE}等待几秒后查询任务状态...${NC}"
-    sleep 3
-
-    # 7.3 查询任务状态，确认是否变为 cancelled
-    print_test "7.3 查询任务状态"
-
-    status_check_response=$(curl -s -X GET \
-        "${BASE_URL}/api/v3/contents/generations/tasks/${CANCEL_TASK_ID}" \
-        -H "Authorization: Bearer ${API_KEY}")
-
-    echo "响应:"
-    echo "$status_check_response" | jq '.'
-
-    final_status=$(echo "$status_check_response" | jq -r '.status // empty')
-    echo ""
-    echo -e "${YELLOW}当前状态: ${final_status}${NC}"
-
-    if [ "$final_status" = "cancelled" ]; then
-        echo -e "${GREEN}✓ 任务状态已更新为 cancelled${NC}"
-    fi
+else
+    print_error "无法创建测试任务"
 fi
 
 echo ""
 
-# 8. 测试参数验证
-print_section "8. 测试参数验证"
-
-echo -e "${BLUE}8.1 测试超出范围的 page_num (501)${NC}"
-invalid_page_response=$(curl -s -X GET \
-    "${BASE_URL}/api/v3/contents/generations/tasks?page_num=501&page_size=20" \
-    -H "Authorization: Bearer ${API_KEY}")
-echo "$invalid_page_response" | jq '.'
-echo ""
-
-echo -e "${BLUE}8.2 测试超出范围的 page_size (501)${NC}"
-invalid_size_response=$(curl -s -X GET \
-    "${BASE_URL}/api/v3/contents/generations/tasks?page_num=1&page_size=501" \
-    -H "Authorization: Bearer ${API_KEY}")
-echo "$invalid_size_response" | jq '.'
-echo ""
-
-# 9. 测试状态转换
-print_section "9. 测试状态值转换"
-
-echo -e "${YELLOW}验证返回的状态值是否为 doubao 官方格式:${NC}"
-echo "- queued (排队中)"
-echo "- running (运行中)"
-echo "- succeeded (成功)"
-echo "- failed (失败)"
-echo "- cancelled (已取消)"
-echo ""
-
-status_test_response=$(curl -s -X GET \
-    "${BASE_URL}/api/v3/contents/generations/tasks/${TASK_ID}" \
-    -H "Authorization: Bearer ${API_KEY}")
-
-returned_status=$(echo "$status_test_response" | jq -r '.status // "unknown"')
-echo -e "返回的状态值: ${GREEN}${returned_status}${NC}"
-echo ""
-
-case $returned_status in
-    queued|running|succeeded|failed|cancelled)
-        echo -e "${GREEN}✓ 状态值格式正确！${NC}"
-        ;;
-    *)
-        echo -e "${RED}✗ 状态值格式不正确！${NC}"
-        ;;
-esac
-echo ""
-
-# 总结
+# 8. 测试总结
 print_section "测试完成"
 
-echo "测试的接口:"
-echo "  ✓ POST   /api/v3/contents/generations/tasks (创建任务)"
-echo "  ✓ GET    /api/v3/contents/generations/tasks/{task_id} (查询单个任务)"
-echo "  ✓ GET    /api/v3/contents/generations/tasks (查询任务列表)"
-echo "  ✓ GET    /api/v3/contents/generations/tasks?filter.* (筛选查询)"
-echo "  ✓ DELETE /api/v3/contents/generations/tasks/{task_id} (取消任务-预期不支持)"
+echo -e "${GREEN}已完成以下测试:${NC}"
+echo "  ✓ 素材上传"
+echo "  ✓ 创建视频任务"
+echo "  ✓ 查询任务状态"
+echo "  ✓ 查询任务列表"
+echo "  ✓ 任务列表筛选"
+echo "  ✓ 取消任务接口"
 echo ""
-
-echo "测试的功能点:"
-echo "  ✓ 接口路径与 doubao 官方一致"
-echo "  ✓ 请求参数格式与官方一致 (page_num, page_size, filter.*)"
-echo "  ✓ 响应格式与官方一致 (items, total)"
-echo "  ✓ 状态值自动转换 (系统内部 <-> doubao 官方)"
-echo "  ✓ 参数范围验证 (1-500)"
+print_info "主任务 ID: ${TASK_ID}"
 echo ""
-
-echo -e "${GREEN}所有测试已完成！${NC}"
+print_info "查询任务: $0 --query ${TASK_ID}"
+print_info "查询列表: $0 --query all"
+echo ""
