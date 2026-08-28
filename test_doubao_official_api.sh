@@ -296,6 +296,13 @@ list_response=$(curl -s -X POST "$list_url" \
     -H "Content-Type: application/json" \
     -d "$list_body")
 
+# 调试：打印查询响应
+echo ""
+echo -e "${YELLOW}━━━ 查询分组响应 ━━━${NC}"
+echo "$list_response" | jq '.' 2>/dev/null || echo "$list_response"
+echo -e "${YELLOW}━━━━━━━━━━━━━━━${NC}"
+echo ""
+
 # 从列表中查找匹配的分组
 GROUP_ID=$(echo "$list_response" | jq -r --arg name "$GROUP_NAME" '.Result.Items[]? | select(.Name == $name) | .Id')
 
