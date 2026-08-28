@@ -13,7 +13,7 @@ Base URL: https://your-domain.com
 | 创建视频任务 | `POST /api/v3/contents/generations/tasks` | ✅ 支持 |
 | 查询视频任务 | `GET /api/v3/contents/generations/tasks/{task_id}` | ✅ 支持 |
 | 查询任务列表 | `GET /api/v3/contents/generations/tasks` | ✅ 支持 |
-| 取消任务 | `DELETE /api/v3/contents/generations/tasks/{task_id}` | ⚠️ 暂不支持 |
+| 取消任务 | `DELETE /api/v3/contents/generations/tasks/{task_id}` | ✅ 支持 |
 
 ## 鉴权
 
@@ -222,46 +222,77 @@ curl 'https://your-domain.com/api/v3/contents/generations/tasks?filter.model=dou
 - 视频 URL 有效期为 24 小时，请及时下载或转存
 - Seedance 2.5 模型生成的视频 URL 下载次数上限为 100 次
 
-## 4. 取消任务（暂不支持）
+## 4. 取消任务
 
-### ⚠️ 重要说明
+### 请求示例
 
-**当前版本暂不支持取消任务功能。**
-
-正确的取消任务逻辑应该是：
-1. 先调用上游（doubao）的取消任务 API
-2. 如果上游取消成功，再更新本地数据库状态为 CANCELLED
-3. 如果上游取消失败，返回错误信息
-
-由于当前未实现上游取消接口调用，仅修改本地状态会导致：
-- 上游任务继续执行并消耗资源
-- 本地状态与上游状态不一致
-- 轮询更新时可能覆盖本地的取消状态
-
-### 接口定义
-
-```
-DELETE /api/v3/contents/generations/tasks/{task_id}
+```bash
+curl -X DELETE \
+  'https://your-domain.com/api/v3/contents/generations/tasks/task_rYVBCZdmBujBIc01dGJEZAZ9t4KyVFkn' \
+  -H 'Authorization: Bearer sk-<NewAPI Token>'
 ```
 
-### 当前行为
+### 说明
 
-调用此接口会返回 501 Not Implemented：
+- 仅可取消 `queued`、`processing`、`in_progress` 状态的任务
+- 已完成（`succeeded`）或已失败（`failed`）的任务无法取消
+- 取消成功后，任务状态会变为 `cancelled`，并自动退还预扣费用
+
+### 响应示例
+
+**成功时（HTTP 200）：**
+
+```json
+{}
+```
+
+**任务不存在（HTTP 404）：**
 
 ```json
 {
-  "code": "not_implemented",
-  "message": "cancel task is not implemented yet, need to call upstream cancel API first",
-  "status_code": 501
+  "code": "task_not_exist",
+  "message": "task not found or already deleted",
+  "status_code": 404
 }
 ```
 
-### 待实现
+**任务运行中，无法取消（HTTP 409）：**
 
-需要在 `relay/channel/task/doubao/adaptor.go` 中实现：
-1. `CancelTask` 方法，调用 doubao 官方取消任务 API
-2. 在 `RelayTaskDelete` 中先调用上游取消接口
-3. 根据上游返回结果更新本地状态
+```json
+{
+  "code": "task_not_cancellable",
+  "message": "Cannot delete task `cgt-...` because it is currently running. Request id: ...",
+  "status_code": 409
+}
+```
+
+**任务状态不支持取消（HTTP 400）：**
+
+```json
+{
+  "code": "task_not_cancellable",
+  "message": "task status is succeeded, cannot be cancelled",
+  "status_code": 400
+}
+```
+
+### 计费说明
+
+- 调用取消接口会立即向上游发送取消请求
+- 本地任务状态不会立即改变，由定时轮询任务自动同步
+- 当轮询检测到任务状态变为 `cancelled` 时：
+  - ✅ 自动退还预扣的全部配额
+  - ✅ 退还用户余额/订阅额度
+  - ✅ 记录退款日志，便于对账
+- 取消仅对 `queued` 状态有效，任务通常在提交后数秒内进入 `running`
+- 如需取消，应在创建任务后立即发起
+
+### 使用要点
+
+- 根据豆包官方 API 限制，只有 `queued` 状态的任务可以取消
+- 任务进入 `running` 状态后无法取消（会返回 409 错误）
+- 取消成功后，不会立即看到本地状态变化，需等待定时轮询（最多 15 秒）
+- 已取消的任务记录会保留在系统中，不会被删除
 
 ---
 
