@@ -275,46 +275,81 @@ echo ""
 # 1. 创建或获取分组
 print_section "1. 创建测试分组"
 
-print_test "检查分组是否存在: ${GROUP_NAME}"
+print_test "创建 AIGC 素材组: ${GROUP_NAME}"
 
-# 这里假设有分组管理 API，如果没有则跳过
-# 实际项目中可能需要通过管理端创建分组
-print_info "跳过分组创建（需要管理员权限）"
-echo ""
-
-# 2. 上传素材
-print_section "2. 上传图片素材"
-
-print_test "上传测试图片到素材库"
-
-asset_url="${BASE_URL}/api/seedance/assets"
-asset_body=$(cat <<EOF
+group_url="${BASE_URL}/api/seedance/assets/v2/?Action=CreateAssetGroup&Version=2024-01-01"
+group_body=$(cat <<EOF
 {
-  "url": "${TEST_IMAGE_URL}",
-  "name": "test-image-$(date +%s).jpg"
+  "Name": "${GROUP_NAME}",
+  "Title": "Doubao 测试素材组",
+  "Description": "用于 Doubao 官方 API 测试的素材组",
+  "GroupType": "AIGC",
+  "ProjectName": "default"
 }
 EOF
 )
 
-print_request "POST" "$asset_url" "$asset_body"
+print_request "POST" "$group_url" "$group_body"
 
-asset_response=$(curl -s -X POST "$asset_url" \
+group_response=$(curl -s -X POST "$group_url" \
     -H "Authorization: Bearer ${API_KEY}" \
     -H "Content-Type: application/json" \
-    -d "$asset_body")
+    -d "$group_body")
 
-print_response "$asset_response"
+print_response "$group_response"
 
-ASSET_ID=$(echo "$asset_response" | jq -r '.asset_id // .id // empty')
+GROUP_ID=$(echo "$group_response" | jq -r '.Result.Id // empty')
 
-if [ -z "$ASSET_ID" ]; then
-    print_error "素材上传失败，使用外部图片 URL"
-    IMAGE_URL="${TEST_IMAGE_URL}"
+if [ -z "$GROUP_ID" ]; then
+    print_error "分组创建失败，跳过素材上传"
+    echo ""
 else
-    print_success "素材上传成功! Asset ID: ${ASSET_ID}"
-    IMAGE_URL="asset://${ASSET_ID}"
+    print_success "分组创建成功! Group ID: ${GROUP_ID}"
+    echo ""
 fi
-echo ""
+
+# 2. 上传素材
+print_section "2. 上传图片素材"
+
+if [ -z "$GROUP_ID" ]; then
+    print_info "没有 Group ID，跳过素材上传，直接使用外部图片 URL"
+    IMAGE_URL="${TEST_IMAGE_URL}"
+    echo ""
+else
+    print_test "上传测试图片到素材库"
+
+    asset_url="${BASE_URL}/api/seedance/assets/v2/?Action=CreateAsset&Version=2024-01-01"
+    asset_body=$(cat <<EOF
+{
+  "GroupId": "${GROUP_ID}",
+  "URL": "${TEST_IMAGE_URL}",
+  "AssetType": "Image",
+  "Name": "test-image-$(date +%s).jpg",
+  "ProjectName": "default"
+}
+EOF
+)
+
+    print_request "POST" "$asset_url" "$asset_body"
+
+    asset_response=$(curl -s -X POST "$asset_url" \
+        -H "Authorization: Bearer ${API_KEY}" \
+        -H "Content-Type: application/json" \
+        -d "$asset_body")
+
+    print_response "$asset_response"
+
+    ASSET_ID=$(echo "$asset_response" | jq -r '.Result.Id // empty')
+
+    if [ -z "$ASSET_ID" ]; then
+        print_error "素材上传失败，使用外部图片 URL"
+        IMAGE_URL="${TEST_IMAGE_URL}"
+    else
+        print_success "素材上传成功! Asset ID: ${ASSET_ID}"
+        IMAGE_URL="asset://${ASSET_ID}"
+    fi
+    echo ""
+fi
 
 # 3. 创建视频任务
 print_section "3. 创建视频生成任务"

@@ -453,3 +453,213 @@ const getTask = async (taskId) => {
 
 - [ARK Video API 文档](./ARK-VIDEO-API.zh-CN.md) - 火山方舟原生兼容接口（旧版）
 - [豆包官方文档](https://docs.volcengine.com/docs/82379/1521675) - 豆包视频生成 API 官方文档
+
+---
+
+## Seedance Asset API（素材管理）
+
+除了视频生成任务接口，本系统还支持 Seedance 素材管理 API，用于管理视频生成所需的素材（图片、视频、音频）和素材组。
+
+### 接口地址
+
+```text
+Base URL: https://your-domain.com/api/seedance/assets/v2
+```
+
+### 统一请求方式
+
+所有 Seedance Asset API 使用统一的 POST 请求，通过 `Action` 参数区分不同操作：
+
+```bash
+POST /api/seedance/assets/v2/?Action={ActionName}&Version=2024-01-01
+```
+
+### 支持的操作
+
+| 功能 | Action | 方法 | 路径 |
+| --- | --- | --- | --- |
+| 创建素材组 | CreateAssetGroup | POST | `/?Action=CreateAssetGroup&Version=2024-01-01` |
+| 查询素材组 | ListAssetGroups | POST | `/?Action=ListAssetGroups&Version=2024-01-01` |
+| 获取素材组 | GetAssetGroup | POST | `/?Action=GetAssetGroup&Version=2024-01-01` |
+| 更新素材组 | UpdateAssetGroup | POST | `/?Action=UpdateAssetGroup&Version=2024-01-01` |
+| 删除素材组 | DeleteAssetGroup | POST | `/?Action=DeleteAssetGroup&Version=2024-01-01` |
+| 创建素材 | CreateAsset | POST | `/?Action=CreateAsset&Version=2024-01-01` |
+| 查询素材列表 | ListAssets | POST | `/?Action=ListAssets&Version=2024-01-01` |
+| 获取素材详情 | GetAsset | POST | `/?Action=GetAsset&Version=2024-01-01` |
+| 更新素材 | UpdateAsset | POST | `/?Action=UpdateAsset&Version=2024-01-01` |
+| 删除素材 | DeleteAsset | POST | `/?Action=DeleteAsset&Version=2024-01-01` |
+
+### 鉴权
+
+```http
+Authorization: Bearer sk-<NewAPI Token>
+Content-Type: application/json
+```
+
+### 使用示例
+
+#### 1. 创建素材组
+
+```bash
+curl -X POST \
+  'https://your-domain.com/api/seedance/assets/v2/?Action=CreateAssetGroup&Version=2024-01-01' \
+  -H 'Authorization: Bearer sk-<NewAPI Token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "Name": "我的素材组",
+    "Description": "用于存放项目素材"
+  }'
+```
+
+**响应示例：**
+
+```json
+{
+  "GroupId": "group_xxxxxxxx",
+  "Name": "我的素材组",
+  "Description": "用于存放项目素材",
+  "CreatedAt": 1787912449,
+  "UpdatedAt": 1787912449
+}
+```
+
+#### 2. 创建素材
+
+```bash
+curl -X POST \
+  'https://your-domain.com/api/seedance/assets/v2/?Action=CreateAsset&Version=2024-01-01' \
+  -H 'Authorization: Bearer sk-<NewAPI Token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "GroupId": "group_xxxxxxxx",
+    "Type": "image",
+    "Url": "https://example.com/image.jpg",
+    "Name": "参考图片",
+    "Tags": ["参考", "人物"]
+  }'
+```
+
+**响应示例：**
+
+```json
+{
+  "AssetId": "asset_xxxxxxxx",
+  "GroupId": "group_xxxxxxxx",
+  "Type": "image",
+  "Url": "https://example.com/image.jpg",
+  "Name": "参考图片",
+  "Tags": ["参考", "人物"],
+  "CreatedAt": 1787912449,
+  "UpdatedAt": 1787912449
+}
+```
+
+#### 3. 查询素材列表
+
+```bash
+curl -X POST \
+  'https://your-domain.com/api/seedance/assets/v2/?Action=ListAssets&Version=2024-01-01' \
+  -H 'Authorization: Bearer sk-<NewAPI Token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "GroupId": "group_xxxxxxxx",
+    "PageNumber": 1,
+    "PageSize": 20
+  }'
+```
+
+**响应示例：**
+
+```json
+{
+  "Assets": [
+    {
+      "AssetId": "asset_xxxxxxxx",
+      "GroupId": "group_xxxxxxxx",
+      "Type": "image",
+      "Url": "https://example.com/image.jpg",
+      "Name": "参考图片",
+      "Tags": ["参考", "人物"],
+      "CreatedAt": 1787912449,
+      "UpdatedAt": 1787912449
+    }
+  ],
+  "Total": 1,
+  "PageNumber": 1,
+  "PageSize": 20
+}
+```
+
+#### 4. 删除素材
+
+```bash
+curl -X POST \
+  'https://your-domain.com/api/seedance/assets/v2/?Action=DeleteAsset&Version=2024-01-01' \
+  -H 'Authorization: Bearer sk-<NewAPI Token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "AssetId": "asset_xxxxxxxx"
+  }'
+```
+
+**响应示例：**
+
+```json
+{
+  "Success": true
+}
+```
+
+### 素材类型
+
+| 类型 | 说明 | 用途 |
+| --- | --- | --- |
+| image | 图片素材 | 作为参考图片用于 image2video 生成 |
+| video | 视频素材 | 作为参考视频用于视频续写 |
+| audio | 音频素材 | 作为参考音频用于音频生成 |
+
+### 在视频生成中使用素材
+
+创建素材后，可以在视频生成任务中引用素材 ID：
+
+```bash
+curl -X POST \
+  'https://your-domain.com/api/v3/contents/generations/tasks' \
+  -H 'Authorization: Bearer sk-<NewAPI Token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "doubao-seedance-2-0-260128",
+    "content": [
+      {
+        "type": "text",
+        "text": "基于参考图生成视频"
+      },
+      {
+        "type": "image_url",
+        "image_url": {
+          "url": "asset://asset_xxxxxxxx"
+        },
+        "role": "reference_image"
+      }
+    ],
+    "duration": 5
+  }'
+```
+
+### 注意事项
+
+1. **URL 格式**：素材 URL 支持 `https://` 和 `asset://` 两种格式
+   - `https://` - 直接指定素材 URL
+   - `asset://asset_id` - 引用已创建的素材
+
+2. **素材管理**：素材会持久化存储在系统中，可以重复使用
+
+3. **权限控制**：每个用户只能访问自己创建的素材组和素材
+
+4. **配额计费**：素材存储和使用不额外计费，仅在视频生成时计费
+
+### 更多信息
+
+完整的 Seedance Asset API 设计文档和使用说明，请参考：
+- [Seedance Asset API 设计文档](./seedance-asset-design.md)
+- [Seedance Asset API 简明文档](./seedance-asset-simple.md)
