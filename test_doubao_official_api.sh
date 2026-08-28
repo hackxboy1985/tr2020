@@ -4,12 +4,13 @@
 # 完整测试流程：分组 → 素材 → 视频任务 → 查询 → 取消
 #
 # 使用方法:
-#   ./test_doubao_official_api.sh              # 执行完整测试流程
-#   ./test_doubao_official_api.sh --query <id> # 查询指定任务状态
-#   ./test_doubao_official_api.sh --query all  # 查询任务列表
+#   ./test_doubao_official_api.sh                 # 执行完整测试流程
+#   ./test_doubao_official_api.sh --query <id>    # 查询指定任务状态
+#   ./test_doubao_official_api.sh --query all     # 查询任务列表
+#   ./test_doubao_official_api.sh --cancel <id>   # 取消指定任务
 
 # 配置
-BASE_URL="http://book2:3000"
+BASE_URL="http://book2:3002"
 API_KEY="sk-60oOqvQYb8vziFfg2hPHlTKW3X80Pc6sIBDC5EFHCY0sn5NY"
 GROUP_NAME="doubao-test-group"
 TEST_IMAGE_URL="https://static.horse-world.mints-id.com/gy/general/1/image/2026-07-08/1783497394035_4147.png"
@@ -195,6 +196,51 @@ query_task() {
     exit 0
 }
 
+# 子命令：取消任务
+cancel_task() {
+    local task_id="$1"
+
+    print_section "取消任务: ${task_id}"
+
+    local cancel_url="${BASE_URL}/api/v3/contents/generations/tasks/${task_id}"
+    print_request "DELETE" "$cancel_url"
+
+    cancel_response=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X DELETE "$cancel_url" \
+        -H "Authorization: Bearer ${API_KEY}")
+
+    response_body=$(echo "$cancel_response" | sed -e 's/HTTP_STATUS\:.*//g')
+    http_status=$(echo "$cancel_response" | grep -o "HTTP_STATUS:[0-9]*" | cut -d: -f2)
+
+    print_response "$response_body" "$http_status"
+
+    case $http_status in
+        200)
+            print_success "取消成功 (HTTP 200)"
+            echo ""
+            echo -e "${GREEN}任务已成功取消${NC}"
+            ;;
+        404)
+            print_error "任务不存在 (HTTP 404)"
+            ;;
+        409)
+            print_error "任务运行中，无法取消 (HTTP 409)"
+            ;;
+        400)
+            print_error "任务状态不支持取消 (HTTP 400)"
+            local code=$(echo "$response_body" | jq -r '.code // "unknown"')
+            local message=$(echo "$response_body" | jq -r '.message // "unknown"')
+            echo ""
+            echo -e "${YELLOW}错误代码: ${code}${NC}"
+            echo -e "${YELLOW}错误信息: ${message}${NC}"
+            ;;
+        *)
+            print_error "未预期的状态码: ${http_status}"
+            ;;
+    esac
+
+    exit 0
+}
+
 # 处理命令行参数
 if [ "$1" = "--query" ]; then
     if [ -z "$2" ]; then
@@ -204,6 +250,15 @@ if [ "$1" = "--query" ]; then
         exit 1
     fi
     query_task "$2"
+fi
+
+if [ "$1" = "--cancel" ]; then
+    if [ -z "$2" ]; then
+        echo -e "${RED}错误: --cancel 需要指定任务 ID${NC}"
+        echo "用法: $0 --cancel <task_id>"
+        exit 1
+    fi
+    cancel_task "$2"
 fi
 
 # ========================================
@@ -283,9 +338,9 @@ local create_body=$(cat <<EOF
       "role": "reference_image"
     }
   ],
-  "resolution": "720p",
+  "resolution": "480p",
   "ratio": "16:9",
-  "duration": 5
+  "duration": 4
 }
 EOF
 )
@@ -418,7 +473,7 @@ local cancel_create_body=$(cat <<EOF
       "text": "测试取消任务"
     }
   ],
-  "duration": 5
+  "duration": 4
 }
 EOF
 )
