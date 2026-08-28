@@ -403,6 +403,10 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 		taskResult.Status = model.TaskStatusFailure
 		taskResult.Progress = "100%"
 		taskResult.Reason = resTask.Error.Message
+	case "cancelled":
+		taskResult.Status = model.TaskStatusCancelled
+		taskResult.Progress = "100%"
+		taskResult.Reason = "cancelled by user"
 	default:
 		// Unknown status, treat as processing
 		taskResult.Status = model.TaskStatusInProgress
@@ -410,6 +414,65 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 	}
 
 	return &taskResult, nil
+}
+
+// CancelTask cancels a task by calling upstream DELETE API
+func (a *TaskAdaptor) CancelTask(upstreamTaskID string) error {
+	fetchPath := a.videoFetchPath
+	if fetchPath == "" {
+		fetchPath = "/api/v3/contents/generations/tasks"
+	}
+	uri := fmt.Sprintf("%s%s/%s", a.baseURL, fetchPath, upstreamTaskID)
+
+	req, err := http.NewRequest(http.MethodDelete, uri, nil)
+	if err != nil {
+		return errors.Wrap(err, "create cancel request failed")
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+a.apiKey)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return errors.Wrap(err, "cancel request failed")
+	}
+	defer resp.Body.Close()
+
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return errors.Wrap(err, "read cancel response failed")
+	}
+
+	// 根据文档，成功时返回 HTTP 200，响应体为 {}
+	if resp.StatusCode == http.StatusOK {
+		return nil
+	}
+
+	// 处理错误响应
+	// 任务不存在: HTTP 404
+	if resp.StatusCode == http.StatusNotFound {
+		return errors.New("task_not_exist")
+	}
+
+	// 任务运行中: HTTP 409
+	if resp.StatusCode == http.StatusConflict {
+		var errResp struct {
+			Error struct {
+				Code    string `json:"code"`
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		_ = common.Unmarshal(responseBody, &errResp)
+		if errResp.Error.Message != "" {
+			return errors.New(errResp.Error.Message)
+		}
+		return errors.New("task is running, cannot cancel")
+	}
+
+	// 其他错误
+	return errors.Errorf("cancel task failed with status %d: %s", resp.StatusCode, string(responseBody))
 }
 
 func (a *TaskAdaptor) ConvertToOpenAIVideo(originTask *model.Task) ([]byte, error) {

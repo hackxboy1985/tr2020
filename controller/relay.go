@@ -845,18 +845,96 @@ func RelayTaskDelete(c *gin.Context) {
 		return
 	}
 
-	// TODO: 当前未实现上游取消接口调用
-	// 正确的逻辑应该是：
-	// 1. 先调用上游（doubao）的取消任务接口
-	// 2. 如果上游取消成功，再更新本地状态为 CANCELLED
-	// 3. 如果上游取消失败，返回错误信息
-	//
-	// 暂时返回不支持取消任务
-	c.JSON(http.StatusNotImplemented, &dto.TaskError{
-		Code:       "not_implemented",
-		Message:    "cancel task is not implemented yet, need to call upstream cancel API first",
-		StatusCode: http.StatusNotImplemented,
-	})
+	// Get channel info
+	channel, err := model.GetChannelById(task.ChannelId, true)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, &dto.TaskError{
+			Code:       "get_channel_failed",
+			Message:    err.Error(),
+			StatusCode: http.StatusInternalServerError,
+		})
+		return
+	}
+
+	// Get adaptor
+	adaptor := relay.GetTaskAdaptor(task.Platform)
+	if adaptor == nil {
+		c.JSON(http.StatusInternalServerError, &dto.TaskError{
+			Code:       "invalid_platform",
+			Message:    fmt.Sprintf("platform %s not supported", task.Platform),
+			StatusCode: http.StatusInternalServerError,
+		})
+		return
+	}
+
+	// Initialize adaptor with minimal RelayInfo
+	info := &relaycommon.RelayInfo{}
+	info.ChannelMeta = &relaycommon.ChannelMeta{
+		ChannelType:    channel.Type,
+		ChannelBaseUrl: channel.GetBaseURL(),
+		ApiKey:         channel.Key,
+	}
+
+	// Load channel other settings if available
+	if channel.Other != "" {
+		var channelOtherSettings dto.ChannelOtherSettings
+		if err := common.UnmarshalJsonStr(channel.Other, &channelOtherSettings); err == nil {
+			info.ChannelMeta.ChannelOtherSettings = channelOtherSettings
+		}
+	}
+
+	adaptor.Init(info)
+
+	// Call upstream cancel API
+	type TaskCanceller interface {
+		CancelTask(upstreamTaskID string) error
+	}
+	canceller, ok := adaptor.(TaskCanceller)
+	if !ok {
+		c.JSON(http.StatusNotImplemented, &dto.TaskError{
+			Code:       "not_implemented",
+			Message:    fmt.Sprintf("platform %s does not support cancel task", task.Platform),
+			StatusCode: http.StatusNotImplemented,
+		})
+		return
+	}
+
+	upstreamTaskID := task.GetUpstreamTaskID()
+	if upstreamTaskID == "" {
+		c.JSON(http.StatusBadRequest, &dto.TaskError{
+			Code:       "invalid_task",
+			Message:    "upstream task id not found",
+			StatusCode: http.StatusBadRequest,
+		})
+		return
+	}
+
+	if err := canceller.CancelTask(upstreamTaskID); err != nil {
+		// Parse error message
+		errMsg := err.Error()
+		statusCode := http.StatusInternalServerError
+		errorCode := "cancel_failed"
+
+		if strings.Contains(errMsg, "task_not_exist") || strings.Contains(errMsg, "not found") {
+			statusCode = http.StatusNotFound
+			errorCode = "task_not_exist"
+			errMsg = "task not found or already deleted"
+		} else if strings.Contains(errMsg, "running") || strings.Contains(errMsg, "cannot cancel") {
+			statusCode = http.StatusConflict
+			errorCode = "task_not_cancellable"
+		}
+
+		c.JSON(statusCode, &dto.TaskError{
+			Code:       errorCode,
+			Message:    errMsg,
+			StatusCode: statusCode,
+		})
+		return
+	}
+
+	// Success: return empty response (doubao official format)
+	// Note: We don't modify local task status here, let polling task handle it
+	c.JSON(http.StatusOK, gin.H{})
 }
 
 // respondTaskError 统一输出 Task 错误响应（含 429 限流提示改写）
