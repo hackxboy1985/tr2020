@@ -273,12 +273,43 @@ print_info "测试流程: 分组 → 素材 → 视频任务 → 查询 → 取�
 echo ""
 
 # 1. 创建或获取分组
-print_section "1. 创建测试分组"
+print_section "1. 获取或创建测试分组"
 
-print_test "创建 AIGC 素材组: ${GROUP_NAME}"
+# 先查询分组列表，看是否已存在
+print_test "查询分组: ${GROUP_NAME}"
 
-group_url="${BASE_URL}/api/seedance/assets/v2/?Action=CreateAssetGroup&Version=2024-01-01"
-group_body=$(cat <<EOF
+list_url="${BASE_URL}/api/seedance/assets/v2/?Action=ListAssetGroups&Version=2024-01-01"
+list_body=$(cat <<EOF
+{
+  "Filter": {
+    "GroupType": "AIGC"
+  },
+  "PageNumber": 1,
+  "PageSize": 100,
+  "ProjectName": "default"
+}
+EOF
+)
+
+list_response=$(curl -s -X POST "$list_url" \
+    -H "Authorization: Bearer ${API_KEY}" \
+    -H "Content-Type: application/json" \
+    -d "$list_body")
+
+# 从列表中查找匹配的分组
+GROUP_ID=$(echo "$list_response" | jq -r --arg name "$GROUP_NAME" '.Result.Items[]? | select(.Name == $name) | .Id')
+
+if [ -n "$GROUP_ID" ]; then
+    print_success "分组已存在，跳过创建! Group ID: ${GROUP_ID}"
+    echo ""
+else
+    print_info "分组不存在，开始创建..."
+    echo ""
+
+    print_test "创建 AIGC 素材组: ${GROUP_NAME}"
+
+    group_url="${BASE_URL}/api/seedance/assets/v2/?Action=CreateAssetGroup&Version=2024-01-01"
+    group_body=$(cat <<EOF
 {
   "Name": "${GROUP_NAME}",
   "Title": "Doubao 测试素材组",
@@ -289,23 +320,24 @@ group_body=$(cat <<EOF
 EOF
 )
 
-print_request "POST" "$group_url" "$group_body"
+    print_request "POST" "$group_url" "$group_body"
 
-group_response=$(curl -s -X POST "$group_url" \
-    -H "Authorization: Bearer ${API_KEY}" \
-    -H "Content-Type: application/json" \
-    -d "$group_body")
+    group_response=$(curl -s -X POST "$group_url" \
+        -H "Authorization: Bearer ${API_KEY}" \
+        -H "Content-Type: application/json" \
+        -d "$group_body")
 
-print_response "$group_response"
+    print_response "$group_response"
 
-GROUP_ID=$(echo "$group_response" | jq -r '.Result.Id // empty')
+    GROUP_ID=$(echo "$group_response" | jq -r '.Result.Id // empty')
 
-if [ -z "$GROUP_ID" ]; then
-    print_error "分组创建失败，跳过素材上传"
-    echo ""
-else
-    print_success "分组创建成功! Group ID: ${GROUP_ID}"
-    echo ""
+    if [ -z "$GROUP_ID" ]; then
+        print_error "分组创建失败，跳过素材上传"
+        echo ""
+    else
+        print_success "分组创建成功! Group ID: ${GROUP_ID}"
+        echo ""
+    fi
 fi
 
 # 2. 上传素材
@@ -422,6 +454,11 @@ for i in {1..12}; do
         -H "Authorization: Bearer ${API_KEY}")
 
     status=$(echo "$query_response" | jq -r '.status // "unknown"')
+
+    if [ $i -eq 1 ]; then
+        # 第一次查询时打印完整响应
+        print_response "$query_response"
+    fi
 
     echo "当前状态: ${status}"
 

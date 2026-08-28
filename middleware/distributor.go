@@ -319,6 +319,12 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 		if _, ok := c.Get("relay_mode"); !ok {
 			c.Set("relay_mode", relayMode)
 		}
+	} else if strings.HasPrefix(c.Request.URL.Path, "/api/seedance/assets/v2") {
+		// Seedance Asset API (CreateAssetGroup, CreateAsset, etc.)
+		// 这些接口不需要 model 参数，跳过 model 检查
+		shouldSelectChannel = true
+		modelRequest.Model = "seedance-asset" // 占位符，用于渠道选择
+		c.Set("relay_mode", relayconstant.RelayModeUnknown)
 	} else if strings.Contains(c.Request.URL.Path, "/api/v3/contents/generations/tasks") {
 		// Doubao official API path
 		relayMode := relayconstant.RelayModeUnknown
