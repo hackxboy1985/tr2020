@@ -333,6 +333,11 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 			relayMode = relayconstant.RelayModeVideoFetchByID
 			shouldSelectChannel = false
 			modelRequest.Model = getTaskOriginModelName(c)
+		} else if c.Request.Method == http.MethodDelete {
+			// DELETE /api/v3/contents/generations/tasks/:task_id - cancel task
+			relayMode = relayconstant.RelayModeVideoFetchByID // 复用 FetchByID 模式
+			shouldSelectChannel = false
+			modelRequest.Model = getTaskOriginModelName(c)
 		}
 		c.Set("relay_mode", relayMode)
 		c.Set("doubao_official_format", true)

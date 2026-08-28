@@ -716,6 +716,9 @@ func RelayTaskFetchList(c *gin.Context) {
 				// 删除内部字段
 				delete(taskData, "upstream_task_id")
 
+				// 替换为我们的 public task ID（task.Data 中的 id 是上游 ID）
+				taskData["id"] = task.TaskID
+
 				// 不需要转换 status：task.Data 存储的是上游原始响应，status 已经是官方格式
 
 				// 筛选条件（如果指定）
@@ -761,6 +764,9 @@ func RelayTaskFetchList(c *gin.Context) {
 			_ = common.Unmarshal(task.Data, &taskData)
 			// 删除内部字段
 			delete(taskData, "upstream_task_id")
+
+			// 替换为我们的 public task ID（task.Data 中的 id 是上游 ID）
+			taskData["id"] = task.TaskID
 
 			// 不需要转换 status：task.Data 存储的是上游原始响应，status 已经是官方格式
 
