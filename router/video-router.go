@@ -52,9 +52,11 @@ func SetVideoRouter(router *gin.Engine) {
 	}
 
 	// Seedance Asset API routes (使用 Action 参数)
+	// 不使用 Distribute() 中间件，因为这是素材管理接口，不需要模型和渠道选择
+	// controller 内部会自己调用 GetSeedanceGatewayChannel 选择渠道
 	seedanceAssetGroup := router.Group("/api/seedance/assets/v2")
 	seedanceAssetGroup.Use(middleware.RouteTag("relay"))
-	seedanceAssetGroup.Use(middleware.TokenAuth(), middleware.Distribute())
+	seedanceAssetGroup.Use(middleware.TokenAuth())
 	{
 		seedanceAssetGroup.POST("/", controller.RelayAsset)
 	}
