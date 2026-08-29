@@ -33,6 +33,7 @@ func seedanceGetGW(c *gin.Context) (*service.SeedanceGatewayChannel, bool) {
 
 // proxyAndPassthrough sends the request to upstream and writes response back.
 // It also calls the onSuccess callback (with status code and body) before writing.
+// If the callback writes a response, proxyAndPassthrough will not write again.
 func proxyAndPassthrough(c *gin.Context, gw *service.SeedanceGatewayChannel, method, path string, query url.Values, body []byte, onSuccess func(statusCode int, body []byte)) {
 	statusCode, respBody, err := service.SeedanceProxyRequest(gw, method, path, query, body)
 	if err != nil {
@@ -46,7 +47,10 @@ func proxyAndPassthrough(c *gin.Context, gw *service.SeedanceGatewayChannel, met
 	if onSuccess != nil {
 		onSuccess(statusCode, respBody)
 	}
-	c.Data(statusCode, "application/json; charset=utf-8", respBody)
+	// 检查回调是否已经写入响应，如果是则不再写入
+	if !c.Writer.Written() {
+		c.Data(statusCode, "application/json; charset=utf-8", respBody)
+	}
 }
 
 // extractUpstreamErrMsg 从上游标准错误结构中提取 Message，解析失败时返回通用提示。
