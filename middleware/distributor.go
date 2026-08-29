@@ -323,6 +323,7 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 		// Seedance Asset API (CreateAssetGroup, CreateAsset, etc.)
 		// 这些接口是素材管理接口，不需要模型和渠道选择
 		// 返回空 model 和 shouldSelectChannel=false，让 Distribute 直接放行
+		common.SysLog(fmt.Sprintf("[DEBUG] Asset API detected: %s, skipping channel selection", c.Request.URL.Path))
 		return &ModelRequest{Model: ""}, false, nil
 	} else if strings.Contains(c.Request.URL.Path, "/api/v3/contents/generations/tasks") {
 		// Doubao official API path
