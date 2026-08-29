@@ -1,22 +1,19 @@
 package controller
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
-	"strings"
 
 	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/logger"
-	"github.com/QuantumNous/new-api/service"
 
 	"github.com/gin-gonic/gin"
 )
 
 // RelayAsset handles POST /api/seedance/assets/v2/?Action=XXX&Version=2024-01-01
+// 将火山官方 Action 格式的请求转换为调用现有的 Seedance RESTful 函数
+// 这样可以复用现有的用户隔离逻辑和数据库同步逻辑
 func RelayAsset(c *gin.Context) {
 	action := c.Query("Action")
 	version := c.Query("Version")
@@ -35,283 +32,253 @@ func RelayAsset(c *gin.Context) {
 	}
 
 	// 验证 Action 是否支持
-	supportedActions := []string{
+	supportedActions := map[string]bool{
 		// 真人认证
-		"CreateVisualValidateSession",
-		"GetVisualValidateResult",
+		"CreateVisualValidateSession": true,
+		"GetVisualValidateResult":     true,
 		// Asset Group 管理
-		"CreateAssetGroup",
-		"GetAssetGroup",
-		"ListAssetGroups",
-		"UpdateAssetGroup",
-		"DeleteAssetGroup",
+		"CreateAssetGroup": true,
+		"GetAssetGroup":    true,
+		"ListAssetGroups":  true,
+		"UpdateAssetGroup": true,
+		"DeleteAssetGroup": true,
 		// Asset 管理
-		"CreateAsset",
-		"GetAsset",
-		"ListAssets",
-		"UpdateAsset",
-		"DeleteAsset",
+		"CreateAsset":  true,
+		"GetAsset":     true,
+		"ListAssets":   true,
+		"UpdateAsset":  true,
+		"DeleteAsset":  true,
 	}
 
-	isSupported := false
-	for _, a := range supportedActions {
-		if action == a {
-			isSupported = true
-			break
-		}
-	}
-
-	if !isSupported {
+	if !supportedActions[action] {
 		c.JSON(http.StatusBadRequest, &dto.TaskError{
 			Code:       "unsupported_action",
-			Message:    fmt.Sprintf("Action %s is not supported", action),
+			Message:    fmt.Sprintf("Action '%s' is not supported", action),
 			StatusCode: http.StatusBadRequest,
 		})
 		return
 	}
 
-	// 读取请求体
-	bodyBytes, err := io.ReadAll(c.Request.Body)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, &dto.TaskError{
-			Code:       "read_body_failed",
-			Message:    err.Error(),
-			StatusCode: http.StatusBadRequest,
-		})
-		return
-	}
-
-	// 获取 Seedance Gateway 渠道（不使用 Distribute 中间件）
-	userGroup := c.GetString("group")
-	if userGroup == "" {
-		userGroup = "default"
-	}
-
-	gw, err := service.GetSeedanceGatewayChannel(userGroup)
-	if err != nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": map[string]interface{}{
-				"message": fmt.Sprintf("no available seedance gateway channel: %s", err.Error()),
-				"type":    "invalid_request_error",
-			},
-		})
-		return
-	}
-
-	// 获取上游 API 格式配置
-	format := gw.Channel.GetOtherSettings().SeedanceAssetAPIFormat
-	if format == "" {
-		format = "gatewayMg" // 默认咪咕格式
-	}
-
-	// 根据格式转换请求
-	var method, upstreamURL string
-	var requestBody []byte
-
-	if format == "gatewayMg" {
-		// 转换为咪咕 RESTful 格式
-		method, upstreamURL, requestBody, err = convertActionToGatewayMg(gw.GatewayURL, action, bodyBytes)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": map[string]interface{}{
-					"message": fmt.Sprintf("convert to gatewayMg format failed: %s", err.Error()),
-					"type":    "invalid_request_error",
-				},
-			})
-			return
-		}
-	} else if format == "official" {
-		// 保持火山 Action 格式
-		method = "POST"
-		upstreamURL = fmt.Sprintf("%s/?Action=%s&Version=%s", strings.TrimSuffix(gw.GatewayURL, "/"), action, version)
-		requestBody = bodyBytes
-	} else {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": map[string]interface{}{
-				"message": fmt.Sprintf("unsupported api format: %s", format),
-				"type":    "invalid_request_error",
-			},
-		})
-		return
-	}
-
-	// 打印日志
-	logger.LogInfo(c, fmt.Sprintf("asset upstream URL: %s", upstreamURL))
-	logger.LogInfo(c, fmt.Sprintf("asset upstream method: %s", method))
-	if len(requestBody) > 0 {
-		logger.LogInfo(c, fmt.Sprintf("asset upstream body: %s", string(requestBody)))
-	}
-
-	// 创建上游请求
-	req, err := http.NewRequest(method, upstreamURL, bytes.NewBuffer(requestBody))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": map[string]interface{}{
-				"message": fmt.Sprintf("failed to create request: %s", err.Error()),
-				"type":    "internal_error",
-			},
-		})
-		return
-	}
-
-	// 设置请求头
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+gw.Key)
-	req.Header.Set("Accept", "application/json")
-
-	// 发送请求
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{
-			"error": map[string]interface{}{
-				"message": fmt.Sprintf("upstream request failed: %s", err.Error()),
-				"type":    "upstream_error",
-			},
-		})
-		return
-	}
-	defer resp.Body.Close()
-
-	// 读取响应
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": map[string]interface{}{
-				"message": fmt.Sprintf("failed to read response: %s", err.Error()),
-				"type":    "internal_error",
-			},
-		})
-		return
-	}
-
-	// 返回响应
-	c.Data(resp.StatusCode, "application/json", respBody)
-}
-
-// convertActionToGatewayMg 将火山 Action 格式转换为咪咕 Gateway RESTful 格式
-func convertActionToGatewayMg(baseURL, action string, bodyBytes []byte) (method, url string, newBody []byte, err error) {
-	var reqBody map[string]interface{}
-	if len(bodyBytes) > 0 {
-		if err := json.Unmarshal(bodyBytes, &reqBody); err != nil {
-			return "", "", nil, fmt.Errorf("parse request body failed: %w", err)
-		}
-	} else {
-		reqBody = make(map[string]interface{})
-	}
-
-	baseURL = strings.TrimSuffix(baseURL, "/")
-
+	// 根据 Action 调用对应的函数
+	// 这些函数已经实现了用户隔离和数据库同步逻辑
 	switch action {
 	// ========== 素材组接口 ==========
 	case "CreateAssetGroup":
-		return "POST", baseURL + "/api/seedance/proxy/assets/groups", bodyBytes, nil
-
+		SeedanceCreateAssetGroup(c)
 	case "ListAssetGroups":
-		// GET 请求，参数从 body 转为 query
-		query := buildQueryFromBody(reqBody)
-		url := baseURL + "/api/seedance/proxy/assets/groups"
-		if query != "" {
-			url += "?" + query
-		}
-		return "GET", url, nil, nil
-
+		SeedanceListAssetGroups(c)
 	case "GetAssetGroup":
-		groupID, ok := reqBody["GroupId"].(string)
-		if !ok {
-			return "", "", nil, fmt.Errorf("GroupId is required")
-		}
-		return "GET", fmt.Sprintf("%s/api/seedance/proxy/assets/groups/%s", baseURL, groupID), nil, nil
-
+		handleGetAssetGroup(c)
 	case "UpdateAssetGroup":
-		groupID, ok := reqBody["GroupId"].(string)
-		if !ok {
-			return "", "", nil, fmt.Errorf("GroupId is required")
-		}
-		return "PUT", fmt.Sprintf("%s/api/seedance/proxy/assets/groups/%s", baseURL, groupID), bodyBytes, nil
-
+		handleUpdateAssetGroup(c)
 	case "DeleteAssetGroup":
-		groupID, ok := reqBody["GroupId"].(string)
-		if !ok {
-			return "", "", nil, fmt.Errorf("GroupId is required")
-		}
-		return "DELETE", fmt.Sprintf("%s/api/seedance/proxy/assets/groups/%s", baseURL, groupID), nil, nil
+		handleDeleteAssetGroup(c)
 
 	// ========== 素材接口 ==========
 	case "CreateAsset":
-		return "POST", baseURL + "/api/seedance/proxy/assets", bodyBytes, nil
-
+		SeedanceCreateAsset(c)
 	case "ListAssets":
-		query := buildQueryFromBody(reqBody)
-		url := baseURL + "/api/seedance/proxy/assets"
-		if query != "" {
-			url += "?" + query
-		}
-		return "GET", url, nil, nil
-
+		SeedanceListAssets(c)
 	case "GetAsset":
-		assetID, ok := reqBody["AssetId"].(string)
-		if !ok {
-			return "", "", nil, fmt.Errorf("AssetId is required")
-		}
-		return "GET", fmt.Sprintf("%s/api/seedance/proxy/assets/%s", baseURL, assetID), nil, nil
-
+		handleGetAsset(c)
 	case "UpdateAsset":
-		assetID, ok := reqBody["AssetId"].(string)
-		if !ok {
-			return "", "", nil, fmt.Errorf("AssetId is required")
-		}
-		return "PUT", fmt.Sprintf("%s/api/seedance/proxy/assets/%s", baseURL, assetID), bodyBytes, nil
-
+		handleUpdateAsset(c)
 	case "DeleteAsset":
-		assetID, ok := reqBody["AssetId"].(string)
-		if !ok {
-			return "", "", nil, fmt.Errorf("AssetId is required")
-		}
-		return "DELETE", fmt.Sprintf("%s/api/seedance/proxy/assets/%s", baseURL, assetID), nil, nil
+		handleDeleteAsset(c)
 
 	// ========== 真人认证接口 ==========
 	case "CreateVisualValidateSession":
-		return "POST", baseURL + "/api/seedance/proxy/face-verifications", bodyBytes, nil
-
+		SeedanceCreateFaceVerification(c)
 	case "GetVisualValidateResult":
-		sessionID, ok := reqBody["SessionId"].(string)
-		if !ok {
-			return "", "", nil, fmt.Errorf("SessionId is required")
-		}
-		return "GET", fmt.Sprintf("%s/api/seedance/proxy/face-verifications/%s", baseURL, sessionID), nil, nil
+		handleGetVisualValidateResult(c)
 
 	default:
-		return "", "", nil, fmt.Errorf("unsupported action: %s", action)
+		c.JSON(http.StatusBadRequest, &dto.TaskError{
+			Code:       "unsupported_action",
+			Message:    fmt.Sprintf("Action '%s' is not implemented", action),
+			StatusCode: http.StatusBadRequest,
+		})
 	}
 }
 
-// buildQueryFromBody 从请求体中提取查询参数（用于 List 接口）
-func buildQueryFromBody(body map[string]interface{}) string {
-	params := url.Values{}
-
-	// 分页参数
-	if pageNum, ok := body["PageNumber"].(float64); ok {
-		params.Add("PageNumber", fmt.Sprintf("%d", int(pageNum)))
-	}
-	if pageSize, ok := body["PageSize"].(float64); ok {
-		params.Add("PageSize", fmt.Sprintf("%d", int(pageSize)))
-	}
-
-	// 素材组过滤参数
-	if groupID, ok := body["GroupId"].(string); ok && groupID != "" {
-		params.Add("GroupId", groupID)
+// handleGetAssetGroup 从 body 中提取 GroupId 并调用 SeedanceGetAssetGroup
+func handleGetAssetGroup(c *gin.Context) {
+	bodyBytes, _ := io.ReadAll(c.Request.Body)
+	var reqBody map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &reqBody); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]interface{}{
+			"message": "invalid request body",
+			"type":    "invalid_request_error",
+		}})
+		return
 	}
 
-	// 素材类型过滤
-	if assetType, ok := body["AssetType"].(string); ok && assetType != "" {
-		params.Add("AssetType", assetType)
+	groupID, ok := reqBody["GroupId"].(string)
+	if !ok || groupID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]interface{}{
+			"message": "GroupId is required",
+			"type":    "invalid_request_error",
+		}})
+		return
 	}
 
-	// 状态过滤
-	if status, ok := body["Status"].(string); ok && status != "" {
-		params.Add("Status", status)
+	// 将 GroupId 设置到 URL 参数中，供 SeedanceGetAssetGroup 使用
+	c.Params = append(c.Params, gin.Param{Key: "id", Value: groupID})
+	SeedanceGetAssetGroup(c)
+}
+
+// handleUpdateAssetGroup 从 body 中提取 GroupId 并调用 SeedancePutAssetGroup
+func handleUpdateAssetGroup(c *gin.Context) {
+	bodyBytes, _ := io.ReadAll(c.Request.Body)
+	var reqBody map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &reqBody); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]interface{}{
+			"message": "invalid request body",
+			"type":    "invalid_request_error",
+		}})
+		return
 	}
 
-	return params.Encode()
+	groupID, ok := reqBody["GroupId"].(string)
+	if !ok || groupID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]interface{}{
+			"message": "GroupId is required",
+			"type":    "invalid_request_error",
+		}})
+		return
+	}
+
+	// 将 GroupId 设置到 URL 参数中
+	c.Params = append(c.Params, gin.Param{Key: "id", Value: groupID})
+	SeedancePutAssetGroup(c)
+}
+
+// handleDeleteAssetGroup 从 body 中提取 GroupId 并调用 SeedanceDeleteAssetGroup
+func handleDeleteAssetGroup(c *gin.Context) {
+	bodyBytes, _ := io.ReadAll(c.Request.Body)
+	var reqBody map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &reqBody); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]interface{}{
+			"message": "invalid request body",
+			"type":    "invalid_request_error",
+		}})
+		return
+	}
+
+	groupID, ok := reqBody["GroupId"].(string)
+	if !ok || groupID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]interface{}{
+			"message": "GroupId is required",
+			"type":    "invalid_request_error",
+		}})
+		return
+	}
+
+	// 将 GroupId 设置到 URL 参数中
+	c.Params = append(c.Params, gin.Param{Key: "id", Value: groupID})
+	SeedanceDeleteAssetGroup(c)
+}
+
+// handleGetAsset 从 body 中提取 AssetId 并调用 SeedanceGetAsset
+func handleGetAsset(c *gin.Context) {
+	bodyBytes, _ := io.ReadAll(c.Request.Body)
+	var reqBody map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &reqBody); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]interface{}{
+			"message": "invalid request body",
+			"type":    "invalid_request_error",
+		}})
+		return
+	}
+
+	assetID, ok := reqBody["AssetId"].(string)
+	if !ok || assetID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]interface{}{
+			"message": "AssetId is required",
+			"type":    "invalid_request_error",
+		}})
+		return
+	}
+
+	// 将 AssetId 设置到 URL 参数中
+	c.Params = append(c.Params, gin.Param{Key: "id", Value: assetID})
+	SeedanceGetAsset(c)
+}
+
+// handleUpdateAsset 从 body 中提取 AssetId 并调用 SeedancePutAsset
+func handleUpdateAsset(c *gin.Context) {
+	bodyBytes, _ := io.ReadAll(c.Request.Body)
+	var reqBody map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &reqBody); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]interface{}{
+			"message": "invalid request body",
+			"type":    "invalid_request_error",
+		}})
+		return
+	}
+
+	assetID, ok := reqBody["AssetId"].(string)
+	if !ok || assetID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]interface{}{
+			"message": "AssetId is required",
+			"type":    "invalid_request_error",
+		}})
+		return
+	}
+
+	// 将 AssetId 设置到 URL 参数中
+	c.Params = append(c.Params, gin.Param{Key: "id", Value: assetID})
+	SeedancePutAsset(c)
+}
+
+// handleDeleteAsset 从 body 中提取 AssetId 并调用 SeedanceDeleteAsset
+func handleDeleteAsset(c *gin.Context) {
+	bodyBytes, _ := io.ReadAll(c.Request.Body)
+	var reqBody map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &reqBody); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]interface{}{
+			"message": "invalid request body",
+			"type":    "invalid_request_error",
+		}})
+		return
+	}
+
+	assetID, ok := reqBody["AssetId"].(string)
+	if !ok || assetID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]interface{}{
+			"message": "AssetId is required",
+			"type":    "invalid_request_error",
+		}})
+		return
+	}
+
+	// 将 AssetId 设置到 URL 参数中
+	c.Params = append(c.Params, gin.Param{Key: "id", Value: assetID})
+	SeedanceDeleteAsset(c)
+}
+
+// handleGetVisualValidateResult 从 body 中提取 SessionId 并调用 SeedanceGetFaceVerification
+func handleGetVisualValidateResult(c *gin.Context) {
+	bodyBytes, _ := io.ReadAll(c.Request.Body)
+	var reqBody map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &reqBody); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]interface{}{
+			"message": "invalid request body",
+			"type":    "invalid_request_error",
+		}})
+		return
+	}
+
+	sessionID, ok := reqBody["SessionId"].(string)
+	if !ok || sessionID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]interface{}{
+			"message": "SessionId is required",
+			"type":    "invalid_request_error",
+		}})
+		return
+	}
+
+	// 将 SessionId 设置到 URL 参数中
+	c.Params = append(c.Params, gin.Param{Key: "id", Value: sessionID})
+	SeedanceGetFaceVerification(c)
 }
