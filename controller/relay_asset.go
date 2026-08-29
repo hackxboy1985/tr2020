@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -78,37 +78,26 @@ func RelayAsset(c *gin.Context) {
 		return
 	}
 
-	// 从中间件获取渠道信息（Distribute 中间件已设置）
-	channelId := c.GetInt("channel_id")
-	if channelId == 0 {
+	// 获取 Seedance Gateway 渠道（不使用 Distribute 中间件）
+	userGroup := c.GetString("group")
+	if userGroup == "" {
+		userGroup = "default"
+	}
+
+	gw, err := service.GetSeedanceGatewayChannel(userGroup)
+	if err != nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"error": map[string]interface{}{
-				"message": "no available channel",
+				"message": fmt.Sprintf("no available seedance gateway channel: %s", err.Error()),
 				"type":    "invalid_request_error",
 			},
 		})
 		return
 	}
 
-	// 获取渠道详情
-	channel, err := model.GetChannelById(channelId, true)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": map[string]interface{}{
-				"message": fmt.Sprintf("failed to get channel: %s", err.Error()),
-				"type":    "internal_error",
-			},
-		})
-		return
-	}
-
-	// 获取渠道的 BaseURL 和 Key
-	baseURL := channel.GetBaseURL()
-	apiKey := channel.Key
-
 	// 构建上游请求 URL
-	// 火山引擎格式：POST https://ark.cn-beijing.volces.com/?Action=CreateAsset&Version=2024-01-01
-	upstreamURL := fmt.Sprintf("%s/?Action=%s&Version=%s", strings.TrimSuffix(baseURL, "/"), action, version)
+	// 使用 Gateway URL + Action 参数
+	upstreamURL := fmt.Sprintf("%s/?Action=%s&Version=%s", strings.TrimSuffix(gw.GatewayURL, "/"), action, version)
 
 	// 创建上游请求
 	req, err := http.NewRequest("POST", upstreamURL, bytes.NewBuffer(bodyBytes))
@@ -124,7 +113,8 @@ func RelayAsset(c *gin.Context) {
 
 	// 设置请求头
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", apiKey) // 可能是 Bearer Token 或 AK/SK
+	req.Header.Set("Authorization", "Bearer "+gw.Key)
+	req.Header.Set("Accept", "application/json")
 
 	// 发送请求
 	client := &http.Client{}
