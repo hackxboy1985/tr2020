@@ -51,6 +51,10 @@ type ChannelOtherSettings struct {
 	// SeedanceRelayMode 为 true 时，素材接口调用下游 new-api 路径（/api/seedance/assets 等）
 	// 为 false（默认）时，调用 Seedance Gateway 原生路径（/api/seedance/proxy/assets 等）
 	SeedanceRelayMode bool `json:"seedance_relay_mode,omitempty"`
+	// SeedanceAssetAPIFormat 指定素材接口的上游 API 格式
+	// "gatewayMg": 咪咕 Gateway RESTful 格式（默认）- /api/seedance/proxy/assets/groups
+	// "official": 火山官方 Action 格式 - /?Action=CreateAssetGroup&Version=2024-01-01
+	SeedanceAssetAPIFormat string `json:"seedance_asset_api_format,omitempty"`
 	// Poster 渠道路径覆盖
 	// PosterApiVersion: 替换默认路径中的版本号，如 "v2" 将 /openapi/v1/... 改为 /openapi/v2/...
 	// PosterEndpoints: 按模型精确覆盖完整路径，优先级高于 PosterApiVersion
