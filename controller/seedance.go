@@ -418,11 +418,17 @@ func SeedanceCreateAsset(c *gin.Context) {
 		return
 	}
 
+	// 从上游响应中提取实际的 GroupID（可能和请求的不一致，比如重试后创建了新分组）
+	upstreamGroupID, _ := resp.Result["GroupId"].(string)
+	if upstreamGroupID == "" {
+		upstreamGroupID = req.GroupID // fallback 到请求的 GroupID
+	}
+
 	a := &model.SeedanceAsset{
 		UserID:          userID,
 		ChannelID:       gw.Channel.Id,
 		UpstreamAssetID: upstreamAssetID,
-		UpstreamGroupID: req.GroupID,
+		UpstreamGroupID: upstreamGroupID, // 使用上游返回的实际 GroupID
 		Name:            req.Name,
 		AssetType:       req.AssetType,
 		SourceURL:       req.URL,
