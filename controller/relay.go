@@ -935,7 +935,9 @@ func RelayTaskDelete(c *gin.Context) {
 		return
 	}
 
+	logger.LogInfo(c, fmt.Sprintf("[Controller] 准备调用上游取消接口，上游任务ID: %s", upstreamTaskID))
 	if err := canceller.CancelTask(upstreamTaskID); err != nil {
+		logger.LogInfo(c, fmt.Sprintf("[Controller] 上游取消失败，错误: %s", err.Error()))
 		// Parse error message
 		errMsg := err.Error()
 		statusCode := http.StatusInternalServerError
