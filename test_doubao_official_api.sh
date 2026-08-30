@@ -304,7 +304,24 @@ EOF
     print_success "任务创建成功! Task ID: ${TASK_ID}"
     echo ""
 
-    print_test "2. 立即取消任务"
+    print_test "2. 查询任务状态"
+
+    query_url="${BASE_URL}/api/v3/contents/generations/tasks/${TASK_ID}"
+    query_response=$(curl -s -X GET "$query_url" \
+        -H "Authorization: Bearer ${API_KEY}")
+
+    status=$(echo "$query_response" | jq -r '.status // "unknown"')
+
+    echo -e "${CYAN}━━━ 响应详情 ━━━${NC}"
+    echo "Body:"
+    echo "$query_response" | jq '.'
+    echo -e "${CYAN}━━━━━━━━━━━━━━━${NC}"
+    echo ""
+
+    print_info "当前任务状态: ${status}"
+    echo ""
+
+    print_test "3. 立即取消任务"
 
     cancel_url="${BASE_URL}/api/v3/contents/generations/tasks/${TASK_ID}"
     print_request "DELETE" "$cancel_url"
