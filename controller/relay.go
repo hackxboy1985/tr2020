@@ -606,6 +606,11 @@ func RelayTask(c *gin.Context) {
 			task.TaskID = result.UpstreamTaskID
 		}
 
+		// 任务提交成功，设置状态为已提交（用于异步轮询和查询）
+		if result.UpstreamTaskID != "" {
+			task.Status = model.TaskStatusSubmitted
+		}
+
 		task.PrivateData.BillingSource = relayInfo.BillingSource
 		task.PrivateData.SubscriptionId = relayInfo.SubscriptionId
 		task.PrivateData.TokenId = relayInfo.TokenId

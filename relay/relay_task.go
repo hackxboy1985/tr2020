@@ -396,6 +396,12 @@ func videoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *d
 			delete(taskData, "upstream_task_id")
 			// 替换为我们的 public task ID（task.Data 中的 id 是上游 ID）
 			taskData["id"] = originTask.TaskID
+
+			// 如果 task.Data 中没有 status（刚创建时），使用本地状态
+			if _, hasStatus := taskData["status"]; !hasStatus {
+				taskData["status"] = string(originTask.Status)
+			}
+
 			// 不需要转换 status：task.Data 存储的是上游原始响应，status 已经是官方格式
 			respBody, _ = common.Marshal(taskData)
 		} else {
