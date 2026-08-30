@@ -485,14 +485,24 @@ func (a *TaskAdaptor) CancelTask(upstreamTaskID string) error {
 			} `json:"error"`
 		}
 		// 解析上游错误，但重写消息隐藏上游任务ID
-		if err := common.Unmarshal(responseBody, &errResp); err == nil && errResp.Error.Code != "" {
-			// 根据错误码返回用户友好的消息
-			switch errResp.Error.Code {
-			case "InvalidAction.RunningTaskDeletion":
-				return errors.New("task is currently running, cannot be cancelled")
-			default:
-				return errors.New("task cannot be cancelled at this time")
+		fmt.Printf("[Cancel] 开始解析上游错误响应\n")
+		if err := common.Unmarshal(responseBody, &errResp); err == nil {
+			fmt.Printf("[Cancel] 解析成功，错误码: %s\n", errResp.Error.Code)
+			if errResp.Error.Code != "" {
+				// 根据错误码返回用户友好的消息
+				switch errResp.Error.Code {
+				case "InvalidAction.RunningTaskDeletion":
+					fmt.Printf("[Cancel] 匹配到RunningTaskDeletion，返回重写消息\n")
+					return errors.New("task is currently running, cannot be cancelled")
+				default:
+					fmt.Printf("[Cancel] 未匹配错误码，返回通用消息\n")
+					return errors.New("task cannot be cancelled at this time")
+				}
+			} else {
+				fmt.Printf("[Cancel] 错误码为空\n")
 			}
+		} else {
+			fmt.Printf("[Cancel] JSON解析失败: %v\n", err)
 		}
 		return errors.New("task is running, cannot cancel")
 	}
