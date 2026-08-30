@@ -8,6 +8,7 @@
 #   ./test_doubao_official_api.sh --query <id>    # 查询指定任务状态
 #   ./test_doubao_official_api.sh --query all     # 查询任务列表
 #   ./test_doubao_official_api.sh --cancel <id>   # 取消指定任务
+#   ./test_doubao_official_api.sh --test-cancel   # 仅测试：创建任务并立即取消
 
 # 配置
 BASE_URL="http://book2:3002"
@@ -259,6 +260,76 @@ if [ "$1" = "--cancel" ]; then
         exit 1
     fi
     cancel_task "$2"
+fi
+
+# ========================================
+# 仅测试创建和取消任务
+# ========================================
+if [ "$1" = "--test-cancel" ]; then
+    print_section "测试：创建任务并立即取消"
+
+    print_test "1. 创建视频任务"
+
+    create_url="${BASE_URL}/api/v3/contents/generations/tasks"
+    create_body=$(cat <<EOF
+{
+  "model": "doubao-seedance-2-0-mini-260615",
+  "content": [
+    {
+      "type": "text",
+      "text": "测试取消任务"
+    }
+  ],
+  "duration": 4
+}
+EOF
+)
+
+    print_request "POST" "$create_url" "$create_body"
+
+    create_response=$(curl -s -X POST "$create_url" \
+        -H "Authorization: Bearer ${API_KEY}" \
+        -H "Content-Type: application/json" \
+        -d "$create_body")
+
+    print_response "$create_response"
+
+    TASK_ID=$(echo "$create_response" | jq -r '.id // empty')
+
+    if [ -z "$TASK_ID" ]; then
+        print_error "任务创建失败"
+        exit 1
+    fi
+
+    print_success "任务创建成功! Task ID: ${TASK_ID}"
+    echo ""
+
+    print_test "2. 立即取消任务"
+
+    cancel_url="${BASE_URL}/api/v3/contents/generations/tasks/${TASK_ID}"
+    print_request "DELETE" "$cancel_url"
+
+    cancel_response=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X DELETE "$cancel_url" \
+        -H "Authorization: Bearer ${API_KEY}")
+
+    response_body=$(echo "$cancel_response" | sed -e 's/HTTP_STATUS\:.*//g')
+    http_status=$(echo "$cancel_response" | grep -o "HTTP_STATUS:[0-9]*" | cut -d: -f2)
+
+    echo -e "${CYAN}━━━ 响应详情 ━━━${NC}"
+    echo "Status: ${http_status}"
+    echo "Body:"
+    echo "$response_body" | jq '.' 2>/dev/null || echo "$response_body"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━${NC}"
+    echo ""
+
+    if [ "$http_status" = "200" ]; then
+        print_success "任务取消成功!"
+    else
+        print_error "任务取消失败! HTTP ${http_status}"
+        echo "$response_body"
+    fi
+
+    exit 0
 fi
 
 # ========================================
