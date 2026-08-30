@@ -813,8 +813,10 @@ func RelayTaskFetchList(c *gin.Context) {
 
 // RelayTaskDelete handles DELETE /api/v3/contents/generations/tasks/:task_id (cancel task)
 func RelayTaskDelete(c *gin.Context) {
+	logger.SysLog(fmt.Sprintf("[RelayTaskDelete] 函数被调用，Method=%s, Path=%s", c.Request.Method, c.Request.URL.Path))
 	taskId := c.Param("task_id")
 	userId := c.GetInt("id")
+	logger.SysLog(fmt.Sprintf("[RelayTaskDelete] taskId=%s, userId=%d", taskId, userId))
 
 	if taskId == "" {
 		c.JSON(http.StatusBadRequest, &dto.TaskError{
