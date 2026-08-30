@@ -437,7 +437,7 @@ create_body=$(cat <<EOF
   "content": [
     {
       "type": "text",
-      "text": "一只可爱的小猫在草地上玩耍，阳光明媚"
+      "text": "女子身边一只可爱的小猫在草地上玩耍，阳光明媚"
     },
     {
       "type": "image_url",
@@ -500,6 +500,13 @@ for i in {1..12}; do
     if [ $i -eq 1 ]; then
         # 第一次查询时打印完整响应
         print_response "$query_response"
+    else
+        # 其他查询也打印响应体，方便调试
+        echo -e "${CYAN}━━━ 响应详情 ━━━${NC}"
+        echo "Body:"
+        echo "$query_response" | jq '.'
+        echo -e "${CYAN}━━━━━━━━━━━━━━━${NC}"
+        echo ""
     fi
 
     echo "当前状态: ${status}"
