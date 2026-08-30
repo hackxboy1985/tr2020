@@ -385,7 +385,42 @@ EOF
         IMAGE_URL="${TEST_IMAGE_URL}"
     else
         print_success "素材上传成功! Asset ID: ${ASSET_ID}"
-        IMAGE_URL="asset://${ASSET_ID}"
+
+        # 等待素材状态变为 Active
+        print_test "等待素材处理完成..."
+        MAX_RETRIES=30
+        RETRY_COUNT=0
+        ASSET_STATUS=""
+
+        while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            get_asset_response=$(curl -s -X POST "${BASE_URL}/api/seedance/assets/v2/?Action=GetAsset&Version=2024-01-01" \
+                -H "Authorization: Bearer ${API_KEY}" \
+                -H "Content-Type: application/json" \
+                -d "{\"AssetId\": \"${ASSET_ID}\"}")
+
+            ASSET_STATUS=$(echo "$get_asset_response" | jq -r '.Result.Status // empty')
+
+            if [ "$ASSET_STATUS" = "Active" ]; then
+                print_success "素材处理完成，状态: Active"
+                break
+            elif [ "$ASSET_STATUS" = "Failed" ]; then
+                print_error "素材处理失败"
+                IMAGE_URL="${TEST_IMAGE_URL}"
+                break
+            else
+                echo "  状态: ${ASSET_STATUS:-Processing}，等待中... ($((RETRY_COUNT + 1))/$MAX_RETRIES)"
+                sleep 2
+            fi
+
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+        done
+
+        if [ "$ASSET_STATUS" = "Active" ]; then
+            IMAGE_URL="asset://${ASSET_ID}"
+        else
+            print_error "素材处理超时或失败，使用外部图片 URL"
+            IMAGE_URL="${TEST_IMAGE_URL}"
+        fi
     fi
     echo ""
 fi
