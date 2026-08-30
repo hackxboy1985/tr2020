@@ -4,10 +4,12 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
@@ -144,6 +146,44 @@ func SeedanceListAssetGroups(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+
+	// 检查是否需要返回火山官方格式（通过 RelayAsset 调用）
+	if c.GetBool("doubao_official_format") {
+		// 转换为火山官方格式
+		items := []map[string]interface{}{}
+		for _, g := range groups {
+			item := map[string]interface{}{
+				"Id":          g.UpstreamGroupID,
+				"Name":        g.Name,
+				"GroupType":   g.GroupType,
+				"CreateTime":  formatTime(g.CreatedAt),
+				"UpdateTime":  formatTime(g.UpdatedAt),
+			}
+			if g.Description != "" {
+				item["Description"] = g.Description
+			}
+			items = append(items, item)
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"ResponseMetadata": gin.H{
+				"RequestId": generateRequestID(),
+				"Action":    "ListAssetGroups",
+				"Version":   "2024-01-01",
+				"Service":   "ark",
+				"Region":    "cn-beijing",
+			},
+			"Result": gin.H{
+				"Items":      items,
+				"TotalCount": total,
+				"PageNumber": pageInfo.GetPage(),
+				"PageSize":   pageInfo.GetPageSize(),
+			},
+		})
+		return
+	}
+
+	// 默认返回本地格式（RESTful API）
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(groups)
 	common.ApiSuccess(c, pageInfo)
@@ -414,6 +454,46 @@ func SeedanceListAssets(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+
+	// 检查是否需要返回火山官方格式（通过 RelayAsset 调用）
+	if c.GetBool("doubao_official_format") {
+		// 转换为火山官方格式
+		items := []map[string]interface{}{}
+		for _, a := range assets {
+			item := map[string]interface{}{
+				"Id":          a.UpstreamAssetID,
+				"GroupId":     a.UpstreamGroupID,
+				"Name":        a.Name,
+				"AssetType":   a.AssetType,
+				"Status":      a.Status,
+				"CreateTime":  formatTime(a.CreatedAt),
+				"UpdateTime":  formatTime(a.UpdatedAt),
+			}
+			if a.SourceURL != "" {
+				item["URL"] = a.SourceURL
+			}
+			items = append(items, item)
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"ResponseMetadata": gin.H{
+				"RequestId": generateRequestID(),
+				"Action":    "ListAssets",
+				"Version":   "2024-01-01",
+				"Service":   "ark",
+				"Region":    "cn-beijing",
+			},
+			"Result": gin.H{
+				"Items":      items,
+				"TotalCount": total,
+				"PageNumber": pageInfo.GetPage(),
+				"PageSize":   pageInfo.GetPageSize(),
+			},
+		})
+		return
+	}
+
+	// 默认返回本地格式（RESTful API）
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(assets)
 	common.ApiSuccess(c, pageInfo)
@@ -640,3 +720,19 @@ func SeedanceAdminListFaceVerifications(c *gin.Context) {
 
 // ensure json import used
 var _ = json.Marshal
+
+// formatTime 将 Unix 时间戳转换为 ISO 8601 格式
+func formatTime(timestamp int64) string {
+	if timestamp == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s", time.Unix(timestamp, 0).UTC().Format(time.RFC3339))
+}
+
+// generateRequestID 生成火山格式的请求 ID
+func generateRequestID() string {
+	// 格式：YYYYMMDDHHMMSS + 随机字符串
+	now := time.Now()
+	randomPart := fmt.Sprintf("%X", md5.Sum([]byte(fmt.Sprintf("%d%d", now.UnixNano(), rand.Int()))))
+	return fmt.Sprintf("%s%s", now.Format("20060102150405"), randomPart[:20])
+}

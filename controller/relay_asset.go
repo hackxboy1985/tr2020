@@ -31,33 +31,8 @@ func RelayAsset(c *gin.Context) {
 		version = "2024-01-01" // 默认版本
 	}
 
-	// 验证 Action 是否支持
-	supportedActions := map[string]bool{
-		// 真人认证
-		"CreateVisualValidateSession": true,
-		"GetVisualValidateResult":     true,
-		// Asset Group 管理
-		"CreateAssetGroup": true,
-		"GetAssetGroup":    true,
-		"ListAssetGroups":  true,
-		"UpdateAssetGroup": true,
-		"DeleteAssetGroup": true,
-		// Asset 管理
-		"CreateAsset":  true,
-		"GetAsset":     true,
-		"ListAssets":   true,
-		"UpdateAsset":  true,
-		"DeleteAsset":  true,
-	}
-
-	if !supportedActions[action] {
-		c.JSON(http.StatusBadRequest, &dto.TaskError{
-			Code:       "unsupported_action",
-			Message:    fmt.Sprintf("Action '%s' is not supported", action),
-			StatusCode: http.StatusBadRequest,
-		})
-		return
-	}
+	// 设置标志，让 List 接口返回火山官方格式
+	c.Set("doubao_official_format", true)
 
 	// 根据 Action 调用对应的函数
 	// 这些函数已经实现了用户隔离和数据库同步逻辑
