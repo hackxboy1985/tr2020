@@ -948,6 +948,8 @@ func RelayTaskDelete(c *gin.Context) {
 		} else if strings.Contains(errMsg, "running") || strings.Contains(errMsg, "cannot cancel") {
 			statusCode = http.StatusConflict
 			errorCode = "task_not_cancellable"
+			// 使用adaptor层已经重写好的用户友好消息
+			// errMsg 保持从 adaptor 返回的消息不变
 		}
 
 		c.JSON(statusCode, &dto.TaskError{
