@@ -460,8 +460,8 @@ func (a *TaskAdaptor) CancelTask(upstreamTaskID string) error {
 	}
 
 	// 打印上游响应信息
-	fmt.Printf("[Cancel] 上游取消响应状态码: %d\n", resp.StatusCode)
-	fmt.Printf("[Cancel] 上游取消响应体: %s\n", string(responseBody))
+	logger.SysLog(fmt.Sprintf("[Cancel] 上游取消响应状态码: %d", resp.StatusCode))
+	logger.SysLog(fmt.Sprintf("[Cancel] 上游取消响应体: %s", string(responseBody)))
 
 	// 根据文档，成功时返回 HTTP 200，响应体为 {}
 	if resp.StatusCode == http.StatusOK {
@@ -485,24 +485,24 @@ func (a *TaskAdaptor) CancelTask(upstreamTaskID string) error {
 			} `json:"error"`
 		}
 		// 解析上游错误，但重写消息隐藏上游任务ID
-		fmt.Printf("[Cancel] 开始解析上游错误响应\n")
+		logger.SysLog("[Cancel] 开始解析上游错误响应")
 		if err := common.Unmarshal(responseBody, &errResp); err == nil {
-			fmt.Printf("[Cancel] 解析成功，错误码: %s\n", errResp.Error.Code)
+			logger.SysLog(fmt.Sprintf("[Cancel] 解析成功，错误码: %s", errResp.Error.Code))
 			if errResp.Error.Code != "" {
 				// 根据错误码返回用户友好的消息
 				switch errResp.Error.Code {
 				case "InvalidAction.RunningTaskDeletion":
-					fmt.Printf("[Cancel] 匹配到RunningTaskDeletion，返回重写消息\n")
+					logger.SysLog("[Cancel] 匹配到RunningTaskDeletion，返回重写消息")
 					return errors.New("task is currently running, cannot be cancelled")
 				default:
-					fmt.Printf("[Cancel] 未匹配错误码，返回通用消息\n")
+					logger.SysLog("[Cancel] 未匹配错误码，返回通用消息")
 					return errors.New("task cannot be cancelled at this time")
 				}
 			} else {
-				fmt.Printf("[Cancel] 错误码为空\n")
+				logger.SysLog("[Cancel] 错误码为空")
 			}
 		} else {
-			fmt.Printf("[Cancel] JSON解析失败: %v\n", err)
+			logger.SysLog(fmt.Sprintf("[Cancel] JSON解析失败: %v", err))
 		}
 		return errors.New("task is running, cannot cancel")
 	}
