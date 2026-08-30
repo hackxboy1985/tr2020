@@ -476,7 +476,10 @@ func (a *TaskAdaptor) CancelTask(upstreamTaskID string) error {
 
 	// 任务运行中: HTTP 409
 	if resp.StatusCode == http.StatusConflict {
-		var errResp struct {
+		// 尝试两种可能的响应格式
+
+		// 格式1: 嵌套格式 {"error": {"code": "...", "message": "..."}}
+		var nestedResp struct {
 			Error struct {
 				Code    string `json:"code"`
 				Message string `json:"message"`
@@ -484,26 +487,41 @@ func (a *TaskAdaptor) CancelTask(upstreamTaskID string) error {
 				Type    string `json:"type"`
 			} `json:"error"`
 		}
-		// 解析上游错误，但重写消息隐藏上游任务ID
-		logger.SysLog("[Cancel] 开始解析上游错误响应")
-		if err := common.Unmarshal(responseBody, &errResp); err == nil {
-			logger.SysLog(fmt.Sprintf("[Cancel] 解析成功，错误码: %s", errResp.Error.Code))
-			if errResp.Error.Code != "" {
-				// 根据错误码返回用户友好的消息
-				switch errResp.Error.Code {
-				case "InvalidAction.RunningTaskDeletion":
-					logger.SysLog("[Cancel] 匹配到RunningTaskDeletion，返回重写消息")
-					return errors.New("task is currently running, cannot be cancelled")
-				default:
-					logger.SysLog("[Cancel] 未匹配错误码，返回通用消息")
-					return errors.New("task cannot be cancelled at this time")
-				}
-			} else {
-				logger.SysLog("[Cancel] 错误码为空")
-			}
-		} else {
-			logger.SysLog(fmt.Sprintf("[Cancel] JSON解析失败: %v", err))
+
+		// 格式2: 扁平格式 {"code": "...", "message": "..."}
+		var flatResp struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+			Param   string `json:"param"`
+			Type    string `json:"type"`
 		}
+
+		logger.SysLog("[Cancel] 开始解析上游错误响应")
+
+		// 先尝试扁平格式
+		errorCode := ""
+		if err := common.Unmarshal(responseBody, &flatResp); err == nil && flatResp.Code != "" {
+			logger.SysLog(fmt.Sprintf("[Cancel] 扁平格式解析成功，错误码: %s", flatResp.Code))
+			errorCode = flatResp.Code
+		} else if err := common.Unmarshal(responseBody, &nestedResp); err == nil && nestedResp.Error.Code != "" {
+			logger.SysLog(fmt.Sprintf("[Cancel] 嵌套格式解析成功，错误码: %s", nestedResp.Error.Code))
+			errorCode = nestedResp.Error.Code
+		} else {
+			logger.SysLog("[Cancel] JSON解析失败或错误码为空")
+		}
+
+		// 根据错误码返回用户友好的消息
+		if errorCode != "" {
+			switch errorCode {
+			case "InvalidAction.RunningTaskDeletion":
+				logger.SysLog("[Cancel] 匹配到RunningTaskDeletion，返回重写消息")
+				return errors.New("task is currently running, cannot be cancelled")
+			default:
+				logger.SysLog(fmt.Sprintf("[Cancel] 未匹配错误码 %s，返回通用消息", errorCode))
+				return errors.New("task cannot be cancelled at this time")
+			}
+		}
+
 		return errors.New("task is running, cannot cancel")
 	}
 
