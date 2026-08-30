@@ -600,6 +600,12 @@ func RelayTask(c *gin.Context) {
 
 		task := model.InitTask(result.Platform, relayInfo)
 		task.PrivateData.UpstreamTaskID = result.UpstreamTaskID
+
+		// 对于 Doubao 官方格式，使用上游任务 ID 作为主键，确保查询时能找到
+		if c.GetBool("doubao_official_format") && result.UpstreamTaskID != "" {
+			task.TaskID = result.UpstreamTaskID
+		}
+
 		task.PrivateData.BillingSource = relayInfo.BillingSource
 		task.PrivateData.SubscriptionId = relayInfo.SubscriptionId
 		task.PrivateData.TokenId = relayInfo.TokenId
