@@ -397,9 +397,9 @@ func videoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *d
 			// 替换为我们的 public task ID（task.Data 中的 id 是上游 ID）
 			taskData["id"] = originTask.TaskID
 
-			// 如果 task.Data 中没有 status（刚创建时），使用本地状态
+			// 如果 task.Data 中没有 status（刚创建时），使用本地状态并转换为官方格式
 			if _, hasStatus := taskData["status"]; !hasStatus {
-				taskData["status"] = string(originTask.Status)
+				taskData["status"] = originTask.Status.ToDoubaoStatus()
 			}
 
 			// 不需要转换 status：task.Data 存储的是上游原始响应，status 已经是官方格式
