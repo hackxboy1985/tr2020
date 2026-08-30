@@ -484,8 +484,15 @@ func (a *TaskAdaptor) CancelTask(upstreamTaskID string) error {
 				Type    string `json:"type"`
 			} `json:"error"`
 		}
-		if err := common.Unmarshal(responseBody, &errResp); err == nil && errResp.Error.Message != "" {
-			return errors.New(errResp.Error.Message)
+		// 解析上游错误，但重写消息隐藏上游任务ID
+		if err := common.Unmarshal(responseBody, &errResp); err == nil && errResp.Error.Code != "" {
+			// 根据错误码返回用户友好的消息
+			switch errResp.Error.Code {
+			case "InvalidAction.RunningTaskDeletion":
+				return errors.New("task is currently running, cannot be cancelled")
+			default:
+				return errors.New("task cannot be cancelled at this time")
+			}
 		}
 		return errors.New("task is running, cannot cancel")
 	}
