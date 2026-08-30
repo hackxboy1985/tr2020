@@ -441,9 +441,15 @@ func (a *TaskAdaptor) CancelTask(upstreamTaskID string) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+a.apiKey)
 
+	// 打印上游请求信息
+	fmt.Printf("[Cancel] 上游取消请求 URL: %s\n", uri)
+	fmt.Printf("[Cancel] 上游取消请求方法: DELETE\n")
+	fmt.Printf("[Cancel] 上游取消请求头: Authorization: Bearer %s...\n", a.apiKey[:20])
+
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
+		fmt.Printf("[Cancel] 上游取消请求失败: %v\n", err)
 		return errors.Wrap(err, "cancel request failed")
 	}
 	defer resp.Body.Close()
@@ -452,6 +458,10 @@ func (a *TaskAdaptor) CancelTask(upstreamTaskID string) error {
 	if err != nil {
 		return errors.Wrap(err, "read cancel response failed")
 	}
+
+	// 打印上游响应信息
+	fmt.Printf("[Cancel] 上游取消响应状态码: %d\n", resp.StatusCode)
+	fmt.Printf("[Cancel] 上游取消响应体: %s\n", string(responseBody))
 
 	// 根据文档，成功时返回 HTTP 200，响应体为 {}
 	if resp.StatusCode == http.StatusOK {
