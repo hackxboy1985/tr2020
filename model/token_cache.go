@@ -78,16 +78,19 @@ redis.call('HSET', KEYS[1],
 redis.call('EXPIRE', KEYS[1], ARGV[16])
 return 1`
 
-	return common.RDB.Eval(context.Background(), script, []string{
-		getTokenCacheKey(token.Key), getTokenCacheFenceKey(token.Key),
-	},
+	args := []interface{}{
 		token.Id, token.UserId, token.Status, token.Name,
 		token.CreatedTime, token.AccessedTime, token.ExpiredTime,
 		strconv.FormatBool(token.UnlimitedQuota), strconv.FormatBool(token.ModelLimitsEnabled),
 		token.ModelLimits, allowIps, token.Group, strconv.FormatBool(token.CrossGroupRetry),
 		token.RemainQuota, token.UsedQuota,
 		tokenCacheTTLSeconds(),
-	).Int()
+	}
+	common.SysLog(fmt.Sprintf("cacheInitToken: key=%s, args_count=%d", token.Key, len(args)))
+
+	return common.RDB.Eval(context.Background(), script, []string{
+		getTokenCacheKey(token.Key), getTokenCacheFenceKey(token.Key),
+	}, args...).Int()
 }
 
 // cacheGetTokenByKey 从缓存读取 token；不完整的哈希（如仅有配额字段）会被拒绝。
