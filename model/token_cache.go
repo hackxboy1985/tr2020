@@ -70,7 +70,7 @@ if redis.call('EXISTS', KEYS[1]) == 1 then
   redis.call('EXPIRE', KEYS[1], ARGV[16])
   return 2
 end
-redis.call('HSET', KEYS[1],
+redis.call('HMSET', KEYS[1],
   'Id', ARGV[1], 'UserId', ARGV[2], 'Status', ARGV[3], 'Name', ARGV[4],
   'CreatedTime', ARGV[5], 'AccessedTime', ARGV[6], 'ExpiredTime', ARGV[7],
   'UnlimitedQuota', ARGV[8], 'ModelLimitsEnabled', ARGV[9], 'ModelLimits', ARGV[10],
