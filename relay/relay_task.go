@@ -12,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relay/channel"
 	"github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
@@ -388,6 +389,12 @@ func videoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *d
 
 	// Doubao official API 格式: 返回 doubao responseTask 格式
 	if isDoubaoOfficialAPI {
+		// 尝试从上游实时拉取最新状态（当本地Data字段不完整时）
+		if realtimeResp := tryDoubaoRealtimeFetch(originTask, c); len(realtimeResp) > 0 {
+			respBody = realtimeResp
+			return
+		}
+
 		// 直接返回存储的上游响应数据（doubao 官方格式）
 		// task.Data 中的 status 已经是官方格式（succeeded/running/queued等），不需要转换
 		var taskData map[string]interface{}
@@ -439,6 +446,116 @@ func videoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *d
 		taskResp = service.TaskErrorWrapper(err, "marshal_response_failed", http.StatusInternalServerError)
 	}
 	return
+}
+
+// tryDoubaoRealtimeFetch 尝试从上游实时拉取 Doubao 任务状态。
+// 仅当 task.Data 字段不完整时（只有 id 和 upstream_task_id）触发实时查询。
+// 查询成功后更新本地任务状态，并返回 Doubao 官方格式的响应体。
+func tryDoubaoRealtimeFetch(task *model.Task, c *gin.Context) []byte {
+	// 检查 task.Data 是否只有基本信息
+	var taskData map[string]interface{}
+	if err := common.Unmarshal(task.Data, &taskData); err != nil {
+		return nil
+	}
+
+	// 如果 Data 中已有 status 或其他完整字段，则不需要实时查询
+	if _, hasStatus := taskData["status"]; hasStatus {
+		return nil
+	}
+	if _, hasModel := taskData["model"]; hasModel {
+		return nil
+	}
+	if _, hasCreatedAt := taskData["created_at"]; hasCreatedAt {
+		return nil
+	}
+
+	// Data 不完整，需要实时查询上游
+	logger.LogInfo(c, fmt.Sprintf("[Doubao实时查询] 任务 %s 的 Data 字段不完整，发起上游查询", task.TaskID))
+
+	channelModel, err := model.GetChannelById(task.ChannelId, true)
+	if err != nil {
+		logger.LogError(c, fmt.Sprintf("[Doubao实时查询] 获取渠道失败: %v", err))
+		return nil
+	}
+
+	baseURL := constant.ChannelBaseURLs[channelModel.Type]
+	if channelModel.GetBaseURL() != "" {
+		baseURL = channelModel.GetBaseURL()
+	}
+	proxy := channelModel.GetSetting().Proxy
+	adaptor := GetTaskAdaptor(constant.TaskPlatform(strconv.Itoa(channelModel.Type)))
+	if adaptor == nil {
+		logger.LogError(c, "[Doubao实时查询] 获取适配器失败")
+		return nil
+	}
+
+	upstreamTaskID := task.GetUpstreamTaskID()
+	logger.LogInfo(c, fmt.Sprintf("[Doubao实时查询] 查询上游任务: %s", upstreamTaskID))
+
+	resp, err := adaptor.FetchTask(baseURL, channelModel.Key, map[string]any{
+		"task_id": upstreamTaskID,
+		"action":  task.Action,
+	}, proxy)
+	if err != nil || resp == nil {
+		logger.LogError(c, fmt.Sprintf("[Doubao实时查询] 查询上游失败: %v", err))
+		return nil
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logger.LogError(c, fmt.Sprintf("[Doubao实时查询] 读取响应失败: %v", err))
+		return nil
+	}
+
+	logger.LogInfo(c, fmt.Sprintf("[Doubao实时查询] 上游响应: %s", string(body)))
+
+	ti, err := adaptor.ParseTaskResult(body)
+	if err != nil || ti == nil {
+		logger.LogError(c, fmt.Sprintf("[Doubao实时查询] 解析响应失败: %v", err))
+		return nil
+	}
+
+	snap := task.Snapshot()
+
+	// 更新任务状态
+	if ti.Status != "" {
+		task.Status = model.TaskStatus(ti.Status)
+	}
+	if ti.Progress != "" {
+		task.Progress = ti.Progress
+	}
+	if ti.Url != "" {
+		task.PrivateData.ResultURL = ti.Url
+	}
+
+	// 保存上游完整的原始响应到 Data 字段（不修改，便于调试和分析）
+	task.Data = body
+
+	// 保存到数据库
+	if !snap.Equal(task.Snapshot()) {
+		_, err := task.UpdateWithStatus(snap.Status)
+		if err != nil {
+			logger.LogError(c, fmt.Sprintf("[Doubao实时查询] 更新任务失败: %v", err))
+		} else {
+			logger.LogInfo(c, fmt.Sprintf("[Doubao实时查询] 任务 %s 状态已更新: %s", task.TaskID, ti.Status))
+		}
+	}
+
+	// 构建返回给下游的响应：删除内部字段，保持 id 为上游任务ID
+	var responseData map[string]interface{}
+	if err := common.Unmarshal(body, &responseData); err == nil {
+		// 删除上游的内部字段
+		delete(responseData, "upstream_task_id")
+		// id 字段保持为上游任务ID（用户查询时使用的ID）
+		responseData["id"] = task.TaskID
+
+		if respBody, err := common.Marshal(responseData); err == nil {
+			return respBody
+		}
+	}
+
+	return body
 }
 
 // tryRealtimeFetch 尝试从上游实时拉取 Gemini/Vertex 任务状态。
