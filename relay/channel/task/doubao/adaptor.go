@@ -11,7 +11,6 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relay/channel"
 	"github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
@@ -223,7 +222,7 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	if upstreamPath == "" {
 		upstreamPath = "/api/v3/contents/generations/tasks"
 	}
-	upstreamURL := fmt.Sprintf("%s%s", a.baseURL, upstreamPath)
+	_ = fmt.Sprintf("%s%s", a.baseURL, upstreamPath)
 	// logger.LogInfo(c, fmt.Sprintf("doubao video upstream URL: %s", upstreamURL))
 
 	// 打印最终发往上游的请求体，方便排查转换问题
