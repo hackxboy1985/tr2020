@@ -529,22 +529,8 @@ func tryDoubaoRealtimeFetch(task *model.Task, c *gin.Context) []byte {
 		task.PrivateData.ResultURL = ti.Url
 	}
 
-	// 处理上游响应：删除 upstream_task_id，保持 id 为上游任务ID
-	var upstreamData map[string]interface{}
-	if err := common.Unmarshal(body, &upstreamData); err == nil {
-		delete(upstreamData, "upstream_task_id")
-		// 保持 id 为上游任务ID（数据库主键）
-		upstreamData["id"] = task.GetUpstreamTaskID()
-
-		// 将处理后的数据保存到 Data 字段
-		if processedBody, err := common.Marshal(upstreamData); err == nil {
-			task.Data = processedBody
-		} else {
-			task.Data = body
-		}
-	} else {
-		task.Data = body
-	}
+	// 保存上游完整的原始响应到 Data 字段（不修改，便于调试和分析）
+	task.Data = body
 
 	// 保存到数据库
 	if !snap.Equal(task.Snapshot()) {
@@ -556,10 +542,12 @@ func tryDoubaoRealtimeFetch(task *model.Task, c *gin.Context) []byte {
 		}
 	}
 
-	// 构建返回给用户的 Doubao 官方格式响应
+	// 构建返回给下游的响应：删除内部字段，保持 id 为上游任务ID
 	var responseData map[string]interface{}
-	if err := common.Unmarshal(task.Data, &responseData); err == nil {
-		// id 字段保持为上游任务ID（用户用来查询的ID）
+	if err := common.Unmarshal(body, &responseData); err == nil {
+		// 删除上游的内部字段
+		delete(responseData, "upstream_task_id")
+		// id 字段保持为上游任务ID（用户查询时使用的ID）
 		responseData["id"] = task.TaskID
 
 		if respBody, err := common.Marshal(responseData); err == nil {
@@ -567,7 +555,7 @@ func tryDoubaoRealtimeFetch(task *model.Task, c *gin.Context) []byte {
 		}
 	}
 
-	return task.Data
+	return body
 }
 
 // tryRealtimeFetch 尝试从上游实时拉取 Gemini/Vertex 任务状态。
