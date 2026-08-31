@@ -79,12 +79,22 @@ redis.call('EXPIRE', KEYS[1], ARGV[16])
 return 1`
 
 	args := []interface{}{
-		token.Id, token.UserId, token.Status, token.Name,
-		token.CreatedTime, token.AccessedTime, token.ExpiredTime,
-		strconv.FormatBool(token.UnlimitedQuota), strconv.FormatBool(token.ModelLimitsEnabled),
-		token.ModelLimits, allowIps, token.Group, strconv.FormatBool(token.CrossGroupRetry),
-		token.RemainQuota, token.UsedQuota,
-		strconv.Itoa(tokenCacheTTLSeconds()),  // 转换为字符串
+		strconv.Itoa(token.Id),
+		strconv.Itoa(token.UserId),
+		strconv.Itoa(token.Status),
+		token.Name,
+		strconv.FormatInt(token.CreatedTime, 10),
+		strconv.FormatInt(token.AccessedTime, 10),
+		strconv.FormatInt(token.ExpiredTime, 10),
+		strconv.FormatBool(token.UnlimitedQuota),
+		strconv.FormatBool(token.ModelLimitsEnabled),
+		token.ModelLimits,
+		allowIps,
+		token.Group,
+		strconv.FormatBool(token.CrossGroupRetry),
+		strconv.Itoa(token.RemainQuota),
+		strconv.Itoa(token.UsedQuota),
+		strconv.Itoa(tokenCacheTTLSeconds()),
 	}
 	common.SysLog(fmt.Sprintf("cacheInitToken: key=%s, args_count=%d", token.Key, len(args)))
 
