@@ -441,15 +441,9 @@ func (a *TaskAdaptor) CancelTask(upstreamTaskID string) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+a.apiKey)
 
-	// 打印上游请求信息
-	fmt.Printf("[Cancel] 上游取消请求 URL: %s\n", uri)
-	fmt.Printf("[Cancel] 上游取消请求方法: DELETE\n")
-	fmt.Printf("[Cancel] 上游取消请求头: Authorization: Bearer %s...\n", a.apiKey[:20])
-
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Printf("[Cancel] 上游取消请求失败: %v\n", err)
 		return errors.Wrap(err, "cancel request failed")
 	}
 	defer resp.Body.Close()
@@ -458,10 +452,6 @@ func (a *TaskAdaptor) CancelTask(upstreamTaskID string) error {
 	if err != nil {
 		return errors.Wrap(err, "read cancel response failed")
 	}
-
-	// 打印上游响应信息
-	logger.SysLog(fmt.Sprintf("[Cancel] 上游取消响应状态码: %d", resp.StatusCode))
-	logger.SysLog(fmt.Sprintf("[Cancel] 上游取消响应体: %s", string(responseBody)))
 
 	// 根据文档，成功时返回 HTTP 200，响应体为 {}
 	if resp.StatusCode == http.StatusOK {
@@ -496,28 +486,20 @@ func (a *TaskAdaptor) CancelTask(upstreamTaskID string) error {
 			Type    string `json:"type"`
 		}
 
-		logger.SysLog("[Cancel] 开始解析上游错误响应")
-
-		// 先尝试扁平格式
+		// 先尝试扁平格式，再尝试嵌套格式
 		errorCode := ""
 		if err := common.Unmarshal(responseBody, &flatResp); err == nil && flatResp.Code != "" {
-			logger.SysLog(fmt.Sprintf("[Cancel] 扁平格式解析成功，错误码: %s", flatResp.Code))
 			errorCode = flatResp.Code
 		} else if err := common.Unmarshal(responseBody, &nestedResp); err == nil && nestedResp.Error.Code != "" {
-			logger.SysLog(fmt.Sprintf("[Cancel] 嵌套格式解析成功，错误码: %s", nestedResp.Error.Code))
 			errorCode = nestedResp.Error.Code
-		} else {
-			logger.SysLog("[Cancel] JSON解析失败或错误码为空")
 		}
 
-		// 根据错误码返回用户友好的消息
+		// 根据错误码返回用户友好的消息，避免泄露上游任务ID
 		if errorCode != "" {
 			switch errorCode {
 			case "InvalidAction.RunningTaskDeletion":
-				logger.SysLog("[Cancel] 匹配到RunningTaskDeletion，返回重写消息")
 				return errors.New("task is currently running, cannot be cancelled")
 			default:
-				logger.SysLog(fmt.Sprintf("[Cancel] 未匹配错误码 %s，返回通用消息", errorCode))
 				return errors.New("task cannot be cancelled at this time")
 			}
 		}
