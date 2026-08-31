@@ -441,9 +441,12 @@ func (a *TaskAdaptor) CancelTask(upstreamTaskID string) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+a.apiKey)
 
+	fmt.Printf("[CancelTask] 上游取消请求 - URI: %s, Method: DELETE\n", uri)
+
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
+		fmt.Printf("[CancelTask] 上游请求失败: %v\n", err)
 		return errors.Wrap(err, "cancel request failed")
 	}
 	defer resp.Body.Close()
@@ -453,19 +456,24 @@ func (a *TaskAdaptor) CancelTask(upstreamTaskID string) error {
 		return errors.Wrap(err, "read cancel response failed")
 	}
 
+	fmt.Printf("[CancelTask] 上游响应 - StatusCode: %d, Body: %s\n", resp.StatusCode, string(responseBody))
+
 	// 根据文档，成功时返回 HTTP 200，响应体为 {}
 	if resp.StatusCode == http.StatusOK {
+		fmt.Printf("[CancelTask] 取消成功\n")
 		return nil
 	}
 
 	// 处理错误响应
 	// 任务不存在: HTTP 404
 	if resp.StatusCode == http.StatusNotFound {
+		fmt.Printf("[CancelTask] 任务不存在 (404)\n")
 		return errors.New("task_not_exist")
 	}
 
 	// 任务运行中: HTTP 409
 	if resp.StatusCode == http.StatusConflict {
+		fmt.Printf("[CancelTask] 任务不可取消 (409)，开始解析错误响应\n")
 		// 尝试两种可能的响应格式
 
 		// 格式1: 嵌套格式 {"error": {"code": "...", "message": "..."}}
@@ -489,21 +497,28 @@ func (a *TaskAdaptor) CancelTask(upstreamTaskID string) error {
 		// 先尝试扁平格式，再尝试嵌套格式
 		errorCode := ""
 		if err := common.Unmarshal(responseBody, &flatResp); err == nil && flatResp.Code != "" {
+			fmt.Printf("[CancelTask] 扁平格式解析成功，错误码: %s\n", flatResp.Code)
 			errorCode = flatResp.Code
 		} else if err := common.Unmarshal(responseBody, &nestedResp); err == nil && nestedResp.Error.Code != "" {
+			fmt.Printf("[CancelTask] 嵌套格式解析成功，错误码: %s\n", nestedResp.Error.Code)
 			errorCode = nestedResp.Error.Code
+		} else {
+			fmt.Printf("[CancelTask] JSON解析失败或错误码为空\n")
 		}
 
 		// 根据错误码返回用户友好的消息，避免泄露上游任务ID
 		if errorCode != "" {
 			switch errorCode {
 			case "InvalidAction.RunningTaskDeletion":
+				fmt.Printf("[CancelTask] 匹配到RunningTaskDeletion，返回友好消息\n")
 				return errors.New("task is currently running, cannot be cancelled")
 			default:
+				fmt.Printf("[CancelTask] 错误码: %s，返回通用消息\n", errorCode)
 				return errors.New("task cannot be cancelled at this time")
 			}
 		}
 
+		fmt.Printf("[CancelTask] 无法解析错误码，返回默认消息\n")
 		return errors.New("task is running, cannot cancel")
 	}
 
