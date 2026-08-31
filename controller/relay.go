@@ -952,11 +952,22 @@ func RelayTaskDelete(c *gin.Context) {
 			// errMsg 保持从 adaptor 返回的消息不变
 		}
 
-		c.JSON(statusCode, &dto.TaskError{
-			Code:       errorCode,
-			Message:    errMsg,
-			StatusCode: statusCode,
-		})
+		// 如果是Doubao官方格式，返回官方错误格式
+		if c.GetBool("doubao_official_format") {
+			c.JSON(statusCode, gin.H{
+				"error": gin.H{
+					"code":    errorCode,
+					"message": errMsg,
+					"type":    http.StatusText(statusCode),
+				},
+			})
+		} else {
+			c.JSON(statusCode, &dto.TaskError{
+				Code:       errorCode,
+				Message:    errMsg,
+				StatusCode: statusCode,
+			})
+		}
 		return
 	}
 
