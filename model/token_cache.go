@@ -84,7 +84,7 @@ return 1`
 		strconv.FormatBool(token.UnlimitedQuota), strconv.FormatBool(token.ModelLimitsEnabled),
 		token.ModelLimits, allowIps, token.Group, strconv.FormatBool(token.CrossGroupRetry),
 		token.RemainQuota, token.UsedQuota,
-		tokenCacheTTLSeconds(),
+		strconv.Itoa(tokenCacheTTLSeconds()),  // 转换为字符串
 	}
 	common.SysLog(fmt.Sprintf("cacheInitToken: key=%s, args_count=%d", token.Key, len(args)))
 
