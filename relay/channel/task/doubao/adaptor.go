@@ -224,10 +224,10 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		upstreamPath = "/api/v3/contents/generations/tasks"
 	}
 	upstreamURL := fmt.Sprintf("%s%s", a.baseURL, upstreamPath)
-	logger.LogInfo(c, fmt.Sprintf("doubao video upstream URL: %s", upstreamURL))
+	// logger.LogInfo(c, fmt.Sprintf("doubao video upstream URL: %s", upstreamURL))
 
 	// 打印最终发往上游的请求体，方便排查转换问题
-	logger.LogInfo(c, fmt.Sprintf("doubao video upstream request body: %s", data))
+	// logger.LogInfo(c, fmt.Sprintf("doubao video upstream request body: %s", data))
 	// 保存到 context，供 savePrompt 写入 prompt_logs.request_body
 	c.Set(string(constant.ContextKeyVideoRequestBody), string(data))
 
