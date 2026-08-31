@@ -87,8 +87,10 @@ type Task struct {
 	TaskID     string                `json:"task_id" gorm:"type:varchar(191);index"` // 第三方id，不一定有/ song id\ Task id
 	Platform   constant.TaskPlatform `json:"platform" gorm:"type:varchar(30);index"` // 平台
 	UserId     int                   `json:"user_id" gorm:"index"`
-	Group      string                `json:"group" gorm:"type:varchar(50)"` // 修正计费用
+	TokenId    int                   `json:"token_id" gorm:"index"`                  // Token ID，用于按token隔离查询
+	Group      string                `json:"group" gorm:"type:varchar(50)"`          // 修正计费用
 	ChannelId  int                   `json:"channel_id" gorm:"index"`
+	ModelName  string                `json:"model_name" gorm:"type:varchar(100);index"` // 模型名称，用于筛选
 	Quota      int                   `json:"quota"`
 	Action     string                `json:"action" gorm:"type:varchar(40);index"` // 任务类型, song, lyrics, description-mode
 	Status     TaskStatus            `json:"status" gorm:"type:varchar(20);index"` // 任务状态
@@ -210,6 +212,8 @@ type SyncTaskQueryParams struct {
 	EndTimestamp   int64
 	UserIDs        []int
 	UpstreamTaskID string
+	ModelName      string // 模型名称筛选（用于 Doubao 官方格式）
+	TokenId        int    // Token ID 筛选（用于 Doubao 官方格式）
 }
 
 func InitTask(platform constant.TaskPlatform, relayInfo *commonRelay.RelayInfo) *Task {
@@ -239,7 +243,9 @@ func InitTask(platform constant.TaskPlatform, relayInfo *commonRelay.RelayInfo) 
 	t := &Task{
 		TaskID:      taskID,
 		UserId:      relayInfo.UserId,
+		TokenId:     relayInfo.TokenId,
 		Group:       relayInfo.UsingGroup,
+		ModelName:   relayInfo.OriginModelName,
 		SubmitTime:  time.Now().Unix(),
 		Status:      TaskStatusNotStart,
 		Progress:    "0%",
@@ -276,6 +282,13 @@ func TaskGetAllUserTask(userId int, startIdx int, num int, queryParams SyncTaskQ
 	}
 	if queryParams.EndTimestamp != 0 {
 		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
+	}
+	// Doubao 官方格式专用筛选条件
+	if queryParams.ModelName != "" {
+		query = query.Where("model_name = ?", queryParams.ModelName)
+	}
+	if queryParams.TokenId > 0 {
+		query = query.Where("token_id = ?", queryParams.TokenId)
 	}
 	// 普通用户不支持 upstream_task_id 筛选，已在 controller 层限制
 
@@ -566,6 +579,13 @@ func TaskCountAllUserTask(userId int, queryParams SyncTaskQueryParams) int64 {
 	}
 	if queryParams.EndTimestamp != 0 {
 		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
+	}
+	// Doubao 官方格式专用筛选条件
+	if queryParams.ModelName != "" {
+		query = query.Where("model_name = ?", queryParams.ModelName)
+	}
+	if queryParams.TokenId > 0 {
+		query = query.Where("token_id = ?", queryParams.TokenId)
 	}
 	_ = query.Count(&total).Error
 	return total
