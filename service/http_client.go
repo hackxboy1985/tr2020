@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -40,6 +41,25 @@ func InitHttpClient() {
 		IdleConnTimeout:     time.Duration(common.RelayIdleConnTimeout) * time.Second,
 		ForceAttemptHTTP2:   true,
 		Proxy:               http.ProxyFromEnvironment, // Support HTTP_PROXY, HTTPS_PROXY, NO_PROXY env vars
+	}
+	// Bound the wait for upstream response headers. Without it, an upstream that
+	// accepts the connection but never responds (and never sends FIN/RST) parks the
+	// goroutine forever, and every buffer that request owns -- the raw body read by
+	// io.ReadAll, the decoded messages, and the re-marshalled upstream body -- stays
+	// reachable for the lifetime of the process.
+	//
+	// This only covers the wait for the headers; streaming after the headers arrive
+	// is not affected. Set RELAY_RESPONSE_HEADER_TIMEOUT=0 to restore the old
+	// unbounded behaviour.
+	if seconds := common.RelayResponseHeaderTimeout; seconds > 0 {
+		// Clamp before converting: seconds beyond maxTimeoutSeconds overflow
+		// time.Duration and can wrap into a tiny positive timeout, which would cut
+		// every relay request instead of only the stuck ones.
+		maxTimeoutSeconds := int(math.MaxInt64 / int64(time.Second))
+		if seconds > maxTimeoutSeconds {
+			seconds = maxTimeoutSeconds
+		}
+		transport.ResponseHeaderTimeout = time.Duration(seconds) * time.Second
 	}
 	if common.TLSInsecureSkipVerify {
 		transport.TLSClientConfig = common.InsecureTLSConfig
@@ -113,6 +133,13 @@ func NewProxyHttpClient(proxyURL string) (*http.Client, error) {
 			ForceAttemptHTTP2:   true,
 			Proxy:               http.ProxyURL(parsedURL),
 		}
+		if seconds := common.RelayResponseHeaderTimeout; seconds > 0 {
+			maxTimeoutSeconds := int(math.MaxInt64 / int64(time.Second))
+			if seconds > maxTimeoutSeconds {
+				seconds = maxTimeoutSeconds
+			}
+			transport.ResponseHeaderTimeout = time.Duration(seconds) * time.Second
+		}
 		if common.TLSInsecureSkipVerify {
 			transport.TLSClientConfig = common.InsecureTLSConfig
 		}
@@ -154,6 +181,13 @@ func NewProxyHttpClient(proxyURL string) (*http.Client, error) {
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 				return dialer.Dial(network, addr)
 			},
+		}
+		if seconds := common.RelayResponseHeaderTimeout; seconds > 0 {
+			maxTimeoutSeconds := int(math.MaxInt64 / int64(time.Second))
+			if seconds > maxTimeoutSeconds {
+				seconds = maxTimeoutSeconds
+			}
+			transport.ResponseHeaderTimeout = time.Duration(seconds) * time.Second
 		}
 		if common.TLSInsecureSkipVerify {
 			transport.TLSClientConfig = common.InsecureTLSConfig
