@@ -206,8 +206,12 @@ cancel_task() {
     local cancel_url="${BASE_URL}/api/v3/contents/generations/tasks/${task_id}"
     print_request "DELETE" "$cancel_url"
 
+    echo -e "${YELLOW}[$(date '+%Y-%m-%d %H:%M:%S')]${NC} 发起取消任务请求..."
+
     cancel_response=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X DELETE "$cancel_url" \
         -H "Authorization: Bearer ${API_KEY}")
+
+    echo -e "${YELLOW}[$(date '+%Y-%m-%d %H:%M:%S')]${NC} 收到取消任务响应"
 
     response_body=$(echo "$cancel_response" | sed -e 's/HTTP_STATUS\:.*//g')
     http_status=$(echo "$cancel_response" | grep -o "HTTP_STATUS:[0-9]*" | cut -d: -f2)
@@ -310,6 +314,9 @@ EOF
     query_response=$(curl -s -X GET "$query_url" \
         -H "Authorization: Bearer ${API_KEY}")
 
+    # 打印响应时间
+    echo -e "${YELLOW}[$(date '+%Y-%m-%d %H:%M:%S')]${NC} 收到响应"
+
     status=$(echo "$query_response" | jq -r '.status // "unknown"')
 
     echo -e "${CYAN}━━━ 响应详情 ━━━${NC}"
@@ -326,8 +333,12 @@ EOF
     cancel_url="${BASE_URL}/api/v3/contents/generations/tasks/${TASK_ID}"
     print_request "DELETE" "$cancel_url"
 
+    echo -e "${YELLOW}[$(date '+%Y-%m-%d %H:%M:%S')]${NC} 发起取消任务请求..."
+
     cancel_response=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X DELETE "$cancel_url" \
         -H "Authorization: Bearer ${API_KEY}")
+
+    echo -e "${YELLOW}[$(date '+%Y-%m-%d %H:%M:%S')]${NC} 收到取消任务响应"
 
     response_body=$(echo "$cancel_response" | sed -e 's/HTTP_STATUS\:.*//g')
     http_status=$(echo "$cancel_response" | grep -o "HTTP_STATUS:[0-9]*" | cut -d: -f2)
@@ -544,10 +555,14 @@ EOF
 
 print_request "POST" "$create_url" "$create_body"
 
+echo -e "${YELLOW}[$(date '+%Y-%m-%d %H:%M:%S')]${NC} 发起创建任务请求..."
+
 create_response=$(curl -s -X POST "$create_url" \
     -H "Authorization: Bearer ${API_KEY}" \
     -H "Content-Type: application/json" \
     -d "$create_body")
+
+echo -e "${YELLOW}[$(date '+%Y-%m-%d %H:%M:%S')]${NC} 收到创建任务响应"
 
 print_response "$create_response"
 validate_official_format "$create_response" "task_create"
@@ -580,8 +595,14 @@ for i in {1..12}; do
         echo -e "${CYAN}━━━ 请求 ━━━${NC} GET ${query_url}"
     fi
 
+    # 打印请求时间
+    echo -e "${YELLOW}[$(date '+%Y-%m-%d %H:%M:%S')]${NC} 发起请求..."
+
     query_response=$(curl -s -X GET "$query_url" \
         -H "Authorization: Bearer ${API_KEY}")
+
+    # 打印响应时间
+    echo -e "${YELLOW}[$(date '+%Y-%m-%d %H:%M:%S')]${NC} 收到响应"
 
     status=$(echo "$query_response" | jq -r '.status // "unknown"')
 
