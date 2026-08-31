@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -96,11 +97,24 @@ return 1`
 		strconv.Itoa(token.UsedQuota),
 		strconv.Itoa(tokenCacheTTLSeconds()),
 	}
-	common.SysLog(fmt.Sprintf("cacheInitToken: key=%s, args_count=%d", token.Key, len(args)))
 
-	return common.RDB.Eval(context.Background(), script, []string{
+	// 详细日志：打印所有参数
+	argStrs := make([]string, len(args))
+	for i, arg := range args {
+		argStrs[i] = fmt.Sprintf("ARGV[%d]=%q", i+1, arg)
+	}
+	common.SysLog(fmt.Sprintf("cacheInitToken: key=%s, args=[%s]", token.Key, strings.Join(argStrs, ", ")))
+
+	result, err := common.RDB.Eval(context.Background(), script, []string{
 		getTokenCacheKey(token.Key), getTokenCacheFenceKey(token.Key),
 	}, args...).Int()
+
+	if err != nil {
+		common.SysLog(fmt.Sprintf("cacheInitToken failed: key=%s, error=%v", token.Key, err))
+		return 0, err
+	}
+
+	return result, nil
 }
 
 // cacheGetTokenByKey 从缓存读取 token；不完整的哈希（如仅有配额字段）会被拒绝。
