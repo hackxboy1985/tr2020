@@ -702,6 +702,17 @@ func RelayTaskFetchList(c *gin.Context) {
 	// Check if doubao official format
 	isDoubaoOfficialAPI := strings.Contains(c.Request.RequestURI, "/api/v3/contents/generations/tasks")
 
+	// Doubao 官方格式：使用数据库筛选 model_name 和 token_id
+	if isDoubaoOfficialAPI {
+		if filterModel != "" {
+			queryParams.ModelName = filterModel
+		}
+		tokenId := c.GetInt("token_id")
+		if tokenId > 0 {
+			queryParams.TokenId = tokenId
+		}
+	}
+
 	// 如果指定了 task_ids，直接查询这些任务
 	if len(filterTaskIds) > 0 {
 		taskIds := make([]any, len(filterTaskIds))
@@ -732,12 +743,7 @@ func RelayTaskFetchList(c *gin.Context) {
 
 				// 不需要转换 status：task.Data 存储的是上游原始响应，status 已经是官方格式
 
-				// 筛选条件（如果指定）
-				if filterModel != "" {
-					if model, ok := taskData["model"].(string); !ok || model != filterModel {
-						continue
-					}
-				}
+				// service_tier 筛选（model 和 token 已在数据库层筛选）
 				if filterServiceTier != "" {
 					if tier, ok := taskData["service_tier"].(string); !ok || tier != filterServiceTier {
 						continue
@@ -781,12 +787,7 @@ func RelayTaskFetchList(c *gin.Context) {
 
 			// 不需要转换 status：task.Data 存储的是上游原始响应，status 已经是官方格式
 
-			// 筛选条件（如果指定）
-			if filterModel != "" {
-				if model, ok := taskData["model"].(string); !ok || model != filterModel {
-					continue
-				}
-			}
+			// service_tier 筛选（model 和 token 已在数据库层筛选）
 			if filterServiceTier != "" {
 				if tier, ok := taskData["service_tier"].(string); !ok || tier != filterServiceTier {
 					continue
