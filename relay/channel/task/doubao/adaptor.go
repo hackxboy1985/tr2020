@@ -284,13 +284,18 @@ func (a *TaskAdaptor) FetchTask(baseUrl, key string, body map[string]any, proxy 
 		return nil, fmt.Errorf("invalid task_id")
 	}
 
-	// 注意：轮询流程传入的 task_id 已经是上游 ID，无需再解析
-	// 直接使用传入的 taskID 即可
+	// 解析上游任务 ID（兼容本地 ID 和上游 ID）
+	// 如果数据库中存在任务，使用其上游 ID；否则直接使用传入的 ID（轮询场景）
+	upstreamTaskID, err := taskcommon.ResolveUpstreamTaskID(taskID)
+	if err != nil {
+		return nil, err
+	}
+
 	fetchPath := a.videoFetchPath
 	if fetchPath == "" {
 		fetchPath = "/api/v3/contents/generations/tasks"
 	}
-	uri := fmt.Sprintf("%s%s/%s", baseUrl, fetchPath, taskID)
+	uri := fmt.Sprintf("%s%s/%s", baseUrl, fetchPath, upstreamTaskID)
 
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
 	if err != nil {
