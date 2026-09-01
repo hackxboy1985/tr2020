@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -97,13 +96,6 @@ return 1`
 		strconv.Itoa(token.UsedQuota),
 		strconv.Itoa(tokenCacheTTLSeconds()),
 	}
-
-	// 详细日志：打印所有参数
-	argStrs := make([]string, len(args))
-	for i, arg := range args {
-		argStrs[i] = fmt.Sprintf("ARGV[%d]=%q", i+1, arg)
-	}
-	common.SysLog(fmt.Sprintf("cacheInitToken: key=%s, args=[%s]", token.Key, strings.Join(argStrs, ", ")))
 
 	result, err := common.RDB.Eval(context.Background(), script, []string{
 		getTokenCacheKey(token.Key), getTokenCacheFenceKey(token.Key),
