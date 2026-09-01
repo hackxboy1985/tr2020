@@ -284,26 +284,17 @@ func (a *TaskAdaptor) FetchTask(baseUrl, key string, body map[string]any, proxy 
 		return nil, fmt.Errorf("invalid task_id")
 	}
 
-	// 从数据库查询任务，获取上游 task_id
-	dbTask, exists, err := model.GetByOnlyTaskId(taskID)
+	// 解析上游任务 ID（兼容新旧任务）
+	upstreamTaskID, err := taskcommon.ResolveUpstreamTaskID(taskID)
 	if err != nil {
-		return nil, fmt.Errorf("query task failed: %w", err)
-	}
-	if !exists {
-		return nil, fmt.Errorf("task not found: %s", taskID)
-	}
-
-	// 使用上游的 task_id 查询（如果存在）
-	upstreamTaskID := dbTask.GetUpstreamTaskID()
-	if upstreamTaskID != "" {
-		taskID = upstreamTaskID
+		return nil, err
 	}
 
 	fetchPath := a.videoFetchPath
 	if fetchPath == "" {
 		fetchPath = "/api/v3/contents/generations/tasks"
 	}
-	uri := fmt.Sprintf("%s%s/%s", baseUrl, fetchPath, taskID)
+	uri := fmt.Sprintf("%s%s/%s", baseUrl, fetchPath, upstreamTaskID)
 
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
 	if err != nil {

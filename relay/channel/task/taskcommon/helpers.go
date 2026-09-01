@@ -95,3 +95,32 @@ func (BaseBilling) AdjustBillingOnSubmit(_ *relaycommon.RelayInfo, _ []byte) map
 func (BaseBilling) AdjustBillingOnComplete(_ *model.Task, _ *relaycommon.TaskInfo) int {
 	return 0
 }
+
+// ResolveUpstreamTaskID resolves the actual upstream task ID from a local task ID.
+// If the task exists in the database and has an upstream task ID, returns it.
+// Otherwise, returns the original task ID.
+// This ensures compatibility with both new and old tasks.
+func ResolveUpstreamTaskID(localTaskID string) (string, error) {
+	if localTaskID == "" {
+		return "", fmt.Errorf("task_id is empty")
+	}
+
+	// Query database to get task details
+	dbTask, exists, err := model.GetByOnlyTaskId(localTaskID)
+	if err != nil {
+		return "", fmt.Errorf("query task failed: %w", err)
+	}
+	if !exists {
+		// Task not found - might be a direct upstream ID, return as-is
+		return localTaskID, nil
+	}
+
+	// Get upstream task ID (from PrivateData.UpstreamTaskID or fallback to TaskID)
+	upstreamTaskID := dbTask.GetUpstreamTaskID()
+	if upstreamTaskID != "" {
+		return upstreamTaskID, nil
+	}
+
+	// Fallback to local task ID
+	return localTaskID, nil
+}
