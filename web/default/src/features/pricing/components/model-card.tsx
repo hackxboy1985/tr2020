@@ -42,6 +42,7 @@ export interface ModelCardProps {
   tokenUnit?: TokenUnit
   showRechargePrice?: boolean
   perf?: ModelPerfBadgeData
+  usableGroups?: Record<string, string>
 }
 
 export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
@@ -54,7 +55,11 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const isTokenBased = isTokenBasedModel(props.model)
   const tokenUnitLabel = tokenUnit === 'K' ? '1K' : '1M'
   const tags = parseTags(props.model.tags)
-  const groups = props.model.enable_groups || []
+  const allGroups = props.model.enable_groups || []
+  // 只显示用户可用的分组
+  const groups = allGroups.filter((g) =>
+    g === 'all' || Object.prototype.hasOwnProperty.call(props.usableGroups || {}, g)
+  )
   const endpoints = props.model.supported_endpoint_types || []
   const modelIconKey = props.model.icon || props.model.vendor_icon
   const modelIcon = modelIconKey

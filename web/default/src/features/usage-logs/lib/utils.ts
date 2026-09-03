@@ -206,6 +206,9 @@ export function buildApiParams(config: {
     ...(isAdmin && searchParams.channel
       ? { channel: Number(searchParams.channel) || 0 }
       : {}),
+    ...(searchParams.channelType
+      ? { channelType: Number(searchParams.channelType) || 0 }
+      : {}),
     ...(isAdmin && searchParams.username
       ? { username: String(searchParams.username) }
       : {}),
@@ -217,6 +220,9 @@ export function buildApiParams(config: {
       : {}),
     ...(searchParams.taskId
       ? { task_id: String(searchParams.taskId) }
+      : {}),
+    ...(isAdmin && searchParams.upstreamTaskId
+      ? { upstream_task_id: String(searchParams.upstreamTaskId) }
       : {}),
     ...buildTimeRangeParams(searchParams, false),
   }
@@ -290,7 +296,12 @@ export async function fetchLogsByCategory(
       ? { mj_id: searchParams.filter as string | undefined }
       : {}),
     ...(logCategory === 'task'
-      ? { task_id: searchParams.filter as string | undefined }
+      ? {
+          task_id: searchParams.filter as string | undefined,
+          ...(isAdmin && searchParams.upstreamTaskId
+            ? { upstream_task_id: String(searchParams.upstreamTaskId) }
+            : {}),
+        }
       : {}),
   }
 

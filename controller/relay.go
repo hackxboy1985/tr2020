@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -632,6 +633,17 @@ func RelayTask(c *gin.Context) {
 
 		task := model.InitTask(result.Platform, relayInfo)
 		task.PrivateData.UpstreamTaskID = result.UpstreamTaskID
+
+		// 对于 Doubao 官方格式，使用上游任务 ID 作为主键，确保查询时能找到
+		if c.GetBool("doubao_official_format") && result.UpstreamTaskID != "" {
+			task.TaskID = result.UpstreamTaskID
+		}
+
+		// 任务提交成功，设置状态为已提交（用于异步轮询和查询）
+		if result.UpstreamTaskID != "" {
+			task.Status = model.TaskStatusSubmitted
+		}
+
 		task.PrivateData.BillingSource = relayInfo.BillingSource
 		task.PrivateData.SubscriptionId = relayInfo.SubscriptionId
 		task.PrivateData.TokenId = relayInfo.TokenId
@@ -665,6 +677,337 @@ func RelayTask(c *gin.Context) {
 	if taskErr != nil {
 		respondTaskError(c, taskErr)
 	}
+}
+
+// convertDoubaoStatusToInternal converts doubao official status to internal status
+func convertDoubaoStatusToInternal(doubaoStatus string) string {
+	return string(model.DoubaoStatusToInternal(doubaoStatus))
+}
+
+// convertInternalStatusToDoubao converts internal status to doubao official status
+func convertInternalStatusToDoubao(internalStatus string) string {
+	return model.TaskStatus(internalStatus).ToDoubaoStatus()
+}
+
+// RelayTaskFetchList handles GET /api/v3/contents/generations/tasks (query task list)
+func RelayTaskFetchList(c *gin.Context) {
+	userId := c.GetInt("id")
+
+	// Parse query parameters - 支持 doubao 官方参数
+	pageNum := c.DefaultQuery("page_num", "1")
+	pageSize := c.DefaultQuery("page_size", "20")
+
+	// 兼容旧参数名
+	if pageNum == "1" && c.Query("page") != "" {
+		pageNum = c.Query("page")
+	}
+	if pageSize == "20" && c.Query("page_size") != "" {
+		pageSize = c.Query("page_size")
+	}
+
+	// 筛选参数
+	filterStatus := c.Query("filter.status")
+	filterModel := c.Query("filter.model")
+	filterServiceTier := c.Query("filter.service_tier")
+	filterTaskIds := c.QueryArray("filter.task_ids")
+
+	// 状态值转换：doubao 官方格式 -> 系统内部格式
+	if filterStatus != "" {
+		filterStatus = convertDoubaoStatusToInternal(filterStatus)
+	}
+
+	pageInt, _ := strconv.Atoi(pageNum)
+	pageSizeInt, _ := strconv.Atoi(pageSize)
+	if pageInt < 1 {
+		pageInt = 1
+	}
+	if pageSizeInt < 1 || pageSizeInt > 500 {
+		pageSizeInt = 20
+	}
+
+	startIdx := (pageInt - 1) * pageSizeInt
+
+	queryParams := model.SyncTaskQueryParams{}
+	if filterStatus != "" {
+		queryParams.Status = filterStatus
+	}
+
+	// Check if doubao official format
+	isDoubaoOfficialAPI := strings.Contains(c.Request.RequestURI, "/api/v3/contents/generations/tasks")
+
+	// Doubao 官方格式：使用数据库筛选 model_name 和 token_id
+	if isDoubaoOfficialAPI {
+		if filterModel != "" {
+			queryParams.ModelName = filterModel
+		}
+		tokenId := c.GetInt("token_id")
+		if tokenId > 0 {
+			queryParams.TokenId = tokenId
+		}
+	}
+
+	// 如果指定了 task_ids，直接查询这些任务
+	if len(filterTaskIds) > 0 {
+		taskIds := make([]any, len(filterTaskIds))
+		for i, id := range filterTaskIds {
+			taskIds[i] = id
+		}
+		tasks, err := model.GetByTaskIds(userId, taskIds)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, &dto.TaskError{
+				Code:       "get_tasks_failed",
+				Message:    err.Error(),
+				StatusCode: http.StatusInternalServerError,
+			})
+			return
+		}
+
+		if isDoubaoOfficialAPI {
+			// Doubao official format
+			var items []map[string]interface{}
+			for _, task := range tasks {
+				var taskData map[string]interface{}
+				_ = common.Unmarshal(task.Data, &taskData)
+				// 删除内部字段
+				delete(taskData, "upstream_task_id")
+
+				// 替换为我们的 public task ID（task.Data 中的 id 是上游 ID）
+				taskData["id"] = task.TaskID
+
+				// 不需要转换 status：task.Data 存储的是上游原始响应，status 已经是官方格式
+
+				// service_tier 筛选（model 和 token 已在数据库层筛选）
+				if filterServiceTier != "" {
+					if tier, ok := taskData["service_tier"].(string); !ok || tier != filterServiceTier {
+						continue
+					}
+				}
+				items = append(items, taskData)
+			}
+			c.JSON(http.StatusOK, map[string]interface{}{
+				"items": items,
+				"total": len(items),
+			})
+		} else {
+			// Generic format
+			var taskDtos []*dto.TaskDto
+			for _, task := range tasks {
+				taskDtos = append(taskDtos, relay.TaskModel2Dto(task))
+			}
+			c.JSON(http.StatusOK, dto.TaskResponse[interface{}]{
+				Code: "success",
+				Data: taskDtos,
+			})
+		}
+		return
+	}
+
+	// 正常分页查询
+	tasks := model.TaskGetAllUserTask(userId, startIdx, pageSizeInt, queryParams)
+	total := model.TaskCountAllUserTask(userId, queryParams)
+
+	if isDoubaoOfficialAPI {
+		// Doubao official format: return items array
+		var items []map[string]interface{}
+		for _, task := range tasks {
+			var taskData map[string]interface{}
+			_ = common.Unmarshal(task.Data, &taskData)
+			// 删除内部字段
+			delete(taskData, "upstream_task_id")
+
+			// 替换为我们的 public task ID（task.Data 中的 id 是上游 ID）
+			taskData["id"] = task.TaskID
+
+			// 不需要转换 status：task.Data 存储的是上游原始响应，status 已经是官方格式
+
+			// service_tier 筛选（model 和 token 已在数据库层筛选）
+			if filterServiceTier != "" {
+				if tier, ok := taskData["service_tier"].(string); !ok || tier != filterServiceTier {
+					continue
+				}
+			}
+			items = append(items, taskData)
+		}
+		c.JSON(http.StatusOK, map[string]interface{}{
+			"items": items,
+			"total": total,
+		})
+	} else {
+		// Generic format
+		var taskDtos []*dto.TaskDto
+		for _, task := range tasks {
+			taskDtos = append(taskDtos, relay.TaskModel2Dto(task))
+		}
+		c.JSON(http.StatusOK, dto.TaskResponse[interface{}]{
+			Code: "success",
+			Data: taskDtos,
+		})
+	}
+}
+
+// RelayTaskDelete handles DELETE /api/v3/contents/generations/tasks/:task_id (cancel task)
+func RelayTaskDelete(c *gin.Context) {
+	taskId := c.Param("task_id")
+	userId := c.GetInt("id")
+
+	if taskId == "" {
+		c.JSON(http.StatusBadRequest, &dto.TaskError{
+			Code:       "invalid_request",
+			Message:    "task_id is required",
+			StatusCode: http.StatusBadRequest,
+		})
+		return
+	}
+
+	// Get task from database
+	task, exist, err := model.GetByTaskId(userId, taskId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, &dto.TaskError{
+			Code:       "get_task_failed",
+			Message:    err.Error(),
+			StatusCode: http.StatusInternalServerError,
+		})
+		return
+	}
+	if !exist {
+		c.JSON(http.StatusNotFound, &dto.TaskError{
+			Code:       "task_not_found",
+			Message:    "task not found",
+			StatusCode: http.StatusNotFound,
+		})
+		return
+	}
+
+	// Check if task can be cancelled
+	// 根据官方文档：只有 queued 状态可以取消，running 状态会被上游拒绝
+	if task.Status == model.TaskStatusInProgress {
+		// running 状态：上游必定返回 409，在本地直接拒绝避免浪费 API 调用
+		logger.LogInfo(c, fmt.Sprintf("[Cancel] 任务状态为 %s (%s)，无法取消，未调用上游", task.Status, task.Status.ToDoubaoStatus()))
+		c.JSON(http.StatusConflict, &dto.TaskError{
+			Code:       "task_not_cancellable",
+			Message:    fmt.Sprintf("task is in %s state, cannot be cancelled", task.Status.ToDoubaoStatus()),
+			StatusCode: http.StatusConflict,
+		})
+		return
+	}
+
+	// 允许取消的状态：NOT_START, SUBMITTED, QUEUED（官方格式都是 queued）
+	if task.Status != model.TaskStatusNotStart &&
+	   task.Status != model.TaskStatusQueued &&
+	   task.Status != model.TaskStatusSubmitted {
+		// 已完成/失败/已取消的任务不能取消
+		logger.LogInfo(c, fmt.Sprintf("[Cancel] 任务状态为 %s (%s)，无法取消，未调用上游", task.Status, task.Status.ToDoubaoStatus()))
+		c.JSON(http.StatusBadRequest, &dto.TaskError{
+			Code:       "task_not_cancellable",
+			Message:    fmt.Sprintf("task is in %s state, cannot be cancelled", task.Status.ToDoubaoStatus()),
+			StatusCode: http.StatusBadRequest,
+		})
+		return
+	}
+
+	// Get channel info
+	channel, err := model.GetChannelById(task.ChannelId, true)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, &dto.TaskError{
+			Code:       "get_channel_failed",
+			Message:    err.Error(),
+			StatusCode: http.StatusInternalServerError,
+		})
+		return
+	}
+
+	// Get adaptor
+	adaptor := relay.GetTaskAdaptor(task.Platform)
+	if adaptor == nil {
+		c.JSON(http.StatusInternalServerError, &dto.TaskError{
+			Code:       "invalid_platform",
+			Message:    fmt.Sprintf("platform %s not supported", task.Platform),
+			StatusCode: http.StatusInternalServerError,
+		})
+		return
+	}
+
+	// Initialize adaptor with minimal RelayInfo
+	info := &relaycommon.RelayInfo{}
+	info.ChannelMeta = &relaycommon.ChannelMeta{
+		ChannelType:    channel.Type,
+		ChannelBaseUrl: channel.GetBaseURL(),
+		ApiKey:         channel.Key,
+	}
+
+	// Load channel other settings if available
+	if channel.Other != "" {
+		var channelOtherSettings dto.ChannelOtherSettings
+		if err := common.UnmarshalJsonStr(channel.Other, &channelOtherSettings); err == nil {
+			info.ChannelMeta.ChannelOtherSettings = channelOtherSettings
+		}
+	}
+
+	adaptor.Init(info)
+
+	// Call upstream cancel API
+	type TaskCanceller interface {
+		CancelTask(upstreamTaskID string) error
+	}
+	canceller, ok := adaptor.(TaskCanceller)
+	if !ok {
+		c.JSON(http.StatusNotImplemented, &dto.TaskError{
+			Code:       "not_implemented",
+			Message:    fmt.Sprintf("platform %s does not support cancel task", task.Platform),
+			StatusCode: http.StatusNotImplemented,
+		})
+		return
+	}
+
+	upstreamTaskID := task.GetUpstreamTaskID()
+	if upstreamTaskID == "" {
+		c.JSON(http.StatusBadRequest, &dto.TaskError{
+			Code:       "invalid_task",
+			Message:    "upstream task id not found",
+			StatusCode: http.StatusBadRequest,
+		})
+		return
+	}
+
+	if err := canceller.CancelTask(upstreamTaskID); err != nil {
+		// Parse error message
+		errMsg := err.Error()
+		statusCode := http.StatusInternalServerError
+		errorCode := "cancel_failed"
+
+		if strings.Contains(errMsg, "task_not_exist") || strings.Contains(errMsg, "not found") {
+			statusCode = http.StatusNotFound
+			errorCode = "task_not_exist"
+			errMsg = "task not found or already deleted"
+		} else if strings.Contains(errMsg, "running") || strings.Contains(errMsg, "cannot cancel") {
+			statusCode = http.StatusConflict
+			errorCode = "task_not_cancellable"
+			// 使用adaptor层已经重写好的用户友好消息
+			// errMsg 保持从 adaptor 返回的消息不变
+		}
+
+		// 如果是Doubao官方格式，返回官方错误格式
+		if c.GetBool("doubao_official_format") {
+			c.JSON(statusCode, gin.H{
+				"error": gin.H{
+					"code":    errorCode,
+					"message": errMsg,
+					"type":    http.StatusText(statusCode),
+				},
+			})
+		} else {
+			c.JSON(statusCode, &dto.TaskError{
+				Code:       errorCode,
+				Message:    errMsg,
+				StatusCode: statusCode,
+			})
+		}
+		return
+	}
+
+	// Success: return empty response (doubao official format)
+	// Note: We don't modify local task status here, let polling task handle it
+	c.JSON(http.StatusOK, gin.H{})
 }
 
 // respondTaskError 统一输出 Task 错误响应（含 429 限流提示改写）

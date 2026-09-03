@@ -394,6 +394,11 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 
 	task.Data = redactVideoResponseBody(responseBody)
 
+	// 若 adaptor 解析出源头任务 ID，存入 PrivateData 供计费日志使用
+	if taskResult.OriTaskID != "" {
+		task.PrivateData.OriTaskID = taskResult.OriTaskID
+	}
+
 	logger.LogDebug(ctx, "updateVideoSingleTask taskResult: %+v", taskResult)
 
 	now := time.Now().Unix()
@@ -464,6 +469,21 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 			}
 		}
 		shouldSettle = true
+	case model.TaskStatusCancelled:
+		logger.LogInfo(ctx, fmt.Sprintf("Task %s cancelled", task.TaskID))
+		task.Status = model.TaskStatusCancelled
+		task.Progress = taskcommon.ProgressComplete
+		if task.FinishTime == 0 {
+			task.FinishTime = now
+		}
+		task.FailReason = taskResult.Reason
+		if task.FailReason == "" {
+			task.FailReason = "cancelled by user"
+		}
+		taskResult.Progress = taskcommon.ProgressComplete
+		if quota != 0 {
+			shouldRefund = true
+		}
 	case model.TaskStatusFailure:
 		logger.LogJson(ctx, fmt.Sprintf("Task %s failed", taskId), task)
 		task.Status = model.TaskStatusFailure
@@ -484,7 +504,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		task.Progress = taskResult.Progress
 	}
 
-	isDone := task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure
+	isDone := task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure || task.Status == model.TaskStatusCancelled
 	if isDone && snap.Status != task.Status {
 		won, err := task.UpdateWithStatus(snap.Status)
 		if err != nil {
@@ -575,6 +595,9 @@ func recordTaskCompletionLog(task *model.Task, responseBody []byte) {
 	other["task_log_source"] = "polling_result"
 	if upstreamTaskID := task.GetUpstreamTaskID(); upstreamTaskID != "" {
 		other["upstream_task_id"] = upstreamTaskID
+	}
+	if task.PrivateData.OriTaskID != "" {
+		other["ori_task_id"] = task.PrivateData.OriTaskID
 	}
 	if len(responseBody) > 0 {
 		other["response_body"] = TruncateBody(string(responseBody))

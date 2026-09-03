@@ -38,6 +38,7 @@ export const usageLogSchema = z.object({
   use_time: z.number().default(0),
   is_stream: z.boolean().default(false),
   channel: z.number().default(0),
+  channel_type: z.number().default(1), // 1=通用渠道, 2=视频渠道
   channel_name: z.string().nullish().default(''),
   token_id: z.number().default(0),
   group: z.string().default(''),

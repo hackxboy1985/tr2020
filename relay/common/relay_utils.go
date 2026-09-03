@@ -224,11 +224,10 @@ func ValidateBasicTaskRequest(c *gin.Context, info *RelayInfo, action string) *d
 					req.Prompt = text
 				}
 			case "image_url":
-				if imgObj, ok := item["image_url"].(map[string]interface{}); ok {
-					if u, ok := imgObj["url"].(string); ok {
-						imageURLs = append(imageURLs, u)
-					}
-				}
+				// 格式二（Ark 原生格式）：完整透传 image_url 到 metadata.content，保留 role 字段
+				// 支持用户传入 role: "first_frame" / "last_frame" / "reference_image"
+				// 如果用户未传 role，会在 doubao adaptor 中补充为 "reference_image"
+				otherContent = append(otherContent, item)
 			default:
 				// audio_url / video_url 等放进 metadata.content
 				otherContent = append(otherContent, item)
@@ -255,7 +254,11 @@ func ValidateBasicTaskRequest(c *gin.Context, info *RelayInfo, action string) *d
 				_, _ = rs.Seek(0, io.SeekStart)
 			}
 		}
-		arkRootFields := []string{"resolution", "ratio", "generate_audio", "watermark", "seed", "camera_fixed", "service_tier"}
+		arkRootFields := []string{
+			"resolution", "ratio", "generate_audio", "watermark", "seed", "camera_fixed", "service_tier",
+			"omni_reference_task_type", "output_format", "return_last_frame", "draft",
+			"callback_url", "execution_expires_after", "priority", "safety_identifier", "tools",
+		}
 		for _, field := range arkRootFields {
 			if v, ok := rawBody[field]; ok {
 				if req.Metadata == nil {

@@ -4,10 +4,12 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
@@ -33,6 +35,7 @@ func seedanceGetGW(c *gin.Context) (*service.SeedanceGatewayChannel, bool) {
 
 // proxyAndPassthrough sends the request to upstream and writes response back.
 // It also calls the onSuccess callback (with status code and body) before writing.
+// If the callback writes a response, proxyAndPassthrough will not write again.
 func proxyAndPassthrough(c *gin.Context, gw *service.SeedanceGatewayChannel, method, path string, query url.Values, body []byte, onSuccess func(statusCode int, body []byte)) {
 	statusCode, respBody, err := service.SeedanceProxyRequest(gw, method, path, query, body)
 	if err != nil {
@@ -46,7 +49,10 @@ func proxyAndPassthrough(c *gin.Context, gw *service.SeedanceGatewayChannel, met
 	if onSuccess != nil {
 		onSuccess(statusCode, respBody)
 	}
-	c.Data(statusCode, "application/json; charset=utf-8", respBody)
+	// 检查回调是否已经写入响应，如果是则不再写入
+	if !c.Writer.Written() {
+		c.Data(statusCode, "application/json; charset=utf-8", respBody)
+	}
 }
 
 // extractUpstreamErrMsg 从上游标准错误结构中提取 Message，解析失败时返回通用提示。
@@ -140,6 +146,44 @@ func SeedanceListAssetGroups(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+
+	// 检查是否需要返回火山官方格式（通过 RelayAsset 调用）
+	if c.GetBool("doubao_official_format") {
+		// 转换为火山官方格式
+		items := []map[string]interface{}{}
+		for _, g := range groups {
+			item := map[string]interface{}{
+				"Id":          g.UpstreamGroupID,
+				"Name":        g.Name,
+				"GroupType":   g.GroupType,
+				"CreateTime":  formatTime(g.CreatedAt),
+				"UpdateTime":  formatTime(g.UpdatedAt),
+			}
+			if g.Description != "" {
+				item["Description"] = g.Description
+			}
+			items = append(items, item)
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"ResponseMetadata": gin.H{
+				"RequestId": generateRequestID(),
+				"Action":    "ListAssetGroups",
+				"Version":   "2024-01-01",
+				"Service":   "ark",
+				"Region":    "cn-beijing",
+			},
+			"Result": gin.H{
+				"Items":      items,
+				"TotalCount": total,
+				"PageNumber": pageInfo.GetPage(),
+				"PageSize":   pageInfo.GetPageSize(),
+			},
+		})
+		return
+	}
+
+	// 默认返回本地格式（RESTful API）
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(groups)
 	common.ApiSuccess(c, pageInfo)
@@ -374,11 +418,17 @@ func SeedanceCreateAsset(c *gin.Context) {
 		return
 	}
 
+	// 从上游响应中提取实际的 GroupID（可能和请求的不一致，比如重试后创建了新分组）
+	upstreamGroupID, _ := resp.Result["GroupId"].(string)
+	if upstreamGroupID == "" {
+		upstreamGroupID = req.GroupID // fallback 到请求的 GroupID
+	}
+
 	a := &model.SeedanceAsset{
 		UserID:          userID,
 		ChannelID:       gw.Channel.Id,
 		UpstreamAssetID: upstreamAssetID,
-		UpstreamGroupID: req.GroupID,
+		UpstreamGroupID: upstreamGroupID, // 使用上游返回的实际 GroupID
 		Name:            req.Name,
 		AssetType:       req.AssetType,
 		SourceURL:       req.URL,
@@ -410,6 +460,46 @@ func SeedanceListAssets(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+
+	// 检查是否需要返回火山官方格式（通过 RelayAsset 调用）
+	if c.GetBool("doubao_official_format") {
+		// 转换为火山官方格式
+		items := []map[string]interface{}{}
+		for _, a := range assets {
+			item := map[string]interface{}{
+				"Id":          a.UpstreamAssetID,
+				"GroupId":     a.UpstreamGroupID,
+				"Name":        a.Name,
+				"AssetType":   a.AssetType,
+				"Status":      a.Status,
+				"CreateTime":  formatTime(a.CreatedAt),
+				"UpdateTime":  formatTime(a.UpdatedAt),
+			}
+			if a.SourceURL != "" {
+				item["URL"] = a.SourceURL
+			}
+			items = append(items, item)
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"ResponseMetadata": gin.H{
+				"RequestId": generateRequestID(),
+				"Action":    "ListAssets",
+				"Version":   "2024-01-01",
+				"Service":   "ark",
+				"Region":    "cn-beijing",
+			},
+			"Result": gin.H{
+				"Items":      items,
+				"TotalCount": total,
+				"PageNumber": pageInfo.GetPage(),
+				"PageSize":   pageInfo.GetPageSize(),
+			},
+		})
+		return
+	}
+
+	// 默认返回本地格式（RESTful API）
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(assets)
 	common.ApiSuccess(c, pageInfo)
@@ -636,3 +726,19 @@ func SeedanceAdminListFaceVerifications(c *gin.Context) {
 
 // ensure json import used
 var _ = json.Marshal
+
+// formatTime 将 Unix 时间戳转换为 ISO 8601 格式
+func formatTime(timestamp int64) string {
+	if timestamp == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s", time.Unix(timestamp, 0).UTC().Format(time.RFC3339))
+}
+
+// generateRequestID 生成火山格式的请求 ID
+func generateRequestID() string {
+	// 格式：YYYYMMDDHHMMSS + 随机字符串
+	now := time.Now()
+	randomPart := fmt.Sprintf("%X", md5.Sum([]byte(fmt.Sprintf("%d%d", now.UnixNano(), rand.Int()))))
+	return fmt.Sprintf("%s%s", now.Format("20060102150405"), randomPart[:20])
+}

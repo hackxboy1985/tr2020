@@ -20,9 +20,10 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useQueryClient, useIsFetching } from '@tanstack/react-query'
 import { useNavigate, getRouteApi } from '@tanstack/react-router'
 import { type Table } from '@tanstack/react-table'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, Download } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useIsAdmin } from '@/hooks/use-admin'
+import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import type { ComboboxInputOption } from '@/components/ui/combobox-input'
 import { SearchableFilterInput } from './searchable-filter-input'
@@ -90,6 +91,7 @@ export function CommonLogsFilterBar<TData>(
         : start,
       endTime: searchParams.endTime ? new Date(searchParams.endTime) : end,
       channel: searchParams.channel || undefined,
+      channelType: searchParams.channelType || undefined,
       model: searchParams.model || undefined,
       token: searchParams.token || undefined,
       group: searchParams.group || undefined,
@@ -97,6 +99,7 @@ export function CommonLogsFilterBar<TData>(
       requestId: searchParams.requestId || undefined,
       upstreamRequestId: searchParams.upstreamRequestId || undefined,
       taskId: searchParams.taskId || undefined,
+      upstreamTaskId: searchParams.upstreamTaskId || undefined,
     })
 
     const typeArr = searchParams.type
@@ -111,6 +114,7 @@ export function CommonLogsFilterBar<TData>(
     searchParams.startTime,
     searchParams.endTime,
     searchParams.channel,
+    searchParams.channelType,
     searchParams.model,
     searchParams.token,
     searchParams.group,
@@ -118,6 +122,7 @@ export function CommonLogsFilterBar<TData>(
     searchParams.requestId,
     searchParams.upstreamRequestId,
     searchParams.taskId,
+    searchParams.upstreamTaskId,
     searchParams.type,
   ])
 
@@ -170,6 +175,47 @@ export function CommonLogsFilterBar<TData>(
     [handleApply]
   )
 
+  const handleExport = useCallback(async () => {
+    const filterParams = buildSearchParams(filters, 'common')
+    const queryParams = new URLSearchParams()
+
+    // 时间戳转换：毫秒转秒
+    if (filterParams.startTime) queryParams.set('start_timestamp', String(Math.floor(Number(filterParams.startTime) / 1000)))
+    if (filterParams.endTime) queryParams.set('end_timestamp', String(Math.floor(Number(filterParams.endTime) / 1000)))
+    if (filterParams.model) queryParams.set('model', String(filterParams.model))
+    if (filterParams.token) queryParams.set('token', String(filterParams.token))
+    if (filterParams.channel) queryParams.set('channel', String(filterParams.channel))
+    if (filterParams.channelType) queryParams.set('channelType', String(filterParams.channelType))
+    if (filterParams.group) queryParams.set('group', String(filterParams.group))
+    if (filterParams.username) queryParams.set('username', String(filterParams.username))
+    if (filterParams.requestId) queryParams.set('request_id', String(filterParams.requestId))
+    if (filterParams.upstreamRequestId) queryParams.set('upstream_request_id', String(filterParams.upstreamRequestId))
+    if (filterParams.taskId) queryParams.set('task_id', String(filterParams.taskId))
+    if (filterParams.upstreamTaskId) queryParams.set('upstream_task_id', String(filterParams.upstreamTaskId))
+    if (logType !== LOG_TYPE_ALL_VALUE) queryParams.set('type', logType)
+
+    try {
+      const response = await api.get(`/api/log/export?${queryParams.toString()}`, {
+        responseType: 'blob',
+      })
+
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `logs_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error: any) {
+      const message = error.response?.data?.message || error.message || 'Export failed'
+      alert(message)
+    }
+  }, [filters, logType])
+
   const fetchTokenOptions = useCallback(
     async (keyword: string): Promise<ComboboxInputOption[]> => {
       const params = new URLSearchParams({ keyword, p: '1', size: '10' })
@@ -206,7 +252,8 @@ export function CommonLogsFilterBar<TData>(
     !!filters.channel ||
     !!filters.requestId ||
     !!filters.upstreamRequestId ||
-    !!filters.taskId
+    !!filters.taskId ||
+    !!filters.upstreamTaskId
 
   const hasTypeFilter = logType !== LOG_TYPE_ALL_VALUE
   const hasAdditionalFilters =
@@ -219,6 +266,7 @@ export function CommonLogsFilterBar<TData>(
     filters.requestId,
     filters.upstreamRequestId,
     filters.taskId,
+    isAdmin ? filters.upstreamTaskId : undefined,
   ].filter(Boolean).length
   const sensitiveType = sensitiveVisible ? 'text' : 'password'
   const logTypeItems = useMemo(
@@ -253,6 +301,24 @@ export function CommonLogsFilterBar<TData>(
           {sensitiveVisible ? t('Hide') : t('Show')}
         </TooltipContent>
       </Tooltip>
+      {isAdmin && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant='ghost'
+                size='icon'
+                onClick={handleExport}
+                aria-label={t('Export')}
+                className='text-muted-foreground hover:text-foreground size-7'
+              />
+            }
+          >
+            <Download />
+          </TooltipTrigger>
+          <TooltipContent>{t('Export')}</TooltipContent>
+        </Tooltip>
+      )}
     </div>
   )
 
@@ -347,6 +413,33 @@ export function CommonLogsFilterBar<TData>(
           />
         </LogsFilterField>
       )}
+      {isAdmin && (
+        <LogsFilterField>
+          <Select
+            value={filters.channelType?.toString() || ''}
+            onValueChange={(value) =>
+              handleChange('channelType', value ? Number(value) : undefined)
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder='渠道类型'>
+                {filters.channelType === 1
+                  ? '普通'
+                  : filters.channelType === 2
+                    ? '广告'
+                    : undefined}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="">{t('All')}</SelectItem>
+                <SelectItem value="1">普通</SelectItem>
+                <SelectItem value="2">广告</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </LogsFilterField>
+      )}
       <LogsFilterField>
         <LogsFilterInput
           placeholder={t('Request ID')}
@@ -371,6 +464,16 @@ export function CommonLogsFilterBar<TData>(
           onKeyDown={handleKeyDown}
         />
       </LogsFilterField>
+      {isAdmin && (
+        <LogsFilterField>
+          <LogsFilterInput
+            placeholder={t('Upstream Task ID')}
+            value={filters.upstreamTaskId || ''}
+            onChange={(e) => handleChange('upstreamTaskId', e.target.value)}
+            onKeyDown={handleKeyDown}
+          />
+        </LogsFilterField>
+      )}
     </>
   )
 

@@ -43,6 +43,7 @@ export function buildSearchParams(
     ...(filters.startTime && { startTime: filters.startTime.getTime() }),
     ...(filters.endTime && { endTime: filters.endTime.getTime() }),
     ...(filters.channel && { channel: filters.channel }),
+    ...(filters.channelType && { channelType: filters.channelType }),
   }
 
   switch (logCategory) {
@@ -59,6 +60,9 @@ export function buildSearchParams(
           upstreamRequestId: commonFilters.upstreamRequestId,
         }),
         ...(commonFilters.taskId && { taskId: commonFilters.taskId }),
+        ...(commonFilters.upstreamTaskId && {
+          upstreamTaskId: commonFilters.upstreamTaskId,
+        }),
       }
     }
     case 'drawing': {
@@ -73,6 +77,9 @@ export function buildSearchParams(
       return {
         ...baseParams,
         ...(taskFilters.taskId && { filter: taskFilters.taskId }),
+        ...(taskFilters.upstreamTaskId && {
+          upstreamTaskId: taskFilters.upstreamTaskId,
+        }),
       }
     }
     default:

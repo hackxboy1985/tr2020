@@ -41,6 +41,7 @@ export interface CommonFilters {
   startTime?: Date
   endTime?: Date
   channel?: string
+  channelType?: number // 1=通用渠道, 2=视频渠道
 }
 
 /**
@@ -54,6 +55,7 @@ export interface CommonLogFilters extends CommonFilters {
   requestId?: string
   upstreamRequestId?: string
   taskId?: string
+  upstreamTaskId?: string
 }
 
 /**
@@ -68,6 +70,7 @@ export interface DrawingLogFilters extends CommonFilters {
  */
 export interface TaskLogFilters extends CommonFilters {
   taskId?: string
+  upstreamTaskId?: string
 }
 
 /**
@@ -274,6 +277,7 @@ export interface GetLogsParams {
   request_id?: string
   upstream_request_id?: string
   task_id?: string
+  upstream_task_id?: string
 }
 
 export interface GetLogsResponse {
@@ -298,6 +302,8 @@ export interface GetLogStatsParams {
   group?: string
   request_id?: string
   upstream_request_id?: string
+  task_id?: string
+  upstream_task_id?: string
 }
 
 export interface GetLogStatsResponse {
@@ -330,6 +336,8 @@ export interface GetTaskLogsParams {
   task_id?: string
   start_timestamp?: number
   end_timestamp?: number
+  upstream_task_id?: string
+}
 }
 
 // ============================================================================

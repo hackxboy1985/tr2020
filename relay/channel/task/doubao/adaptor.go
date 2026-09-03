@@ -11,7 +11,6 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relay/channel"
 	"github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
@@ -70,30 +69,40 @@ type responseTask struct {
 	Model   string `json:"model"`
 	Status  string `json:"status"`
 	Content struct {
-		VideoURL string `json:"video_url"`
+		VideoURL      string `json:"video_url"`
+		LastFrameURL  string `json:"last_frame_url,omitempty"`
 	} `json:"content"`
 	// Metadata 兼容下游为 new-api 时返回的 OpenAIVideo 格式（metadata.url 存视频地址）
-	Metadata        map[string]interface{} `json:"metadata,omitempty"`
-	Seed            int                    `json:"seed"`
-	Resolution      string                 `json:"resolution"`
-	Duration        int                    `json:"duration"`
-	Ratio           string                 `json:"ratio"`
-	FramesPerSecond int                    `json:"framespersecond"`
-	ServiceTier     string                 `json:"service_tier"`
-	Tools           []struct {
+	Metadata               map[string]interface{} `json:"metadata,omitempty"`
+	Seed                   int                    `json:"seed,omitempty"`
+	Resolution             string                 `json:"resolution,omitempty"`
+	Duration               int                    `json:"duration,omitempty"`
+	Frames                 int                    `json:"frames,omitempty"`
+	Ratio                  string                 `json:"ratio,omitempty"`
+	FramesPerSecond        int                    `json:"framespersecond,omitempty"`
+	ServiceTier            string                 `json:"service_tier,omitempty"`
+	GenerateAudio          bool                   `json:"generate_audio,omitempty"`
+	OutputFormat           string                 `json:"output_format,omitempty"`
+	Draft                  bool                   `json:"draft,omitempty"`
+	DraftTaskID            string                 `json:"draft_task_id,omitempty"`
+	SafetyIdentifier       string                 `json:"safety_identifier,omitempty"`
+	ExecutionExpiresAfter  int                    `json:"execution_expires_after,omitempty"`
+	// UpstreamTaskID 是豆包内部的源头任务 ID（如 cgt-... 格式）
+	UpstreamTaskID string `json:"upstream_task_id,omitempty"`
+	Tools          []struct {
 		Type string `json:"type"`
-	} `json:"tools"`
+	} `json:"tools,omitempty"`
 	Usage struct {
 		CompletionTokens int `json:"completion_tokens"`
 		TotalTokens      int `json:"total_tokens"`
 		ToolUsage        struct {
-			WebSearch int `json:"web_search"`
-		} `json:"tool_usage"`
+			WebSearch int `json:"web_search,omitempty"`
+		} `json:"tool_usage,omitempty"`
 	} `json:"usage"`
 	Error struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
-	} `json:"error"`
+	} `json:"error,omitempty"`
 	CreatedAt int64 `json:"created_at"`
 	UpdatedAt int64 `json:"updated_at"`
 }
@@ -208,6 +217,14 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		return nil, err
 	}
 
+	// 打印上游请求 URL
+	upstreamPath := a.videoGeneratePath
+	if upstreamPath == "" {
+		upstreamPath = "/api/v3/contents/generations/tasks"
+	}
+	_ = fmt.Sprintf("%s%s", a.baseURL, upstreamPath)
+	// logger.LogInfo(c, fmt.Sprintf("doubao video upstream URL: %s", upstreamURL))
+
 	// 打印最终发往上游的请求体，方便排查转换问题
 	if common.LogUpstreamRequestEnabled {
 		logger.LogInfo(c, fmt.Sprintf("doubao video upstream request body: %s", data))
@@ -244,13 +261,20 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		return
 	}
 
-	ov := dto.NewOpenAIVideo()
-	ov.ID = info.PublicTaskID
-	ov.TaskID = info.PublicTaskID
-	ov.CreatedAt = time.Now().Unix()
-	ov.Model = info.OriginModelName
+	// Check if should return Doubao official format
+	if c.GetBool("doubao_official_format") {
+		// Return Doubao official format: just {"id": "task_id"}
+		c.JSON(http.StatusOK, responsePayload{ID: dResp.ID})
+	} else {
+		// Return OpenAI Video format (default)
+		ov := dto.NewOpenAIVideo()
+		ov.ID = info.PublicTaskID
+		ov.TaskID = info.PublicTaskID
+		ov.CreatedAt = time.Now().Unix()
+		ov.Model = info.OriginModelName
+		c.JSON(http.StatusOK, ov)
+	}
 
-	c.JSON(http.StatusOK, ov)
 	c.Set(string(constant.ContextKeyVideoResponseBody), string(responseBody))
 	return dResp.ID, responseBody, nil
 }
@@ -352,7 +376,8 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 	}
 
 	taskResult := relaycommon.TaskInfo{
-		Code: 0,
+		Code:      0,
+		OriTaskID: resTask.UpstreamTaskID,
 	}
 
 	// Map Doubao status to internal status
@@ -387,6 +412,10 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 		taskResult.Status = model.TaskStatusFailure
 		taskResult.Progress = "100%"
 		taskResult.Reason = resTask.Error.Message
+	case "cancelled":
+		taskResult.Status = model.TaskStatusCancelled
+		taskResult.Progress = "100%"
+		taskResult.Reason = "cancelled by user"
 	default:
 		// Unknown status, treat as processing
 		taskResult.Status = model.TaskStatusInProgress
@@ -394,6 +423,108 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 	}
 
 	return &taskResult, nil
+}
+
+// CancelTask cancels a task by calling upstream DELETE API
+func (a *TaskAdaptor) CancelTask(upstreamTaskID string) error {
+	fetchPath := a.videoFetchPath
+	if fetchPath == "" {
+		fetchPath = "/api/v3/contents/generations/tasks"
+	}
+	uri := fmt.Sprintf("%s%s/%s", a.baseURL, fetchPath, upstreamTaskID)
+
+	req, err := http.NewRequest(http.MethodDelete, uri, nil)
+	if err != nil {
+		return errors.Wrap(err, "create cancel request failed")
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+a.apiKey)
+
+	fmt.Printf("[CancelTask] 上游取消请求 - URI: %s, Method: DELETE\n", uri)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("[CancelTask] 上游请求失败: %v\n", err)
+		return errors.Wrap(err, "cancel request failed")
+	}
+	defer resp.Body.Close()
+
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return errors.Wrap(err, "read cancel response failed")
+	}
+
+	fmt.Printf("[CancelTask] 上游响应 - StatusCode: %d, Body: %s\n", resp.StatusCode, string(responseBody))
+
+	// 根据文档，成功时返回 HTTP 200，响应体为 {}
+	if resp.StatusCode == http.StatusOK {
+		fmt.Printf("[CancelTask] 取消成功\n")
+		return nil
+	}
+
+	// 处理错误响应
+	// 任务不存在: HTTP 404
+	if resp.StatusCode == http.StatusNotFound {
+		fmt.Printf("[CancelTask] 任务不存在 (404)\n")
+		return errors.New("task_not_exist")
+	}
+
+	// 任务运行中: HTTP 409
+	if resp.StatusCode == http.StatusConflict {
+		fmt.Printf("[CancelTask] 任务不可取消 (409)，开始解析错误响应\n")
+		// 尝试两种可能的响应格式
+
+		// 格式1: 嵌套格式 {"error": {"code": "...", "message": "..."}}
+		var nestedResp struct {
+			Error struct {
+				Code    string `json:"code"`
+				Message string `json:"message"`
+				Param   string `json:"param"`
+				Type    string `json:"type"`
+			} `json:"error"`
+		}
+
+		// 格式2: 扁平格式 {"code": "...", "message": "..."}
+		var flatResp struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+			Param   string `json:"param"`
+			Type    string `json:"type"`
+		}
+
+		// 先尝试扁平格式，再尝试嵌套格式
+		errorCode := ""
+		if err := common.Unmarshal(responseBody, &flatResp); err == nil && flatResp.Code != "" {
+			fmt.Printf("[CancelTask] 扁平格式解析成功，错误码: %s\n", flatResp.Code)
+			errorCode = flatResp.Code
+		} else if err := common.Unmarshal(responseBody, &nestedResp); err == nil && nestedResp.Error.Code != "" {
+			fmt.Printf("[CancelTask] 嵌套格式解析成功，错误码: %s\n", nestedResp.Error.Code)
+			errorCode = nestedResp.Error.Code
+		} else {
+			fmt.Printf("[CancelTask] JSON解析失败或错误码为空\n")
+		}
+
+		// 根据错误码返回用户友好的消息，避免泄露上游任务ID
+		if errorCode != "" {
+			switch errorCode {
+			case "InvalidAction.RunningTaskDeletion":
+				fmt.Printf("[CancelTask] 匹配到RunningTaskDeletion，返回友好消息\n")
+				return errors.New("task is currently running, cannot be cancelled")
+			default:
+				fmt.Printf("[CancelTask] 错误码: %s，返回通用消息\n", errorCode)
+				return errors.New("task cannot be cancelled at this time")
+			}
+		}
+
+		fmt.Printf("[CancelTask] 无法解析错误码，返回默认消息\n")
+		return errors.New("task is running, cannot cancel")
+	}
+
+	// 其他错误
+	return errors.Errorf("cancel task failed with status %d: %s", resp.StatusCode, string(responseBody))
 }
 
 func (a *TaskAdaptor) ConvertToOpenAIVideo(originTask *model.Task) ([]byte, error) {
@@ -407,15 +538,53 @@ func (a *TaskAdaptor) ConvertToOpenAIVideo(originTask *model.Task) ([]byte, erro
 	openAIVideo.TaskID = originTask.TaskID
 	openAIVideo.Status = originTask.Status.ToVideoStatus()
 	openAIVideo.SetProgressStr(originTask.Progress)
+	openAIVideo.CreatedAt = originTask.CreatedAt
+	openAIVideo.CompletedAt = originTask.UpdatedAt
+	openAIVideo.Model = originTask.Properties.OriginModelName
+
+	// Set metadata with all doubao-specific fields
 	openAIVideo.SetMetadata("url", dResp.Content.VideoURL)
 	if dResp.Content.VideoURL == "" {
 		if u, ok := dResp.Metadata["url"].(string); ok {
 			openAIVideo.SetMetadata("url", u)
 		}
 	}
-	openAIVideo.CreatedAt = originTask.CreatedAt
-	openAIVideo.CompletedAt = originTask.UpdatedAt
-	openAIVideo.Model = originTask.Properties.OriginModelName
+
+	if dResp.Content.LastFrameURL != "" {
+		openAIVideo.SetMetadata("last_frame_url", dResp.Content.LastFrameURL)
+	}
+	if dResp.UpdatedAt > 0 {
+		openAIVideo.SetMetadata("updated_at", dResp.UpdatedAt)
+	}
+	if dResp.Duration > 0 {
+		openAIVideo.SetMetadata("duration", dResp.Duration)
+	}
+	if dResp.Ratio != "" {
+		openAIVideo.SetMetadata("ratio", dResp.Ratio)
+	}
+	if dResp.Resolution != "" {
+		openAIVideo.SetMetadata("resolution", dResp.Resolution)
+	}
+	if dResp.FramesPerSecond > 0 {
+		openAIVideo.SetMetadata("framespersecond", dResp.FramesPerSecond)
+	}
+	if dResp.Seed > 0 {
+		openAIVideo.SetMetadata("seed", dResp.Seed)
+	}
+	if dResp.OutputFormat != "" {
+		openAIVideo.SetMetadata("output_format", dResp.OutputFormat)
+	}
+	if dResp.ServiceTier != "" {
+		openAIVideo.SetMetadata("service_tier", dResp.ServiceTier)
+	}
+	openAIVideo.SetMetadata("generate_audio", dResp.GenerateAudio)
+	openAIVideo.SetMetadata("draft", dResp.Draft)
+	if dResp.DraftTaskID != "" {
+		openAIVideo.SetMetadata("draft_task_id", dResp.DraftTaskID)
+	}
+	if dResp.ExecutionExpiresAfter > 0 {
+		openAIVideo.SetMetadata("execution_expires_after", dResp.ExecutionExpiresAfter)
+	}
 
 	if dResp.Status == "failed" {
 		openAIVideo.Error = &dto.OpenAIVideoError{

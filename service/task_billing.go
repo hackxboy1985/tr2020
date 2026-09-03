@@ -54,6 +54,18 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 		other["request_body"] = TruncateBody(requestBody)
 	}
 	if responseBody := c.GetString(string(constant.ContextKeyVideoResponseBody)); responseBody != "" {
+		// 先从完整 responseBody 中提取字段，再截断保存
+		var respData map[string]interface{}
+		if err := common.Unmarshal([]byte(responseBody), &respData); err == nil {
+			// "id" 字段 -> upstream_task_id（上游任务ID）
+			if taskID, ok := respData["id"].(string); ok && taskID != "" {
+				other["upstream_task_id"] = taskID
+			}
+			// "upstream_task_id" 字段 -> ori_task_id（上游的上游任务ID，如豆包的 cgt-xxx）
+			if oriTaskID, ok := respData["upstream_task_id"].(string); ok && oriTaskID != "" {
+				other["ori_task_id"] = oriTaskID
+			}
+		}
 		other["response_body"] = TruncateBody(responseBody)
 	}
 	if upstreamRequestPath := c.GetString(string(constant.ContextKeyVideoRequestPath)); upstreamRequestPath != "" {
@@ -206,6 +218,9 @@ func RefundTaskQuota(ctx context.Context, task *model.Task, reason string, final
 	if upstreamTaskID := task.GetUpstreamTaskID(); upstreamTaskID != "" {
 		other["upstream_task_id"] = upstreamTaskID
 	}
+	if task.PrivateData.OriTaskID != "" {
+		other["ori_task_id"] = task.PrivateData.OriTaskID
+	}
 	model.RecordTaskBillingLog(model.RecordTaskBillingLogParams{
 		UserId:    task.UserId,
 		LogType:   model.LogTypeRefund,
@@ -277,6 +292,9 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 	other["actual_quota"] = actualQuota
 	if upstreamTaskID := task.GetUpstreamTaskID(); upstreamTaskID != "" {
 		other["upstream_task_id"] = upstreamTaskID
+	}
+	if task.PrivateData.OriTaskID != "" {
+		other["ori_task_id"] = task.PrivateData.OriTaskID
 	}
 	model.RecordTaskBillingLog(model.RecordTaskBillingLogParams{
 		UserId:    task.UserId,

@@ -319,6 +319,34 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 		if _, ok := c.Get("relay_mode"); !ok {
 			c.Set("relay_mode", relayMode)
 		}
+	} else if strings.HasPrefix(c.Request.URL.Path, "/api/seedance/assets/v2") {
+		// Seedance Asset API (CreateAssetGroup, CreateAsset, etc.)
+		// 这些接口是素材管理接口，不需要模型和渠道选择
+		// 返回空 model 和 shouldSelectChannel=false，让 Distribute 直接放行
+		common.SysLog(fmt.Sprintf("[DEBUG] Asset API detected: %s, skipping channel selection", c.Request.URL.Path))
+		return &ModelRequest{Model: ""}, false, nil
+	} else if strings.Contains(c.Request.URL.Path, "/api/v3/contents/generations/tasks") {
+		// Doubao official API path
+		relayMode := relayconstant.RelayModeUnknown
+		if c.Request.Method == http.MethodPost {
+			req, err := getModelFromRequest(c)
+			if err != nil {
+				return nil, false, err
+			}
+			modelRequest.Model = req.Model
+			relayMode = relayconstant.RelayModeVideoSubmit
+		} else if c.Request.Method == http.MethodGet {
+			relayMode = relayconstant.RelayModeVideoFetchByID
+			shouldSelectChannel = false
+			modelRequest.Model = getTaskOriginModelName(c)
+		} else if c.Request.Method == http.MethodDelete {
+			// DELETE /api/v3/contents/generations/tasks/:task_id - cancel task
+			relayMode = relayconstant.RelayModeVideoFetchByID // 复用 FetchByID 模式
+			shouldSelectChannel = false
+			modelRequest.Model = getTaskOriginModelName(c)
+		}
+		c.Set("relay_mode", relayMode)
+		c.Set("doubao_official_format", true)
 	} else if strings.HasPrefix(c.Request.URL.Path, "/v1/images/tasks") && c.Request.Method == http.MethodGet {
 		// GET /v1/images/tasks/:task_id — fetch task status from local DB, no channel selection needed
 		relayMode := relayconstant.RelayModeImageTaskFetchByID

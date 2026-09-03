@@ -50,6 +50,7 @@ interface LogsFilterToolbarProps<TData> {
   searchLoading?: boolean
   onReset: () => void
   onSearch: () => void
+  onExport?: () => void
   className?: string
 }
 
@@ -244,6 +245,15 @@ export function LogsFilterToolbar<TData>(props: LogsFilterToolbarProps<TData>) {
             {props.searchLoading && <Loader2 className='animate-spin' />}
             {t('Search')}
           </Button>
+          {props.onExport && (
+            <Button
+              type='button'
+              variant='outline'
+              onClick={props.onExport}
+            >
+              {t('Export')}
+            </Button>
+          )}
           <DataTableViewOptions table={props.table} />
         </div>
       </div>

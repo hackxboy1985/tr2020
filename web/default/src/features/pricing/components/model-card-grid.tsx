@@ -34,6 +34,7 @@ export interface ModelCardGridProps {
   usdExchangeRate?: number
   tokenUnit?: TokenUnit
   showRechargePrice?: boolean
+  usableGroups?: Record<string, string>
 }
 
 export function ModelCardGrid(props: ModelCardGridProps) {
@@ -81,6 +82,7 @@ export function ModelCardGrid(props: ModelCardGridProps) {
             showRechargePrice={props.showRechargePrice}
             perf={perfMap.get(model.model_name || '')}
             onClick={() => props.onModelClick(model.model_name || '')}
+            usableGroups={props.usableGroups}
           />
         ))}
       </div>

@@ -205,7 +205,16 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 									logContent := fmt.Sprintf("视频任务成功补扣费，模型倍率 %.2f，分组倍率 %.2f，tokens %d，预扣费 %s，实际扣费 %s，补扣费 %s",
 										modelRatio, finalGroupRatio, taskResult.TotalTokens,
 										logger.LogQuota(preConsumedQuota), logger.LogQuota(actualQuota), logger.LogQuota(quotaDelta))
-									model.RecordLog(task.UserId, model.LogTypeSystem, logContent)
+
+									// 获取 token_name
+									tokenName := ""
+									if task.PrivateData.TokenId > 0 {
+										if token, err := model.GetTokenById(task.PrivateData.TokenId); err == nil {
+											tokenName = token.Name
+										}
+									}
+
+									model.RecordLogWithQuota(task.UserId, model.LogTypeSystem, quotaDelta, modelName, task.ChannelId, model.ChannelTypeVideo, task.PrivateData.TokenId, tokenName, logContent)
 								}
 							} else if quotaDelta < 0 {
 								// 需要退还多扣的费用
@@ -226,7 +235,16 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 									logContent := fmt.Sprintf("视频任务成功退还多扣费用，模型倍率 %.2f，分组倍率 %.2f，tokens %d，预扣费 %s，实际扣费 %s，退还 %s",
 										modelRatio, finalGroupRatio, taskResult.TotalTokens,
 										logger.LogQuota(preConsumedQuota), logger.LogQuota(actualQuota), logger.LogQuota(refundQuota))
-									model.RecordLog(task.UserId, model.LogTypeSystem, logContent)
+
+									// 获取 token_name
+									tokenName := ""
+									if task.PrivateData.TokenId > 0 {
+										if token, err := model.GetTokenById(task.PrivateData.TokenId); err == nil {
+											tokenName = token.Name
+										}
+									}
+
+									model.RecordLogWithQuota(task.UserId, model.LogTypeSystem, -refundQuota, modelName, task.ChannelId, model.ChannelTypeVideo, task.PrivateData.TokenId, tokenName, logContent)
 								}
 							} else {
 								// quotaDelta == 0, 预扣费刚好准确

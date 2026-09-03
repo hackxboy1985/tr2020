@@ -22,6 +22,7 @@ import { useNavigate, getRouteApi } from '@tanstack/react-router'
 import { type Table } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 import { useIsAdmin } from '@/hooks/use-admin'
+import { api } from '@/lib/api'
 import { buildSearchParams } from '../lib/filter'
 import { getDefaultTimeRange } from '../lib/utils'
 import type { DrawingLogFilters, LogCategory, TaskLogFilters } from '../types'
@@ -96,6 +97,9 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
         : {
             ...baseFilters,
             ...(searchParams.filter ? { taskId: searchParams.filter } : {}),
+            ...(searchParams.upstreamTaskId
+              ? { upstreamTaskId: searchParams.upstreamTaskId }
+              : {}),
           }
 
     setFilters(next)
@@ -105,6 +109,7 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
     searchParams.endTime,
     searchParams.channel,
     searchParams.filter,
+    searchParams.upstreamTaskId,
   ])
 
   const handleChange = useCallback(
@@ -151,6 +156,42 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
     [handleApply]
   )
 
+  const handleExport = useCallback(async () => {
+    const queryParams = new URLSearchParams()
+
+    // 时间戳转换：毫秒转秒
+    if (filters.startTime) queryParams.set('start_timestamp', String(Math.floor(filters.startTime.getTime() / 1000)))
+    if (filters.endTime) queryParams.set('end_timestamp', String(Math.floor(filters.endTime.getTime() / 1000)))
+    if (filters.channel) queryParams.set('channel_id', String(filters.channel))
+
+    if (props.logCategory === 'task') {
+      const taskFilters = filters as TaskLogFilters
+      if (taskFilters.taskId) queryParams.set('task_id', taskFilters.taskId)
+      if (taskFilters.upstreamTaskId) queryParams.set('upstream_task_id', taskFilters.upstreamTaskId)
+    }
+
+    try {
+      const response = await api.get(`/api/task/export?${queryParams.toString()}`, {
+        responseType: 'blob',
+      })
+
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `tasks_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error: any) {
+      const message = error.response?.data?.message || error.message || 'Export failed'
+      alert(message)
+    }
+  }, [filters, props.logCategory])
+
   const handleFilterChange = useCallback(
     (value: string) => {
       setFilters((prev) => setFilterValue(prev, props.logCategory, value))
@@ -163,7 +204,10 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
     props.logCategory === 'drawing'
       ? t('Filter by Midjourney task ID')
       : t('Filter by task ID')
-  const hasAdditionalFilters = !!filterValue || !!filters.channel
+  const hasAdditionalFilters =
+    !!filterValue ||
+    !!filters.channel ||
+    !!(props.logCategory === 'task' && (filters as TaskLogFilters).upstreamTaskId)
   const dateRangeFilter = (
     <LogsFilterField wide>
       <CompactDateTimeRangePicker
@@ -198,6 +242,18 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
     </LogsFilterField>
   ) : null
 
+  const upstreamTaskIdFilter =
+    isAdmin && props.logCategory === 'task' ? (
+      <LogsFilterField>
+        <LogsFilterInput
+          placeholder={t('Upstream Task ID')}
+          value={(filters as TaskLogFilters).upstreamTaskId || ''}
+          onChange={(e) => handleChange('upstreamTaskId', e.target.value)}
+          onKeyDown={handleKeyDown}
+        />
+      </LogsFilterField>
+    ) : null
+
   return (
     <LogsFilterToolbar
       table={props.table}
@@ -206,6 +262,7 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
           {dateRangeFilter}
           {taskIdFilter}
           {channelFilter}
+          {upstreamTaskIdFilter}
         </>
       }
       mobilePinnedFilters={dateRangeFilter}
@@ -213,13 +270,19 @@ export function TaskLogsFilterBar<TData>(props: TaskLogsFilterBarProps<TData>) {
         <>
           {taskIdFilter}
           {channelFilter}
+          {upstreamTaskIdFilter}
         </>
       }
-      mobileFilterCount={[filterValue, filters.channel].filter(Boolean).length}
+      mobileFilterCount={
+        [filterValue, filters.channel, (filters as TaskLogFilters).upstreamTaskId].filter(
+          Boolean
+        ).length
+      }
       hasActiveFilters={hasAdditionalFilters}
       onSearch={handleApply}
       searchLoading={fetchingLogs > 0}
       onReset={handleReset}
+      onExport={isAdmin && props.logCategory === 'task' ? handleExport : undefined}
     />
   )
 }

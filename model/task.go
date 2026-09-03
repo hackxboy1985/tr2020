@@ -25,10 +25,48 @@ func (t TaskStatus) ToVideoStatus() string {
 		status = dto.VideoStatusCompleted
 	case TaskStatusFailure:
 		status = dto.VideoStatusFailed
+	case TaskStatusCancelled:
+		status = dto.VideoStatusCancelled
 	default:
 		status = dto.VideoStatusUnknown // Default fallback
 	}
 	return status
+}
+
+// ToDoubaoStatus converts internal status to doubao official status
+func (t TaskStatus) ToDoubaoStatus() string {
+	switch t {
+	case TaskStatusQueued, TaskStatusSubmitted, TaskStatusNotStart:
+		return "queued"
+	case TaskStatusInProgress:
+		return "running"
+	case TaskStatusSuccess:
+		return "succeeded"
+	case TaskStatusFailure:
+		return "failed"
+	case TaskStatusCancelled:
+		return "cancelled"
+	default:
+		return "unknown"
+	}
+}
+
+// DoubaoStatusToInternal converts doubao official status to internal status
+func DoubaoStatusToInternal(doubaoStatus string) TaskStatus {
+	switch doubaoStatus {
+	case "queued":
+		return TaskStatusQueued
+	case "running":
+		return TaskStatusInProgress
+	case "succeeded":
+		return TaskStatusSuccess
+	case "failed":
+		return TaskStatusFailure
+	case "cancelled":
+		return TaskStatusCancelled
+	default:
+		return TaskStatusUnknown
+	}
 }
 
 const (
@@ -38,6 +76,7 @@ const (
 	TaskStatusInProgress            = "IN_PROGRESS"
 	TaskStatusFailure               = "FAILURE"
 	TaskStatusSuccess               = "SUCCESS"
+	TaskStatusCancelled             = "CANCELLED"
 	TaskStatusUnknown               = "UNKNOWN"
 )
 
@@ -48,8 +87,10 @@ type Task struct {
 	TaskID     string                `json:"task_id" gorm:"type:varchar(191);index"` // 第三方id，不一定有/ song id\ Task id
 	Platform   constant.TaskPlatform `json:"platform" gorm:"type:varchar(30);index"` // 平台
 	UserId     int                   `json:"user_id" gorm:"index"`
-	Group      string                `json:"group" gorm:"type:varchar(50)"` // 修正计费用
+	TokenId    int                   `json:"token_id" gorm:"index"`                  // Token ID，用于按token隔离查询
+	Group      string                `json:"group" gorm:"type:varchar(50)"`          // 修正计费用
 	ChannelId  int                   `json:"channel_id" gorm:"index"`
+	ModelName  string                `json:"model_name" gorm:"type:varchar(100);index"` // 模型名称，用于筛选
 	Quota      int                   `json:"quota"`
 	Action     string                `json:"action" gorm:"type:varchar(40);index"` // 任务类型, song, lyrics, description-mode
 	Status     TaskStatus            `json:"status" gorm:"type:varchar(20);index"` // 任务状态
@@ -99,6 +140,7 @@ func (m Properties) Value() (driver.Value, error) {
 type TaskPrivateData struct {
 	Key            string `json:"key,omitempty"`
 	UpstreamTaskID string `json:"upstream_task_id,omitempty"` // 上游真实 task ID
+	OriTaskID      string `json:"ori_task_id,omitempty"`      // 上游源头任务 ID（如豆包 cgt-... 格式）
 	ResultURL      string `json:"result_url,omitempty"`       // 任务成功后的结果 URL（视频地址等）
 	ExpireAt       int64  `json:"expire_at,omitempty"`        // URL 有效期截止时间（Unix 秒），0 表示不限期
 	// 计费上下文：用于异步退款/差额结算（轮询阶段读取）
@@ -170,6 +212,9 @@ type SyncTaskQueryParams struct {
 	StartTimestamp int64
 	EndTimestamp   int64
 	UserIDs        []int
+	UpstreamTaskID string
+	ModelName      string // 模型名称筛选（用于 Doubao 官方格式）
+	TokenId        int    // Token ID 筛选（用于 Doubao 官方格式）
 }
 
 func InitTask(platform constant.TaskPlatform, relayInfo *commonRelay.RelayInfo) *Task {
@@ -199,7 +244,9 @@ func InitTask(platform constant.TaskPlatform, relayInfo *commonRelay.RelayInfo) 
 	t := &Task{
 		TaskID:      taskID,
 		UserId:      relayInfo.UserId,
+		TokenId:     relayInfo.TokenId,
 		Group:       relayInfo.UsingGroup,
+		ModelName:   relayInfo.OriginModelName,
 		SubmitTime:  time.Now().Unix(),
 		Status:      TaskStatusNotStart,
 		Progress:    "0%",
@@ -237,6 +284,14 @@ func TaskGetAllUserTask(userId int, startIdx int, num int, queryParams SyncTaskQ
 	if queryParams.EndTimestamp != 0 {
 		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
 	}
+	// Doubao 官方格式专用筛选条件
+	if queryParams.ModelName != "" {
+		query = query.Where("model_name = ?", queryParams.ModelName)
+	}
+	if queryParams.TokenId > 0 {
+		query = query.Where("token_id = ?", queryParams.TokenId)
+	}
+	// 普通用户不支持 upstream_task_id 筛选，已在 controller 层限制
 
 	// 获取数据
 	err = query.Omit("channel_id").Order("id desc").Limit(num).Offset(startIdx).Find(&tasks).Error
@@ -281,6 +336,16 @@ func TaskGetAllTasks(startIdx int, num int, queryParams SyncTaskQueryParams) []*
 	}
 	if queryParams.EndTimestamp != 0 {
 		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
+	}
+	if queryParams.UpstreamTaskID != "" {
+		// 查询 private_data JSON 字段中的 upstream_task_id
+		if common.UsingPostgreSQL {
+			query = query.Where("private_data->>'upstream_task_id' = ?", queryParams.UpstreamTaskID)
+		} else if common.UsingMySQL {
+			query = query.Where("JSON_UNQUOTE(JSON_EXTRACT(private_data, '$.upstream_task_id')) = ?", queryParams.UpstreamTaskID)
+		} else {
+			query = query.Where("json_extract(private_data, '$.upstream_task_id') = ?", queryParams.UpstreamTaskID)
+		}
 	}
 
 	// 获取数据
@@ -480,6 +545,16 @@ func TaskCountAllTasks(queryParams SyncTaskQueryParams) int64 {
 	if queryParams.EndTimestamp != 0 {
 		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
 	}
+	if queryParams.UpstreamTaskID != "" {
+		// 查询 private_data JSON 字段中的 upstream_task_id
+		if common.UsingPostgreSQL {
+			query = query.Where("private_data->>'upstream_task_id' = ?", queryParams.UpstreamTaskID)
+		} else if common.UsingMySQL {
+			query = query.Where("JSON_UNQUOTE(JSON_EXTRACT(private_data, '$.upstream_task_id')) = ?", queryParams.UpstreamTaskID)
+		} else {
+			query = query.Where("json_extract(private_data, '$.upstream_task_id') = ?", queryParams.UpstreamTaskID)
+		}
+	}
 	_ = query.Count(&total).Error
 	return total
 }
@@ -505,6 +580,13 @@ func TaskCountAllUserTask(userId int, queryParams SyncTaskQueryParams) int64 {
 	}
 	if queryParams.EndTimestamp != 0 {
 		query = query.Where("submit_time <= ?", queryParams.EndTimestamp)
+	}
+	// Doubao 官方格式专用筛选条件
+	if queryParams.ModelName != "" {
+		query = query.Where("model_name = ?", queryParams.ModelName)
+	}
+	if queryParams.TokenId > 0 {
+		query = query.Where("token_id = ?", queryParams.TokenId)
 	}
 	_ = query.Count(&total).Error
 	return total

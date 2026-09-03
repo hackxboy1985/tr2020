@@ -40,6 +40,27 @@ func SetVideoRouter(router *gin.Engine) {
 		klingV1Router.GET("/videos/image2video/:task_id", controller.RelayTaskFetch)
 	}
 
+	// Doubao official API routes
+	doubaoOfficialGroup := router.Group("/api/v3/contents/generations")
+	doubaoOfficialGroup.Use(middleware.RouteTag("relay"))
+	doubaoOfficialGroup.Use(middleware.TokenAuth(), middleware.Distribute())
+	{
+		doubaoOfficialGroup.POST("/tasks", controller.RelayTask)
+		doubaoOfficialGroup.GET("/tasks/:task_id", controller.RelayTaskFetch)
+		doubaoOfficialGroup.GET("/tasks", controller.RelayTaskFetchList)
+		doubaoOfficialGroup.DELETE("/tasks/:task_id", controller.RelayTaskDelete)
+	}
+
+	// Seedance Asset API routes (使用 Action 参数)
+	// 不使用 Distribute() 中间件，因为这是素材管理接口，不需要模型和渠道选择
+	// controller 内部会自己调用 GetSeedanceGatewayChannel 选择渠道
+	seedanceAssetGroup := router.Group("/api/seedance/assets/v2")
+	seedanceAssetGroup.Use(middleware.RouteTag("relay"))
+	seedanceAssetGroup.Use(middleware.TokenAuth())
+	{
+		seedanceAssetGroup.POST("/", controller.RelayAsset)
+	}
+
 	// Jimeng official API routes
 	jimengOfficialGroup := router.Group("jimeng")
 	jimengOfficialGroup.Use(middleware.RouteTag("relay"))

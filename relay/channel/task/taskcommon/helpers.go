@@ -99,3 +99,34 @@ func (BaseBilling) AdjustBillingOnComplete(_ *model.Task, _ *relaycommon.TaskInf
 // InjectBillingParams is a no-op. Override in adaptors that need to inject
 // transformed parameters into BillingRequestInput before price calculation.
 func (BaseBilling) InjectBillingParams(_ *gin.Context, _ *relaycommon.RelayInfo) {}
+
+// ResolveUpstreamTaskID resolves the actual upstream task ID from a local task ID.
+// If the task exists in the database and has an upstream task ID, returns it.
+// Otherwise, returns the original task ID (assuming it's already an upstream ID).
+// This ensures compatibility with both new and old tasks.
+func ResolveUpstreamTaskID(localTaskID string) (string, error) {
+	if localTaskID == "" {
+		return "", fmt.Errorf("task_id is empty")
+	}
+
+	// Query database to get task details
+	dbTask, exists, err := model.GetByOnlyTaskId(localTaskID)
+	if err != nil {
+		// Database error - return error
+		return "", fmt.Errorf("query task failed: %w", err)
+	}
+	if !exists {
+		// Task not found - might be a direct upstream ID from polling service
+		// Return as-is to allow polling to work
+		return localTaskID, nil
+	}
+
+	// Get upstream task ID (from PrivateData.UpstreamTaskID or fallback to TaskID)
+	upstreamTaskID := dbTask.GetUpstreamTaskID()
+	if upstreamTaskID != "" {
+		return upstreamTaskID, nil
+	}
+
+	// Fallback to local task ID
+	return localTaskID, nil
+}
