@@ -248,6 +248,9 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 	if err != nil {
 		logger.LogError(c, "failed to record log: "+err.Error())
 	}
+	if err == nil && log.Id > 0 {
+		savePrompt(c, log.Id, userId)
+	}
 }
 
 type RecordConsumeLogParams struct {
