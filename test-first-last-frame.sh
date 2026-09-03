@@ -13,7 +13,7 @@
 NEWAPI_BASE_URL="${NEWAPI_BASE_URL:-http://book2:3002}"
 NEWAPI_API_KEY="${NEWAPI_API_KEY:-sk-60oOqvQYb8vziFfg2hPHlTKW3X80Pc6sIBDC5EFHCY0sn5NY}"
 
-MODEL="${MODEL:-doubao-seedance-2-5}"
+MODEL="${MODEL:-doubao-seedance-2-0-fast-260128}"
 PROMPT="${PROMPT:-一个人在海边奔跑}"
 DURATION="${DURATION:-5}"
 RESOLUTION="${RESOLUTION:-720p}"
@@ -21,7 +21,7 @@ RATIO="${RATIO:-16:9}"
 
 # 首尾帧图片 URL
 FIRST_FRAME_URL="${FIRST_FRAME_URL:-https://static.horse-world.mints-id.com/rh/20260604204600/1780577160529_9921.png}"
-LAST_FRAME_URL="${LAST_FRAME_URL:-https://static.horse-world.mints-id.com/rh/20260604204600/1780577160529_9922.png}"
+LAST_FRAME_URL="${LAST_FRAME_URL:-https://static.horse-world.mints-id.com/general/1/image/2026-06-18/1781744040935_290.png}"
 
 # 解析命令行参数
 TEST_OLD=true
