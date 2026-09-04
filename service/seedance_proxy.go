@@ -330,10 +330,19 @@ func AssetProxyRequest(
 	queryParams url.Values,
 	body []byte,
 ) (int, []byte, error) {
+	common.SysLog(fmt.Sprintf(
+		"[AssetProxyRequest] version=%s, method=%s, path=%s",
+		gc.UpstreamVersion, method, upstreamPath,
+	))
+
 	switch gc.UpstreamVersion {
 	case "kwjm":
 		// KWJM 上游：转换路径为 Action
 		action := pathToKwjmAction(upstreamPath, method)
+		common.SysLog(fmt.Sprintf(
+			"[AssetProxyRequest] kwjm action converted: %s %s -> %s",
+			method, upstreamPath, action,
+		))
 		if action == "" {
 			return 0, nil, fmt.Errorf("unsupported path for kwjm: %s %s", method, upstreamPath)
 		}
