@@ -37,7 +37,7 @@ func seedanceGetGW(c *gin.Context) (*service.SeedanceGatewayChannel, bool) {
 // It also calls the onSuccess callback (with status code and body) before writing.
 // If the callback writes a response, proxyAndPassthrough will not write again.
 func proxyAndPassthrough(c *gin.Context, gw *service.SeedanceGatewayChannel, method, path string, query url.Values, body []byte, onSuccess func(statusCode int, body []byte)) {
-	statusCode, respBody, err := service.SeedanceProxyRequest(gw, method, path, query, body)
+	statusCode, respBody, err := service.AssetProxyRequest(gw, method, path, query, body)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": err.Error()})
 		return

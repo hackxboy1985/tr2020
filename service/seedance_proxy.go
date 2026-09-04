@@ -13,17 +13,23 @@ import (
 	"github.com/QuantumNous/new-api/model"
 )
 
-// SeedanceGatewayChannel holds the selected channel info for a Gateway request.
-type SeedanceGatewayChannel struct {
-	Channel    *model.Channel
-	GatewayURL string // SeedanceAssetBaseUrl from OtherSettings
-	Key        string // upstream token (first key)
-	RelayMode  bool   // true = 下游是 new-api，使用 /api/seedance/* 路径；false = 直连 Gateway
+// AssetGatewayChannel holds the selected channel info for asset management.
+// Supports multiple upstream versions: gateway, kwjm
+type AssetGatewayChannel struct {
+	Channel         *model.Channel
+	GatewayURL      string // Base URL from settings
+	Key             string // upstream token (first key)
+	UpstreamVersion string // "gateway" | "kwjm"
+	RelayMode       bool   // true = 下游是 new-api，使用 /api/seedance/* 路径；false = 直连 Gateway (仅 gateway 使用)
+	KwjmModel       string // KWJM 默认模型 (仅 kwjm 使用)
 }
 
-// GetSeedanceGatewayChannel finds an enabled doubao-video channel for the given
-// user group that has SeedanceAssetBaseUrl configured.
-func GetSeedanceGatewayChannel(userGroup string) (*SeedanceGatewayChannel, error) {
+// SeedanceGatewayChannel is an alias for backward compatibility
+type SeedanceGatewayChannel = AssetGatewayChannel
+
+// GetAssetGatewayChannel finds an enabled doubao-video channel for the given
+// user group that has asset gateway configured.
+func GetAssetGatewayChannel(userGroup string) (*AssetGatewayChannel, error) {
 	channels, err := model.GetChannelsByType(0, 500, false, constant.ChannelTypeDoubaoVideo)
 	if err != nil {
 		return nil, fmt.Errorf("query channels failed: %w", err)
@@ -38,15 +44,42 @@ func GetSeedanceGatewayChannel(userGroup string) (*SeedanceGatewayChannel, error
 			continue
 		}
 		settings := ch.GetOtherSettings()
-		gatewayURL := settings.SeedanceAssetBaseUrl
-		if gatewayURL == "" {
-			// relay 模式下允许回退到渠道 Base URL，避免重复配置相同地址
-			if !settings.SeedanceRelayMode {
-				continue
-			}
-			gatewayURL = ch.GetBaseURL()
+
+		// 读取上游版本配置
+		version := settings.AssetUpstreamVersion
+		if version == "" {
+			version = "gateway" // 默认使用 gateway
 		}
-		// GetChannelsByType omits the key field — reload with key
+
+		var gatewayURL string
+		var kwjmModel string
+
+		switch version {
+		case "kwjm":
+			gatewayURL = settings.KwjmAssetBaseUrl
+			kwjmModel = settings.KwjmAssetModel
+			if kwjmModel == "" {
+				kwjmModel = "sd-video-v2" // 默认模型
+			}
+		case "gateway":
+			gatewayURL = settings.SeedanceAssetBaseUrl
+			if gatewayURL == "" {
+				// relay 模式下允许回退到渠道 Base URL，避免重复配置相同地址
+				if !settings.SeedanceRelayMode {
+					continue
+				}
+				gatewayURL = ch.GetBaseURL()
+			}
+		default:
+			// 未知版本，回退到 gateway
+			gatewayURL = settings.SeedanceAssetBaseUrl
+			version = "gateway"
+		}
+
+		if gatewayURL == "" {
+			continue
+		}
+
 		fullCh, err := model.GetChannelById(ch.Id, true)
 		if err != nil {
 			continue
@@ -55,14 +88,21 @@ func GetSeedanceGatewayChannel(userGroup string) (*SeedanceGatewayChannel, error
 		if apiErr != nil {
 			continue
 		}
-		return &SeedanceGatewayChannel{
-			Channel:    fullCh,
-			GatewayURL: strings.TrimRight(gatewayURL, "/"),
-			Key:        key,
-			RelayMode:  settings.SeedanceRelayMode,
+		return &AssetGatewayChannel{
+			Channel:         fullCh,
+			GatewayURL:      strings.TrimRight(gatewayURL, "/"),
+			Key:             key,
+			UpstreamVersion: version,
+			RelayMode:       settings.SeedanceRelayMode,
+			KwjmModel:       kwjmModel,
 		}, nil
 	}
-	return nil, fmt.Errorf("no available seedance gateway channel for group %s", userGroup)
+	return nil, fmt.Errorf("no available asset gateway channel for group %s", userGroup)
+}
+
+// GetSeedanceGatewayChannel is an alias for backward compatibility
+func GetSeedanceGatewayChannel(userGroup string) (*SeedanceGatewayChannel, error) {
+	return GetAssetGatewayChannel(userGroup)
 }
 
 // isGroupAllowed checks if the channel is available for the given user group.
@@ -146,3 +186,158 @@ func SeedanceProxyRequest(
 
 	return resp.StatusCode, respBody, nil
 }
+
+// KwjmProxyRequest proxies a request to the KWJM upstream and returns
+// the raw response body and HTTP status code.
+func KwjmProxyRequest(
+	gc *AssetGatewayChannel,
+	action string,
+	queryParams url.Values,
+	body []byte,
+) (int, []byte, error) {
+	// 构造完整 URL
+	targetURL := gc.GatewayURL + "/v3/open/" + action
+	if len(queryParams) > 0 {
+		targetURL += "?" + queryParams.Encode()
+	}
+
+	// 注入 model 字段到请求体
+	if body != nil && len(body) > 0 {
+		var reqBody map[string]interface{}
+		if err := common.Unmarshal(body, &reqBody); err == nil {
+			// 如果请求体没有 model 字段，注入默认 model
+			if _, ok := reqBody["model"]; !ok {
+				reqBody["model"] = gc.KwjmModel
+			}
+			body, _ = common.Marshal(reqBody)
+		}
+	}
+
+	// 创建 HTTP 请求
+	var bodyReader io.Reader
+	if len(body) > 0 {
+		bodyReader = bytes.NewReader(body)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, targetURL, bodyReader)
+	if err != nil {
+		return 0, nil, fmt.Errorf("create request failed: %w", err)
+	}
+
+	// 设置请求头
+	req.Header.Set("Authorization", "Bearer "+gc.Key)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	common.SysLog(fmt.Sprintf("kwjm proxy: POST %s", targetURL))
+
+	// 发送请求
+	client, err := GetHttpClientWithProxy("")
+	if err != nil {
+		return 0, nil, fmt.Errorf("get http client failed: %w", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		common.SysError(fmt.Sprintf("kwjm proxy do request failed: POST %s: %v", targetURL, err))
+		return 0, nil, fmt.Errorf("do request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// 读取响应
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp.StatusCode, nil, fmt.Errorf("read response failed: %w", err)
+	}
+
+	// 记录错误响应
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		common.SysError(fmt.Sprintf("kwjm proxy upstream error: POST %s -> %d: %s", targetURL, resp.StatusCode, string(respBody)))
+	}
+
+	return resp.StatusCode, respBody, nil
+}
+
+// pathToKwjmAction converts RESTful path and method to KWJM Action
+func pathToKwjmAction(path, method string) string {
+	// 资产分组相关
+	if strings.Contains(path, "/assets/groups") {
+		hasID := strings.Count(path, "/") > 5 // 路径包含 ID
+
+		switch method {
+		case http.MethodPost:
+			return "CreateAssetGroup"
+		case http.MethodGet:
+			if hasID {
+				return "GetAssetGroup"
+			}
+			return "ListAssetGroups"
+		case http.MethodPut, http.MethodPatch:
+			return "UpdateAssetGroup"
+		case http.MethodDelete:
+			return "DeleteAssetGroup"
+		}
+	}
+
+	// 资产相关
+	if strings.Contains(path, "/assets") && !strings.Contains(path, "/assets/groups") {
+		hasID := strings.Count(path, "/") > 4 // 路径包含 ID
+
+		switch method {
+		case http.MethodPost:
+			return "CreateAsset"
+		case http.MethodGet:
+			if hasID {
+				return "GetAsset"
+			}
+			return "ListAssets"
+		case http.MethodPut, http.MethodPatch:
+			return "UpdateAsset"
+		case http.MethodDelete:
+			return "DeleteAsset"
+		}
+	}
+
+	// 真人认证相关
+	if strings.Contains(path, "/face-verifications") {
+		hasID := strings.Count(path, "/") > 3
+
+		switch method {
+		case http.MethodPost:
+			return "CreateVisualValidateSession"
+		case http.MethodGet:
+			if hasID {
+				return "GetVisualValidateResult"
+			}
+		}
+	}
+
+	return ""
+}
+
+// AssetProxyRequest routes the request to the appropriate upstream based on version
+func AssetProxyRequest(
+	gc *AssetGatewayChannel,
+	method string,
+	upstreamPath string,
+	queryParams url.Values,
+	body []byte,
+) (int, []byte, error) {
+	switch gc.UpstreamVersion {
+	case "kwjm":
+		// KWJM 上游：转换路径为 Action
+		action := pathToKwjmAction(upstreamPath, method)
+		if action == "" {
+			return 0, nil, fmt.Errorf("unsupported path for kwjm: %s %s", method, upstreamPath)
+		}
+		return KwjmProxyRequest(gc, action, queryParams, body)
+
+	case "gateway":
+		// Gateway 上游：保持原有逻辑
+		return SeedanceProxyRequest(gc, method, upstreamPath, queryParams, body)
+
+	default:
+		return 0, nil, fmt.Errorf("unsupported upstream version: %s", gc.UpstreamVersion)
+	}
+}
+
