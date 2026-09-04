@@ -88,6 +88,13 @@ func GetAssetGatewayChannel(userGroup string) (*AssetGatewayChannel, error) {
 		if apiErr != nil {
 			continue
 		}
+
+		// 调试日志：输出选中的渠道配置
+		common.SysLog(fmt.Sprintf(
+			"[AssetGateway] selected channel %d for group '%s': version=%s, url=%s, model=%s, relay=%v",
+			fullCh.Id, userGroup, version, gatewayURL, kwjmModel, settings.SeedanceRelayMode,
+		))
+
 		return &AssetGatewayChannel{
 			Channel:         fullCh,
 			GatewayURL:      strings.TrimRight(gatewayURL, "/"),
