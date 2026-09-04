@@ -4,16 +4,17 @@
 # 测试新旧两个接口对首尾帧的支持
 #
 # 用法:
-#   ./test-first-last-frame.sh              # 测试两个接口
-#   ./test-first-last-frame.sh --old        # 仅测试旧接口
-#   ./test-first-last-frame.sh --new        # 仅测试新接口
+#   ./test-first-last-frame.sh                # 测试两个接口（首尾帧模式）
+#   ./test-first-last-frame.sh --first-only   # 测试两个接口（仅首帧模式）
+#   ./test-first-last-frame.sh --old          # 仅测试旧接口
+#   ./test-first-last-frame.sh --new          # 仅测试新接口
 # ============================================================
 
 # ---------- 配置区 ----------
 NEWAPI_BASE_URL="${NEWAPI_BASE_URL:-http://book2:3002}"
 NEWAPI_API_KEY="${NEWAPI_API_KEY:-sk-60oOqvQYb8vziFfg2hPHlTKW3X80Pc6sIBDC5EFHCY0sn5NY}"
 
-MODEL="${MODEL:-doubao-seedance-2-0-fast-260128}"
+MODEL="${MODEL:-doubao-seedance-2-5}"
 PROMPT="${PROMPT:-一个人在海边奔跑}"
 DURATION="${DURATION:-5}"
 RESOLUTION="${RESOLUTION:-720p}"
@@ -21,11 +22,12 @@ RATIO="${RATIO:-16:9}"
 
 # 首尾帧图片 URL
 FIRST_FRAME_URL="${FIRST_FRAME_URL:-https://static.horse-world.mints-id.com/rh/20260604204600/1780577160529_9921.png}"
-LAST_FRAME_URL="${LAST_FRAME_URL:-https://static.horse-world.mints-id.com/general/1/image/2026-06-18/1781744040935_290.png}"
+LAST_FRAME_URL="${LAST_FRAME_URL:-https://static.horse-world.mints-id.com/rh/20260604204600/1780577160529_9922.png}"
 
 # 解析命令行参数
 TEST_OLD=true
 TEST_NEW=true
+USE_LAST_FRAME=true  # 默认使用尾帧（首尾帧模式）
 while [[ $# -gt 0 ]]; do
   case $1 in
     --old)
@@ -38,9 +40,16 @@ while [[ $# -gt 0 ]]; do
       TEST_NEW=true
       shift
       ;;
+    --first-only)
+      USE_LAST_FRAME=false
+      shift
+      ;;
     *)
       echo "未知参数: $1"
-      echo "用法: $0 [--old|--new]"
+      echo "用法: $0 [--old|--new] [--first-only]"
+      echo "  --old         仅测试旧接口"
+      echo "  --new         仅测试新接口"
+      echo "  --first-only  仅使用首帧模式（不使用尾帧）"
       exit 1
       ;;
   esac
@@ -68,25 +77,47 @@ submit_old_api() {
   log_title "旧接口：POST /v1/video/generations（OpenAI 格式 + Ark content）"
 
   local body
-  body=$(jq -n \
-    --arg model "$MODEL" \
-    --arg prompt "$PROMPT" \
-    --argjson duration "$DURATION" \
-    --arg resolution "$RESOLUTION" \
-    --arg ratio "$RATIO" \
-    --arg first_frame "$FIRST_FRAME_URL" \
-    --arg last_frame "$LAST_FRAME_URL" \
-    '{
-      model: $model,
-      content: [
-        {type: "text", text: $prompt},
-        {type: "image_url", image_url: {url: $first_frame}, role: "first_frame"},
-        {type: "image_url", image_url: {url: $last_frame}, role: "last_frame"}
-      ],
-      duration: $duration,
-      resolution: $resolution,
-      ratio: $ratio
-    }')
+  if [ "$USE_LAST_FRAME" = true ]; then
+    # 首尾帧模式
+    body=$(jq -n \
+      --arg model "$MODEL" \
+      --arg prompt "$PROMPT" \
+      --argjson duration "$DURATION" \
+      --arg resolution "$RESOLUTION" \
+      --arg ratio "$RATIO" \
+      --arg first_frame "$FIRST_FRAME_URL" \
+      --arg last_frame "$LAST_FRAME_URL" \
+      '{
+        model: $model,
+        content: [
+          {type: "text", text: $prompt},
+          {type: "image_url", image_url: {url: $first_frame}, role: "first_frame"},
+          {type: "image_url", image_url: {url: $last_frame}, role: "last_frame"}
+        ],
+        duration: $duration,
+        resolution: $resolution,
+        ratio: $ratio
+      }')
+  else
+    # 仅首帧模式
+    body=$(jq -n \
+      --arg model "$MODEL" \
+      --arg prompt "$PROMPT" \
+      --argjson duration "$DURATION" \
+      --arg resolution "$RESOLUTION" \
+      --arg ratio "$RATIO" \
+      --arg first_frame "$FIRST_FRAME_URL" \
+      '{
+        model: $model,
+        content: [
+          {type: "text", text: $prompt},
+          {type: "image_url", image_url: {url: $first_frame}, role: "first_frame"}
+        ],
+        duration: $duration,
+        resolution: $resolution,
+        ratio: $ratio
+      }')
+  fi
 
   log_info "请求体:"
   echo "$body" | jq '.'
@@ -127,25 +158,47 @@ submit_new_api() {
   log_title "新接口：POST /api/v3/contents/generations/tasks（Doubao 官方格式）"
 
   local body
-  body=$(jq -n \
-    --arg model "$MODEL" \
-    --arg prompt "$PROMPT" \
-    --argjson duration "$DURATION" \
-    --arg resolution "$RESOLUTION" \
-    --arg ratio "$RATIO" \
-    --arg first_frame "$FIRST_FRAME_URL" \
-    --arg last_frame "$LAST_FRAME_URL" \
-    '{
-      model: $model,
-      content: [
-        {type: "text", text: $prompt},
-        {type: "image_url", image_url: {url: $first_frame}, role: "first_frame"},
-        {type: "image_url", image_url: {url: $last_frame}, role: "last_frame"}
-      ],
-      duration: $duration,
-      resolution: $resolution,
-      ratio: $ratio
-    }')
+  if [ "$USE_LAST_FRAME" = true ]; then
+    # 首尾帧模式
+    body=$(jq -n \
+      --arg model "$MODEL" \
+      --arg prompt "$PROMPT" \
+      --argjson duration "$DURATION" \
+      --arg resolution "$RESOLUTION" \
+      --arg ratio "$RATIO" \
+      --arg first_frame "$FIRST_FRAME_URL" \
+      --arg last_frame "$LAST_FRAME_URL" \
+      '{
+        model: $model,
+        content: [
+          {type: "text", text: $prompt},
+          {type: "image_url", image_url: {url: $first_frame}, role: "first_frame"},
+          {type: "image_url", image_url: {url: $last_frame}, role: "last_frame"}
+        ],
+        duration: $duration,
+        resolution: $resolution,
+        ratio: $ratio
+      }')
+  else
+    # 仅首帧模式
+    body=$(jq -n \
+      --arg model "$MODEL" \
+      --arg prompt "$PROMPT" \
+      --argjson duration "$DURATION" \
+      --arg resolution "$RESOLUTION" \
+      --arg ratio "$RATIO" \
+      --arg first_frame "$FIRST_FRAME_URL" \
+      '{
+        model: $model,
+        content: [
+          {type: "text", text: $prompt},
+          {type: "image_url", image_url: {url: $first_frame}, role: "first_frame"}
+        ],
+        duration: $duration,
+        resolution: $resolution,
+        ratio: $ratio
+      }')
+  fi
 
   log_info "请求体:"
   echo "$body" | jq '.'
@@ -240,14 +293,20 @@ check_deps
 
 echo ""
 log_sep
-echo -e "${BOLD}  Seedance 首尾帧模式测试${NC}"
+if [ "$USE_LAST_FRAME" = true ]; then
+  echo -e "${BOLD}  Seedance 首尾帧模式测试${NC}"
+else
+  echo -e "${BOLD}  Seedance 首帧模式测试${NC}"
+fi
 log_sep
 echo -e "  Base URL:      ${NEWAPI_BASE_URL}"
 echo -e "  模型:          ${MODEL}"
 echo -e "  Prompt:        ${PROMPT}"
 echo -e "  时长/分辨率:   ${DURATION}s / ${RESOLUTION} / ${RATIO}"
 echo -e "  首帧图片:      ${FIRST_FRAME_URL}"
-echo -e "  尾帧图片:      ${LAST_FRAME_URL}"
+if [ "$USE_LAST_FRAME" = true ]; then
+  echo -e "  尾帧图片:      ${LAST_FRAME_URL}"
+fi
 log_sep
 
 OLD_TASK_ID=""
