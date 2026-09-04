@@ -281,7 +281,7 @@ func getOrCreateDefaultAssetGroup(c *gin.Context, gw *service.SeedanceGatewayCha
 		"Description": "auto-created",
 		"GroupType":   "AIGC",
 	})
-	statusCode, respBody, err3 := service.SeedanceProxyRequest(gw, "POST", "/api/seedance/proxy/assets/groups", nil, createBody)
+	statusCode, respBody, err3 := service.AssetProxyRequest(gw, "POST", "/api/seedance/proxy/assets/groups", nil, createBody)
 	if err3 != nil {
 		return "", fmt.Errorf("create default asset group failed: %w", err3)
 	}
@@ -360,7 +360,7 @@ func SeedanceCreateAsset(c *gin.Context) {
 	})
 	body = newBody
 
-	statusCode, respBody, proxyErr := service.SeedanceProxyRequest(gw, http.MethodPost, "/api/seedance/proxy/assets", nil, body)
+	statusCode, respBody, proxyErr := service.AssetProxyRequest(gw, http.MethodPost, "/api/seedance/proxy/assets", nil, body)
 	if proxyErr != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": proxyErr.Error()})
 		return
@@ -391,7 +391,7 @@ func SeedanceCreateAsset(c *gin.Context) {
 				"AssetType": req.AssetType,
 				"Name":      req.Name,
 			})
-			statusCode, respBody, proxyErr = service.SeedanceProxyRequest(gw, http.MethodPost, "/api/seedance/proxy/assets", nil, retryBody)
+			statusCode, respBody, proxyErr = service.AssetProxyRequest(gw, http.MethodPost, "/api/seedance/proxy/assets", nil, retryBody)
 			if proxyErr != nil {
 				c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": proxyErr.Error()})
 				return
