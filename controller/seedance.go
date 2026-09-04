@@ -196,7 +196,7 @@ func SeedanceGetAssetGroup(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("id")
-	g, err := resolveAssetGroup(c, userID)
+	g, err := resolveAssetGroup(c, userID, gw.Channel.Id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset group not found"})
 		return
@@ -220,7 +220,7 @@ func seedanceModifyAssetGroup(c *gin.Context, method string) {
 		return
 	}
 	userID := c.GetInt("id")
-	g, err := resolveAssetGroup(c, userID)
+	g, err := resolveAssetGroup(c, userID, gw.Channel.Id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset group not found"})
 		return
@@ -243,7 +243,7 @@ func SeedanceDeleteAssetGroup(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("id")
-	g, err := resolveAssetGroup(c, userID)
+	g, err := resolveAssetGroup(c, userID, gw.Channel.Id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset group not found"})
 		return
@@ -330,7 +330,7 @@ func SeedanceCreateAsset(c *gin.Context) {
 
 	// 如果未强制，先按 source_url 查本地表，有 Active 记录直接返回
 	if !req.Force && req.URL != "" {
-		if existing, err := model.GetSeedanceAssetBySourceURL(req.URL, userID); err == nil && existing.Status == "Active" {
+		if existing, err := model.GetSeedanceAssetBySourceURL(req.URL, userID, gw.Channel.Id); err == nil && existing.Status == "Active" {
 			logger.LogInfo(c, fmt.Sprintf("seedance: asset already exists for url %s, asset_id=%s", req.URL, existing.UpstreamAssetID))
 			result := map[string]interface{}{
 				"Id":       existing.UpstreamAssetID,
@@ -506,20 +506,20 @@ func SeedanceListAssets(c *gin.Context) {
 }
 
 // resolveAsset 支持本地数字 ID 或上游 asset-xxxxxxxx 格式查询素材
-func resolveAsset(c *gin.Context, userID int) (*model.SeedanceAsset, error) {
+func resolveAsset(c *gin.Context, userID int, channelID int) (*model.SeedanceAsset, error) {
 	rawID := c.Param("id")
 	if strings.HasPrefix(rawID, "asset-") {
-		return model.GetSeedanceAssetByUpstreamID(rawID, userID)
+		return model.GetSeedanceAssetByUpstreamID(rawID, userID, channelID)
 	}
 	localID, _ := strconv.ParseInt(rawID, 10, 64)
 	return model.GetSeedanceAssetByID(localID, userID)
 }
 
 // resolveAssetGroup 支持本地数字 ID 或上游 group-xxxxxxxx 格式查询素材组
-func resolveAssetGroup(c *gin.Context, userID int) (*model.SeedanceAssetGroup, error) {
+func resolveAssetGroup(c *gin.Context, userID int, channelID int) (*model.SeedanceAssetGroup, error) {
 	rawID := c.Param("id")
 	if strings.HasPrefix(rawID, "group-") {
-		return model.GetSeedanceAssetGroupByUpstreamID(rawID, userID)
+		return model.GetSeedanceAssetGroupByUpstreamID(rawID, userID, channelID)
 	}
 	localID, _ := strconv.ParseInt(rawID, 10, 64)
 	return model.GetSeedanceAssetGroupByID(localID, userID)
@@ -542,7 +542,7 @@ func SeedanceGetAsset(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("id")
-	a, err := resolveAsset(c, userID)
+	a, err := resolveAsset(c, userID, gw.Channel.Id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset not found"})
 		return
@@ -575,7 +575,7 @@ func seedanceModifyAsset(c *gin.Context, method string) {
 		return
 	}
 	userID := c.GetInt("id")
-	a, err := resolveAsset(c, userID)
+	a, err := resolveAsset(c, userID, gw.Channel.Id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset not found"})
 		return
@@ -593,7 +593,7 @@ func SeedanceDeleteAsset(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("id")
-	a, err := resolveAsset(c, userID)
+	a, err := resolveAsset(c, userID, gw.Channel.Id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset not found"})
 		return

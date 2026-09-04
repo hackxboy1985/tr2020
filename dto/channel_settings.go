@@ -55,6 +55,11 @@ type ChannelOtherSettings struct {
 	// "gatewayMg": 咪咕 Gateway RESTful 格式（默认）- /api/seedance/proxy/assets/groups
 	// "official": 火山官方 Action 格式 - /?Action=CreateAssetGroup&Version=2024-01-01
 	SeedanceAssetAPIFormat string `json:"seedance_asset_api_format,omitempty"`
+	// KWJM 素材库配置（新增）
+	KwjmAssetBaseUrl string `json:"kwjm_asset_base_url,omitempty"`     // KWJM 基础URL，例如 https://kwjm.com
+	KwjmAssetModel   string `json:"kwjm_asset_model,omitempty"`       // KWJM 默认模型，例如 sd-video-v2
+	// AssetUpstreamVersion 上游版本选择："gateway"（默认）或 "kwjm"
+	AssetUpstreamVersion string `json:"asset_upstream_version,omitempty"`
 	// Poster 渠道路径覆盖
 	// PosterApiVersion: 替换默认路径中的版本号，如 "v2" 将 /openapi/v1/... 改为 /openapi/v2/...
 	// PosterEndpoints: 按模型精确覆盖完整路径，优先级高于 PosterApiVersion

@@ -58,9 +58,9 @@ func GetSeedanceAssetGroupByID(id int64, userID int) (*SeedanceAssetGroup, error
 	return &g, err
 }
 
-func GetSeedanceAssetGroupByUpstreamID(upstreamGroupID string, userID int) (*SeedanceAssetGroup, error) {
+func GetSeedanceAssetGroupByUpstreamID(upstreamGroupID string, userID int, channelID int) (*SeedanceAssetGroup, error) {
 	var g SeedanceAssetGroup
-	err := DB.Where("upstream_group_id = ? AND user_id = ? AND deleted_at = 0", upstreamGroupID, userID).First(&g).Error
+	err := DB.Where("upstream_group_id = ? AND user_id = ? AND channel_id = ? AND deleted_at = 0", upstreamGroupID, userID, channelID).First(&g).Error
 	return &g, err
 }
 
@@ -115,15 +115,15 @@ func GetSeedanceAssetByID(id int64, userID int) (*SeedanceAsset, error) {
 	return &a, err
 }
 
-func GetSeedanceAssetByUpstreamID(upstreamAssetID string, userID int) (*SeedanceAsset, error) {
+func GetSeedanceAssetByUpstreamID(upstreamAssetID string, userID int, channelID int) (*SeedanceAsset, error) {
 	var a SeedanceAsset
-	err := DB.Where("upstream_asset_id = ? AND user_id = ? AND deleted_at = 0", upstreamAssetID, userID).First(&a).Error
+	err := DB.Where("upstream_asset_id = ? AND user_id = ? AND channel_id = ? AND deleted_at = 0", upstreamAssetID, userID, channelID).First(&a).Error
 	return &a, err
 }
 
-func GetSeedanceAssetBySourceURL(sourceURL string, userID int) (*SeedanceAsset, error) {
+func GetSeedanceAssetBySourceURL(sourceURL string, userID int, channelID int) (*SeedanceAsset, error) {
 	var a SeedanceAsset
-	err := DB.Where("source_url = ? AND user_id = ? AND deleted_at = 0", sourceURL, userID).Order("id desc").First(&a).Error
+	err := DB.Where("source_url = ? AND user_id = ? AND channel_id = ? AND deleted_at = 0", sourceURL, userID, channelID).Order("id desc").First(&a).Error
 	return &a, err
 }
 
