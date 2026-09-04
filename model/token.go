@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -198,9 +199,12 @@ func ValidateUserToken(key string) (token *Token, err error) {
 		if token.Status == common.TokenStatusExhausted ||
 			token.Status == common.TokenStatusExpired ||
 			token.Status != common.TokenStatusEnabled {
+			common.SysLog(fmt.Sprintf("Token %s (user %d) invalid: status=%d", key, token.UserId, token.Status))
 			return token, ErrTokenInvalid
 		}
 		if token.ExpiredTime != -1 && token.ExpiredTime < common.GetTimestamp() {
+			expiredTimeStr := time.Unix(token.ExpiredTime, 0).Format("2006-01-02 15:04:05")
+			common.SysLog(fmt.Sprintf("Token %s (user %d) expired at %s", key, token.UserId, expiredTimeStr))
 			if !common.RedisEnabled {
 				token.Status = common.TokenStatusExpired
 				err := token.SelectUpdate()
@@ -211,6 +215,7 @@ func ValidateUserToken(key string) (token *Token, err error) {
 			return token, ErrTokenInvalid
 		}
 		if !token.UnlimitedQuota && token.RemainQuota <= 0 {
+			common.SysLog(fmt.Sprintf("Token %s (user %d) quota exhausted: remain_quota=%d", key, token.UserId, token.RemainQuota))
 			if !common.RedisEnabled {
 				token.Status = common.TokenStatusExhausted
 				err := token.SelectUpdate()
