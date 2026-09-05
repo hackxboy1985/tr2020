@@ -507,43 +507,46 @@ func resolveFaceVerification(c *gin.Context, userID int) (*model.SeedanceFaceVer
 }
 
 // GET /api/seedance/assets/:id
+// 使用适配器模式重构版本
 func SeedanceGetAsset(c *gin.Context) {
-	gw, ok := seedanceGetGW(c)
-	if !ok {
+	userID := c.GetInt("id")
+	userGroup := c.GetString("group")
+
+	// 获取适配器
+	adapter, channel, err := service.GetAssetAdapter(userGroup)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "message": err.Error()})
 		return
 	}
-	userID := c.GetInt("id")
-	a, err := resolveAsset(c, userID, gw.Channel.Id)
+
+	// 解析素材 ID（支持本地 ID 或上游 ID）
+	a, err := resolveAsset(c, userID, channel.Id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset not found"})
 		return
 	}
-	proxyAndPassthrough(c, gw, http.MethodGet, "/api/seedance/proxy/assets/"+a.UpstreamAssetID, forwardQuery(c), nil, func(_ int, respBody []byte) {
-		// 兼容两种格式：Gateway: { "Result": { "Status": "xxx" } }，KWJM: { "Status": "xxx" }
-		var status string
 
-		// 尝试 Gateway 格式
-		var gatewayResp struct {
-			Result struct {
-				Status string `json:"Status"`
-			} `json:"Result"`
-		}
-		if err := common.Unmarshal(respBody, &gatewayResp); err == nil && gatewayResp.Result.Status != "" {
-			status = gatewayResp.Result.Status
-		} else {
-			// 尝试 KWJM 格式
-			var kwjmResp struct {
-				Status string `json:"Status"`
-			}
-			if err2 := common.Unmarshal(respBody, &kwjmResp); err2 == nil && kwjmResp.Status != "" {
-				status = kwjmResp.Status
-			}
-		}
+	// 使用适配器查询素材
+	resp, err := adapter.GetAsset(a.UpstreamAssetID, forwardQuery(c))
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": err.Error()})
+		return
+	}
 
-		if status != "" {
-			_ = model.UpdateSeedanceAssetStatus(a.ID, status, string(respBody))
-		}
-	})
+	// 更新本地数据库状态
+	if resp.Status != "" {
+		_ = model.UpdateSeedanceAssetStatus(a.ID, resp.Status, resp.RawData)
+	}
+
+	// 返回响应（兼容旧格式，包装在 Result 中）
+	result := map[string]interface{}{
+		"Id":        resp.ID,
+		"Status":    resp.Status,
+		"Name":      resp.Name,
+		"GroupId":   resp.GroupID,
+		"AssetType": resp.AssetType,
+	}
+	c.JSON(http.StatusOK, gin.H{"Result": result})
 }
 
 // PUT /api/seedance/assets/:id
