@@ -84,102 +84,53 @@ func forwardQuery(c *gin.Context) url.Values {
 // ============================================================
 
 // POST /api/seedance/asset-groups
+// 使用适配器模式重构版本
 func SeedanceCreateAssetGroup(c *gin.Context) {
-	gw, ok := seedanceGetGW(c)
-	if !ok {
+	userID := c.GetInt("id")
+	userGroup := c.GetString("group")
+
+	// 获取适配器
+	adapter, channel, err := service.GetAssetAdapter(userGroup)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "message": err.Error()})
 		return
 	}
-	userID := c.GetInt("id")
-	body := readBody(c)
 
-	proxyAndPassthrough(c, gw, http.MethodPost, "/api/seedance/proxy/assets/groups", nil, body, func(_ int, respBody []byte) {
-		// 兼容两种响应格式：
-		// Gateway: { "Result": { "Id": "xxx", "Name": "xxx", ... } }
-		// KWJM: { "Id": "xxx", "Name": "xxx", ... }
-		var groupID, groupName, groupDesc, groupType string
+	// 解析请求体
+	var req service.CreateAssetGroupRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid request"})
+		return
+	}
 
-		// 尝试 Gateway 格式
-		var gatewayResp struct {
-			Result struct {
-				ID   string `json:"Id"`
-				Name string `json:"Name"`
-				Desc string `json:"Description"`
-				Type string `json:"GroupType"`
-			} `json:"Result"`
-		}
-		if err := common.Unmarshal(respBody, &gatewayResp); err == nil && gatewayResp.Result.ID != "" {
-			groupID = gatewayResp.Result.ID
-			groupName = gatewayResp.Result.Name
-			groupDesc = gatewayResp.Result.Desc
-			groupType = gatewayResp.Result.Type
-		} else {
-			// 尝试 KWJM 格式
-			var kwjmResp struct {
-				ID   string `json:"Id"`
-				Name string `json:"Name"`
-				Desc string `json:"Description"`
-				Type string `json:"GroupType"`
-			}
-			if err2 := common.Unmarshal(respBody, &kwjmResp); err2 == nil && kwjmResp.ID != "" {
-				groupID = kwjmResp.ID
-				groupName = kwjmResp.Name
-				groupDesc = kwjmResp.Desc
-				groupType = kwjmResp.Type
-			}
-		}
+	// 使用适配器创建素材组
+	resp, err := adapter.CreateAssetGroup(req)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": err.Error()})
+		return
+	}
 
-		if groupID == "" {
-			return
-		}
-		// parse name/desc/type from request body for local record (fallback)
-		var req struct {
-			Name        string `json:"Name"`
-			Description string `json:"Description"`
-			GroupType   string `json:"GroupType"`
-		}
-		_ = common.Unmarshal(body, &req)
+	// 保存到数据库
+	g := &model.SeedanceAssetGroup{
+		UserID:          userID,
+		ChannelID:       channel.Id,
+		UpstreamGroupID: resp.ID,
+		Name:            resp.Name,
+		Description:     resp.Description,
+		GroupType:       resp.GroupType,
+		RawData:         resp.RawData,
+	}
+	_ = model.CreateSeedanceAssetGroup(g)
 
-		// 优先使用响应中的值，否则使用请求中的值
-		if groupName == "" {
-			groupName = req.Name
-		}
-		if groupDesc == "" {
-			groupDesc = req.Description
-		}
-		if groupType == "" {
-			groupType = req.GroupType
-		}
-
-		g := &model.SeedanceAssetGroup{
-			UserID:          userID,
-			ChannelID:       gw.Channel.Id,
-			UpstreamGroupID: groupID,
-			Name:            groupName,
-			Description:     groupDesc,
-			GroupType:       groupType,
-			RawData:         string(respBody),
-		}
-		_ = model.CreateSeedanceAssetGroup(g)
-		// 在响应里追加 LocalId（业务 ID），方便中继链路直接使用
-		var raw map[string]interface{}
-		if err2 := common.Unmarshal(respBody, &raw); err2 == nil {
-			// Gateway 格式: { "Result": { "Id": "xxx" } }
-			if result, ok := raw["Result"].(map[string]interface{}); ok {
-				result["LocalId"] = groupID
-				if merged, err3 := common.Marshal(raw); err3 == nil {
-					c.Data(http.StatusOK, "application/json; charset=utf-8", merged)
-					return
-				}
-			} else {
-				// KWJM 格式: { "Id": "xxx" }，直接在顶层添加 LocalId
-				raw["LocalId"] = groupID
-				if merged, err3 := common.Marshal(raw); err3 == nil {
-					c.Data(http.StatusOK, "application/json; charset=utf-8", merged)
-					return
-				}
-			}
-		}
-	})
+	// 返回响应（兼容旧格式，包装在 Result 中）
+	result := map[string]interface{}{
+		"Id":          resp.ID,
+		"LocalId":     resp.ID,
+		"Name":        resp.Name,
+		"Description": resp.Description,
+		"GroupType":   resp.GroupType,
+	}
+	c.JSON(http.StatusOK, gin.H{"Result": result})
 }
 
 // GET /api/seedance/asset-groups
@@ -303,12 +254,19 @@ func SeedanceDeleteAssetGroup(c *gin.Context) {
 // ============================================================
 
 // getOrCreateDefaultAssetGroup 获取或创建用户的默认 AIGC 素材组（每用户每渠道一个）
-func getOrCreateDefaultAssetGroup(c *gin.Context, gw *service.SeedanceGatewayChannel, userID int) (string, error) {
+// 使用适配器模式重构版本
+func getOrCreateDefaultAssetGroup(c *gin.Context, userGroup string, userID int) (string, int, error) {
+	// 获取适配器
+	adapter, channel, err := service.GetAssetAdapter(userGroup)
+	if err != nil {
+		return "", 0, fmt.Errorf("get asset adapter failed: %w", err)
+	}
+
 	// 查本地表有无该用户+渠道的 AIGC 素材组，必须匹配渠道，避免跨渠道引用不存在的 group
-	groups, _, err := model.ListSeedanceAssetGroupsByChannel(userID, gw.Channel.Id, 1, 1)
+	groups, _, err := model.ListSeedanceAssetGroupsByChannel(userID, channel.Id, 1, 1)
 	if err == nil && len(groups) > 0 {
 		logger.LogInfo(c, fmt.Sprintf("seedance: found existing asset group %s for user %d", groups[0].UpstreamGroupID, userID))
-		return groups[0].UpstreamGroupID, nil
+		return groups[0].UpstreamGroupID, channel.Id, nil
 	}
 
 	// 没有则创建，组名用 u{id}-{md5(username)前8位}，保证 ASCII 且可追溯
@@ -321,65 +279,44 @@ func getOrCreateDefaultAssetGroup(c *gin.Context, gw *service.SeedanceGatewayCha
 
 	logger.LogInfo(c, fmt.Sprintf("seedance: creating default asset group '%s' for user %d", groupName, userID))
 
-	createBody, _ := json.Marshal(map[string]string{
-		"Name":        groupName,
-		"Description": "auto-created",
-		"GroupType":   "AIGC",
-	})
-	statusCode, respBody, err3 := service.AssetProxyRequest(gw, "POST", "/api/seedance/proxy/assets/groups", nil, createBody)
+	// 使用适配器创建素材组
+	req := service.CreateAssetGroupRequest{
+		Name:        groupName,
+		Description: "auto-created",
+		GroupType:   "AIGC",
+	}
+
+	resp, err3 := adapter.CreateAssetGroup(req)
 	if err3 != nil {
-		return "", fmt.Errorf("create default asset group failed: %w", err3)
-	}
-	if statusCode < 200 || statusCode >= 300 {
-		return "", fmt.Errorf("create default asset group upstream error %d: %s", statusCode, string(respBody))
-	}
-	// 兼容两种响应格式：
-	// Gateway: { "Result": { "Id": "xxx" } }
-	// KWJM: { "Id": "xxx" }
-	var groupID string
-
-	// 尝试 Gateway 格式
-	var gatewayResp struct {
-		Result struct {
-			ID string `json:"Id"`
-		} `json:"Result"`
-	}
-	if err4 := common.Unmarshal(respBody, &gatewayResp); err4 == nil && gatewayResp.Result.ID != "" {
-		groupID = gatewayResp.Result.ID
-	} else {
-		// 尝试 KWJM 格式
-		var kwjmResp struct {
-			ID string `json:"Id"`
-		}
-		if err5 := common.Unmarshal(respBody, &kwjmResp); err5 == nil && kwjmResp.ID != "" {
-			groupID = kwjmResp.ID
-		}
+		return "", 0, fmt.Errorf("create default asset group failed: %w", err3)
 	}
 
-	if groupID == "" {
-		return "", fmt.Errorf("parse create group response failed: %s", string(respBody))
-	}
+	// 保存到数据库
 	g := &model.SeedanceAssetGroup{
 		UserID:          userID,
-		ChannelID:       gw.Channel.Id,
-		UpstreamGroupID: groupID,
-		Name:            groupName,
-		GroupType:       "AIGC",
-		RawData:         string(respBody),
+		ChannelID:       channel.Id,
+		UpstreamGroupID: resp.ID,
+		Name:            resp.Name,
+		GroupType:       resp.GroupType,
+		RawData:         resp.RawData,
 	}
 	_ = model.CreateSeedanceAssetGroup(g)
-	logger.LogInfo(c, fmt.Sprintf("seedance: created asset group %s for user %d", groupID, userID))
-	return groupID, nil
+	logger.LogInfo(c, fmt.Sprintf("seedance: created asset group %s for user %d", resp.ID, userID))
+	return resp.ID, channel.Id, nil
 }
 
 // POST /api/seedance/assets
+// 使用适配器模式重构版本
 func SeedanceCreateAsset(c *gin.Context) {
-	gw, ok := seedanceGetGW(c)
-	if !ok {
+	userID := c.GetInt("id")
+	userGroup := c.GetString("group")
+
+	// 获取适配器
+	adapter, channel, err := service.GetAssetAdapter(userGroup)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "message": err.Error()})
 		return
 	}
-	userID := c.GetInt("id")
-	body := readBody(c)
 
 	// 解析请求体
 	var req struct {
@@ -389,11 +326,14 @@ func SeedanceCreateAsset(c *gin.Context) {
 		Name      string `json:"Name"`
 		Force     bool   `json:"Force"` // true=强制重新上传，忽略本地缓存
 	}
-	_ = common.Unmarshal(body, &req)
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid request"})
+		return
+	}
 
 	// 如果未强制，先按 source_url 查本地表，有 Active 记录直接返回
 	if !req.Force && req.URL != "" {
-		if existing, err := model.GetSeedanceAssetBySourceURL(req.URL, userID, gw.Channel.Id); err == nil && existing.Status == "Active" {
+		if existing, err := model.GetSeedanceAssetBySourceURL(req.URL, userID, channel.Id); err == nil && existing.Status == "Active" {
 			logger.LogInfo(c, fmt.Sprintf("seedance: asset already exists for url %s, asset_id=%s", req.URL, existing.UpstreamAssetID))
 			result := map[string]interface{}{
 				"Id":       existing.UpstreamAssetID,
@@ -406,136 +346,77 @@ func SeedanceCreateAsset(c *gin.Context) {
 		}
 	}
 
+	// 如果没有指定 GroupID，自动创建默认素材组
 	if req.GroupID == "" {
-		groupID, err := getOrCreateDefaultAssetGroup(c, gw, userID)
+		groupID, channelID, err := getOrCreateDefaultAssetGroup(c, userGroup, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
 			return
 		}
 		req.GroupID = groupID
-	}
-	// 重新构建请求体（去掉 Force 字段，上游不认识）
-	newBody, _ := json.Marshal(map[string]string{
-		"GroupId":   req.GroupID,
-		"URL":       req.URL,
-		"AssetType": req.AssetType,
-		"Name":      req.Name,
-	})
-	body = newBody
-
-	statusCode, respBody, proxyErr := service.AssetProxyRequest(gw, http.MethodPost, "/api/seedance/proxy/assets", nil, body)
-	if proxyErr != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": proxyErr.Error()})
-		return
-	}
-
-	// 若上游返回 404 且是 group_id 不存在，自动软删本地旧记录并重建 group 后重试一次
-	if statusCode == http.StatusNotFound && req.GroupID != "" {
-		var errResp struct {
-			ResponseMetadata struct {
-				Error struct {
-					Code string `json:"Code"`
-				} `json:"Error"`
-			} `json:"ResponseMetadata"`
+		// 确保使用同一个渠道
+		if channel.Id != channelID {
+			logger.LogWarn(c, fmt.Sprintf("channel mismatch: adapter=%d, default_group=%d", channel.Id, channelID))
 		}
-		if common.Unmarshal(respBody, &errResp) == nil &&
-			errResp.ResponseMetadata.Error.Code == "NotFound.group_id" {
+	}
+
+	// 使用适配器创建素材
+	createReq := service.CreateAssetRequest{
+		GroupID:   req.GroupID,
+		URL:       req.URL,
+		AssetType: req.AssetType,
+		Name:      req.Name,
+	}
+
+	resp, err := adapter.CreateAsset(createReq)
+	if err != nil {
+		// 若上游返回 group_id 不存在，自动软删本地旧记录并重建 group 后重试一次
+		if strings.Contains(err.Error(), "NotFound.group_id") || strings.Contains(err.Error(), "group") {
 			logger.LogWarn(c, fmt.Sprintf("seedance: upstream group %s not found, rebuilding for user %d", req.GroupID, userID))
 			_ = model.SoftDeleteSeedanceAssetGroupByUpstreamID(req.GroupID, userID)
-			newGroupID, rebuildErr := getOrCreateDefaultAssetGroup(c, gw, userID)
+
+			newGroupID, _, rebuildErr := getOrCreateDefaultAssetGroup(c, userGroup, userID)
 			if rebuildErr != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": rebuildErr.Error()})
 				return
 			}
-			req.GroupID = newGroupID
-			retryBody, _ := json.Marshal(map[string]string{
-				"GroupId":   req.GroupID,
-				"URL":       req.URL,
-				"AssetType": req.AssetType,
-				"Name":      req.Name,
-			})
-			statusCode, respBody, proxyErr = service.AssetProxyRequest(gw, http.MethodPost, "/api/seedance/proxy/assets", nil, retryBody)
-			if proxyErr != nil {
-				c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": proxyErr.Error()})
-				return
-			}
-		}
-	}
 
-	if statusCode < 200 || statusCode >= 300 {
-		c.JSON(statusCode, gin.H{"success": false, "message": extractUpstreamErrMsg(respBody)})
-		return
-	}
-
-	// 解析上游响应取 upstream_asset_id
-	// 兼容两种格式：Gateway: { "Result": { "Id": "xxx" } }，KWJM: { "Id": "xxx" }
-	var upstreamAssetID, upstreamGroupID string
-
-	// 尝试 Gateway 格式
-	var gatewayResp struct {
-		Result map[string]interface{} `json:"Result"`
-	}
-	if err := common.Unmarshal(respBody, &gatewayResp); err == nil && gatewayResp.Result != nil {
-		upstreamAssetID, _ = gatewayResp.Result["Id"].(string)
-		upstreamGroupID, _ = gatewayResp.Result["GroupId"].(string)
-	} else {
-		// 尝试 KWJM 格式
-		var kwjmResp map[string]interface{}
-		if err2 := common.Unmarshal(respBody, &kwjmResp); err2 == nil {
-			upstreamAssetID, _ = kwjmResp["Id"].(string)
-			upstreamGroupID, _ = kwjmResp["GroupId"].(string)
-		}
-	}
-
-	if upstreamAssetID == "" {
-		c.Data(statusCode, "application/json; charset=utf-8", respBody)
-		return
-	}
-
-	// fallback 到请求的 GroupID
-	if upstreamGroupID == "" {
-		upstreamGroupID = req.GroupID
-	}
-
-	a := &model.SeedanceAsset{
-		UserID:          userID,
-		ChannelID:       gw.Channel.Id,
-		UpstreamAssetID: upstreamAssetID,
-		UpstreamGroupID: upstreamGroupID, // 使用上游返回的实际 GroupID
-		Name:            req.Name,
-		AssetType:       req.AssetType,
-		SourceURL:       req.URL,
-		Status:          "Processing",
-		RawData:         string(respBody),
-	}
-	_ = model.CreateSeedanceAsset(a)
-
-	// 在响应里追加 local_id（业务 ID），方便客户端直接用于查询接口
-	// 兼容两种格式：Gateway: { "Result": { ... } }，KWJM: { ... }
-	var raw map[string]interface{}
-	if err2 := common.Unmarshal(respBody, &raw); err2 == nil {
-		// Gateway 格式
-		if result, ok := raw["Result"].(map[string]interface{}); ok {
-			result["LocalId"] = a.UpstreamAssetID
-			result["AssetRef"] = "asset://" + upstreamAssetID
-			merged, mergeErr := common.Marshal(map[string]interface{}{"Result": result})
-			if mergeErr == nil {
-				c.Data(statusCode, "application/json; charset=utf-8", merged)
+			// 重试
+			createReq.GroupID = newGroupID
+			resp, err = adapter.CreateAsset(createReq)
+			if err != nil {
+				c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": err.Error()})
 				return
 			}
 		} else {
-			// KWJM 格式，直接在顶层添加
-			raw["LocalId"] = a.UpstreamAssetID
-			raw["AssetRef"] = "asset://" + upstreamAssetID
-			merged, mergeErr := common.Marshal(raw)
-			if mergeErr == nil {
-				c.Data(statusCode, "application/json; charset=utf-8", merged)
-				return
-			}
+			c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": err.Error()})
+			return
 		}
 	}
-	// fallback：返回原始响应
-	c.Data(statusCode, "application/json; charset=utf-8", respBody)
+
+	// 保存到数据库
+	a := &model.SeedanceAsset{
+		UserID:          userID,
+		ChannelID:       channel.Id,
+		UpstreamAssetID: resp.ID,
+		UpstreamGroupID: resp.GroupID,
+		Name:            resp.Name,
+		AssetType:       resp.AssetType,
+		SourceURL:       req.URL,
+		Status:          resp.Status,
+		RawData:         resp.RawData,
+	}
+	_ = model.CreateSeedanceAsset(a)
+
+	// 返回响应（兼容旧格式，包装在 Result 中）
+	result := map[string]interface{}{
+		"Id":       resp.ID,
+		"LocalId":  resp.ID,
+		"AssetRef": "asset://" + resp.ID,
+		"Status":   resp.Status,
+		"GroupId":  resp.GroupID,
+	}
+	c.JSON(http.StatusOK, gin.H{"Result": result})
 }
 
 // GET /api/seedance/assets
