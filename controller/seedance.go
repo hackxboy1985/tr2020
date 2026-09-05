@@ -93,8 +93,13 @@ func SeedanceCreateAssetGroup(c *gin.Context) {
 	body := readBody(c)
 
 	proxyAndPassthrough(c, gw, http.MethodPost, "/api/seedance/proxy/assets/groups", nil, body, func(_ int, respBody []byte) {
-		// parse upstream_group_id
-		var resp struct {
+		// 兼容两种响应格式：
+		// Gateway: { "Result": { "Id": "xxx", "Name": "xxx", ... } }
+		// KWJM: { "Id": "xxx", "Name": "xxx", ... }
+		var groupID, groupName, groupDesc, groupType string
+
+		// 尝试 Gateway 格式
+		var gatewayResp struct {
 			Result struct {
 				ID   string `json:"Id"`
 				Name string `json:"Name"`
@@ -102,10 +107,31 @@ func SeedanceCreateAssetGroup(c *gin.Context) {
 				Type string `json:"GroupType"`
 			} `json:"Result"`
 		}
-		if err := common.Unmarshal(respBody, &resp); err != nil || resp.Result.ID == "" {
+		if err := common.Unmarshal(respBody, &gatewayResp); err == nil && gatewayResp.Result.ID != "" {
+			groupID = gatewayResp.Result.ID
+			groupName = gatewayResp.Result.Name
+			groupDesc = gatewayResp.Result.Desc
+			groupType = gatewayResp.Result.Type
+		} else {
+			// 尝试 KWJM 格式
+			var kwjmResp struct {
+				ID   string `json:"Id"`
+				Name string `json:"Name"`
+				Desc string `json:"Description"`
+				Type string `json:"GroupType"`
+			}
+			if err2 := common.Unmarshal(respBody, &kwjmResp); err2 == nil && kwjmResp.ID != "" {
+				groupID = kwjmResp.ID
+				groupName = kwjmResp.Name
+				groupDesc = kwjmResp.Desc
+				groupType = kwjmResp.Type
+			}
+		}
+
+		if groupID == "" {
 			return
 		}
-		// parse name/desc/type from request body for local record
+		// parse name/desc/type from request body for local record (fallback)
 		var req struct {
 			Name        string `json:"Name"`
 			Description string `json:"Description"`
@@ -113,21 +139,40 @@ func SeedanceCreateAssetGroup(c *gin.Context) {
 		}
 		_ = common.Unmarshal(body, &req)
 
+		// 优先使用响应中的值，否则使用请求中的值
+		if groupName == "" {
+			groupName = req.Name
+		}
+		if groupDesc == "" {
+			groupDesc = req.Description
+		}
+		if groupType == "" {
+			groupType = req.GroupType
+		}
+
 		g := &model.SeedanceAssetGroup{
 			UserID:          userID,
 			ChannelID:       gw.Channel.Id,
-			UpstreamGroupID: resp.Result.ID,
-			Name:            req.Name,
-			Description:     req.Description,
-			GroupType:       req.GroupType,
+			UpstreamGroupID: groupID,
+			Name:            groupName,
+			Description:     groupDesc,
+			GroupType:       groupType,
 			RawData:         string(respBody),
 		}
 		_ = model.CreateSeedanceAssetGroup(g)
 		// 在响应里追加 LocalId（业务 ID），方便中继链路直接使用
 		var raw map[string]interface{}
 		if err2 := common.Unmarshal(respBody, &raw); err2 == nil {
+			// Gateway 格式: { "Result": { "Id": "xxx" } }
 			if result, ok := raw["Result"].(map[string]interface{}); ok {
-				result["LocalId"] = resp.Result.ID
+				result["LocalId"] = groupID
+				if merged, err3 := common.Marshal(raw); err3 == nil {
+					c.Data(http.StatusOK, "application/json; charset=utf-8", merged)
+					return
+				}
+			} else {
+				// KWJM 格式: { "Id": "xxx" }，直接在顶层添加 LocalId
+				raw["LocalId"] = groupID
 				if merged, err3 := common.Marshal(raw); err3 == nil {
 					c.Data(http.StatusOK, "application/json; charset=utf-8", merged)
 					return
@@ -288,25 +333,43 @@ func getOrCreateDefaultAssetGroup(c *gin.Context, gw *service.SeedanceGatewayCha
 	if statusCode < 200 || statusCode >= 300 {
 		return "", fmt.Errorf("create default asset group upstream error %d: %s", statusCode, string(respBody))
 	}
-	var resp struct {
+	// 兼容两种响应格式：
+	// Gateway: { "Result": { "Id": "xxx" } }
+	// KWJM: { "Id": "xxx" }
+	var groupID string
+
+	// 尝试 Gateway 格式
+	var gatewayResp struct {
 		Result struct {
 			ID string `json:"Id"`
 		} `json:"Result"`
 	}
-	if err4 := common.Unmarshal(respBody, &resp); err4 != nil || resp.Result.ID == "" {
+	if err4 := common.Unmarshal(respBody, &gatewayResp); err4 == nil && gatewayResp.Result.ID != "" {
+		groupID = gatewayResp.Result.ID
+	} else {
+		// 尝试 KWJM 格式
+		var kwjmResp struct {
+			ID string `json:"Id"`
+		}
+		if err5 := common.Unmarshal(respBody, &kwjmResp); err5 == nil && kwjmResp.ID != "" {
+			groupID = kwjmResp.ID
+		}
+	}
+
+	if groupID == "" {
 		return "", fmt.Errorf("parse create group response failed: %s", string(respBody))
 	}
 	g := &model.SeedanceAssetGroup{
 		UserID:          userID,
 		ChannelID:       gw.Channel.Id,
-		UpstreamGroupID: resp.Result.ID,
+		UpstreamGroupID: groupID,
 		Name:            groupName,
 		GroupType:       "AIGC",
 		RawData:         string(respBody),
 	}
 	_ = model.CreateSeedanceAssetGroup(g)
-	logger.LogInfo(c, fmt.Sprintf("seedance: created asset group %s for user %d", resp.Result.ID, userID))
-	return resp.Result.ID, nil
+	logger.LogInfo(c, fmt.Sprintf("seedance: created asset group %s for user %d", groupID, userID))
+	return groupID, nil
 }
 
 // POST /api/seedance/assets
@@ -405,23 +468,33 @@ func SeedanceCreateAsset(c *gin.Context) {
 	}
 
 	// 解析上游响应取 upstream_asset_id
-	var resp struct {
+	// 兼容两种格式：Gateway: { "Result": { "Id": "xxx" } }，KWJM: { "Id": "xxx" }
+	var upstreamAssetID, upstreamGroupID string
+
+	// 尝试 Gateway 格式
+	var gatewayResp struct {
 		Result map[string]interface{} `json:"Result"`
 	}
-	if err := common.Unmarshal(respBody, &resp); err != nil || resp.Result == nil {
-		c.Data(statusCode, "application/json; charset=utf-8", respBody)
-		return
+	if err := common.Unmarshal(respBody, &gatewayResp); err == nil && gatewayResp.Result != nil {
+		upstreamAssetID, _ = gatewayResp.Result["Id"].(string)
+		upstreamGroupID, _ = gatewayResp.Result["GroupId"].(string)
+	} else {
+		// 尝试 KWJM 格式
+		var kwjmResp map[string]interface{}
+		if err2 := common.Unmarshal(respBody, &kwjmResp); err2 == nil {
+			upstreamAssetID, _ = kwjmResp["Id"].(string)
+			upstreamGroupID, _ = kwjmResp["GroupId"].(string)
+		}
 	}
-	upstreamAssetID, _ := resp.Result["Id"].(string)
+
 	if upstreamAssetID == "" {
 		c.Data(statusCode, "application/json; charset=utf-8", respBody)
 		return
 	}
 
-	// 从上游响应中提取实际的 GroupID（可能和请求的不一致，比如重试后创建了新分组）
-	upstreamGroupID, _ := resp.Result["GroupId"].(string)
+	// fallback 到请求的 GroupID
 	if upstreamGroupID == "" {
-		upstreamGroupID = req.GroupID // fallback 到请求的 GroupID
+		upstreamGroupID = req.GroupID
 	}
 
 	a := &model.SeedanceAsset{
@@ -438,14 +511,31 @@ func SeedanceCreateAsset(c *gin.Context) {
 	_ = model.CreateSeedanceAsset(a)
 
 	// 在响应里追加 local_id（业务 ID），方便客户端直接用于查询接口
-	resp.Result["LocalId"] = a.UpstreamAssetID
-	resp.Result["AssetRef"] = "asset://" + upstreamAssetID
-	merged, mergeErr := common.Marshal(map[string]interface{}{"Result": resp.Result})
-	if mergeErr != nil {
-		c.Data(statusCode, "application/json; charset=utf-8", respBody)
-		return
+	// 兼容两种格式：Gateway: { "Result": { ... } }，KWJM: { ... }
+	var raw map[string]interface{}
+	if err2 := common.Unmarshal(respBody, &raw); err2 == nil {
+		// Gateway 格式
+		if result, ok := raw["Result"].(map[string]interface{}); ok {
+			result["LocalId"] = a.UpstreamAssetID
+			result["AssetRef"] = "asset://" + upstreamAssetID
+			merged, mergeErr := common.Marshal(map[string]interface{}{"Result": result})
+			if mergeErr == nil {
+				c.Data(statusCode, "application/json; charset=utf-8", merged)
+				return
+			}
+		} else {
+			// KWJM 格式，直接在顶层添加
+			raw["LocalId"] = a.UpstreamAssetID
+			raw["AssetRef"] = "asset://" + upstreamAssetID
+			merged, mergeErr := common.Marshal(raw)
+			if mergeErr == nil {
+				c.Data(statusCode, "application/json; charset=utf-8", merged)
+				return
+			}
+		}
 	}
-	c.Data(statusCode, "application/json; charset=utf-8", merged)
+	// fallback：返回原始响应
+	c.Data(statusCode, "application/json; charset=utf-8", respBody)
 }
 
 // GET /api/seedance/assets
@@ -548,13 +638,29 @@ func SeedanceGetAsset(c *gin.Context) {
 		return
 	}
 	proxyAndPassthrough(c, gw, http.MethodGet, "/api/seedance/proxy/assets/"+a.UpstreamAssetID, forwardQuery(c), nil, func(_ int, respBody []byte) {
-		var resp struct {
+		// 兼容两种格式：Gateway: { "Result": { "Status": "xxx" } }，KWJM: { "Status": "xxx" }
+		var status string
+
+		// 尝试 Gateway 格式
+		var gatewayResp struct {
 			Result struct {
 				Status string `json:"Status"`
 			} `json:"Result"`
 		}
-		if err2 := common.Unmarshal(respBody, &resp); err2 == nil && resp.Result.Status != "" {
-			_ = model.UpdateSeedanceAssetStatus(a.ID, resp.Result.Status, string(respBody))
+		if err := common.Unmarshal(respBody, &gatewayResp); err == nil && gatewayResp.Result.Status != "" {
+			status = gatewayResp.Result.Status
+		} else {
+			// 尝试 KWJM 格式
+			var kwjmResp struct {
+				Status string `json:"Status"`
+			}
+			if err2 := common.Unmarshal(respBody, &kwjmResp); err2 == nil && kwjmResp.Status != "" {
+				status = kwjmResp.Status
+			}
+		}
+
+		if status != "" {
+			_ = model.UpdateSeedanceAssetStatus(a.ID, status, string(respBody))
 		}
 	})
 }
