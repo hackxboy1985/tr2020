@@ -186,67 +186,120 @@ func SeedanceListAssetGroups(c *gin.Context) {
 }
 
 // GET /api/seedance/asset-groups/:id
+// 使用适配器模式重构版本
 func SeedanceGetAssetGroup(c *gin.Context) {
-	gw, ok := seedanceGetGW(c)
-	if !ok {
+	userID := c.GetInt("id")
+	userGroup := c.GetString("group")
+
+	// 获取适配器
+	adapter, channel, err := service.GetAssetAdapter(userGroup)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "message": err.Error()})
 		return
 	}
-	userID := c.GetInt("id")
-	g, err := resolveAssetGroup(c, userID, gw.Channel.Id)
+
+	// 解析素材组 ID
+	g, err := resolveAssetGroup(c, userID, channel.Id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset group not found"})
 		return
 	}
-	proxyAndPassthrough(c, gw, http.MethodGet, "/api/seedance/proxy/assets/groups/"+g.UpstreamGroupID, forwardQuery(c), nil, nil)
+
+	// 使用适配器查询素材组
+	resp, err := adapter.GetAssetGroup(g.UpstreamGroupID)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+
+	// 返回响应（兼容旧格式，包装在 Result 中）
+	result := map[string]interface{}{
+		"Id":          resp.ID,
+		"Name":        resp.Name,
+		"Description": resp.Description,
+		"GroupType":   resp.GroupType,
+	}
+	c.JSON(http.StatusOK, gin.H{"Result": result})
 }
 
 // PUT /api/seedance/asset-groups/:id
 func SeedancePutAssetGroup(c *gin.Context) {
-	seedanceModifyAssetGroup(c, http.MethodPut)
+	seedanceModifyAssetGroup(c)
 }
 
 // PATCH /api/seedance/asset-groups/:id
 func SeedancePatchAssetGroup(c *gin.Context) {
-	seedanceModifyAssetGroup(c, http.MethodPatch)
+	seedanceModifyAssetGroup(c)
 }
 
-func seedanceModifyAssetGroup(c *gin.Context, method string) {
-	gw, ok := seedanceGetGW(c)
-	if !ok {
+// 使用适配器模式重构版本
+func seedanceModifyAssetGroup(c *gin.Context) {
+	userID := c.GetInt("id")
+	userGroup := c.GetString("group")
+
+	// 获取适配器
+	adapter, channel, err := service.GetAssetAdapter(userGroup)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "message": err.Error()})
 		return
 	}
-	userID := c.GetInt("id")
-	g, err := resolveAssetGroup(c, userID, gw.Channel.Id)
+
+	// 解析素材组 ID
+	g, err := resolveAssetGroup(c, userID, channel.Id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset group not found"})
 		return
 	}
-	body := readBody(c)
-	proxyAndPassthrough(c, gw, method, "/api/seedance/proxy/assets/groups/"+g.UpstreamGroupID, nil, body, func(_ int, respBody []byte) {
-		var req struct {
-			Name        string `json:"Name"`
-			Description string `json:"Description"`
-		}
-		_ = common.Unmarshal(body, &req)
-		_ = model.UpdateSeedanceAssetGroupRaw(g.ID, req.Name, req.Description, string(respBody))
-	})
+
+	// 解析请求体
+	var req service.UpdateAssetGroupRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid request"})
+		return
+	}
+
+	// 使用适配器更新素材组
+	if err := adapter.UpdateAssetGroup(g.UpstreamGroupID, req); err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+
+	// 更新本地数据库
+	_ = model.UpdateSeedanceAssetGroupRaw(g.ID, req.Name, req.Description, "")
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
 // DELETE /api/seedance/asset-groups/:id
+// 使用适配器模式重构版本
 func SeedanceDeleteAssetGroup(c *gin.Context) {
-	gw, ok := seedanceGetGW(c)
-	if !ok {
+	userID := c.GetInt("id")
+	userGroup := c.GetString("group")
+
+	// 获取适配器
+	adapter, channel, err := service.GetAssetAdapter(userGroup)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "message": err.Error()})
 		return
 	}
-	userID := c.GetInt("id")
-	g, err := resolveAssetGroup(c, userID, gw.Channel.Id)
+
+	// 解析素材组 ID
+	g, err := resolveAssetGroup(c, userID, channel.Id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset group not found"})
 		return
 	}
-	proxyAndPassthrough(c, gw, http.MethodDelete, "/api/seedance/proxy/assets/groups/"+g.UpstreamGroupID, nil, nil, func(_ int, _ []byte) {
-		_ = model.SoftDeleteSeedanceAssetGroup(g.ID, userID)
-	})
+
+	// 使用适配器删除素材组
+	if err := adapter.DeleteAssetGroup(g.UpstreamGroupID); err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+
+	// 软删除本地记录
+	_ = model.SoftDeleteSeedanceAssetGroup(g.ID, userID)
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
 // ============================================================
@@ -551,46 +604,82 @@ func SeedanceGetAsset(c *gin.Context) {
 
 // PUT /api/seedance/assets/:id
 func SeedancePutAsset(c *gin.Context) {
-	seedanceModifyAsset(c, http.MethodPut)
+	seedanceModifyAsset(c)
 }
 
 // PATCH /api/seedance/assets/:id
 func SeedancePatchAsset(c *gin.Context) {
-	seedanceModifyAsset(c, http.MethodPatch)
+	seedanceModifyAsset(c)
 }
 
-func seedanceModifyAsset(c *gin.Context, method string) {
-	gw, ok := seedanceGetGW(c)
-	if !ok {
+// 使用适配器模式重构版本
+func seedanceModifyAsset(c *gin.Context) {
+	userID := c.GetInt("id")
+	userGroup := c.GetString("group")
+
+	// 获取适配器
+	adapter, channel, err := service.GetAssetAdapter(userGroup)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "message": err.Error()})
 		return
 	}
-	userID := c.GetInt("id")
-	a, err := resolveAsset(c, userID, gw.Channel.Id)
+
+	// 解析素材 ID
+	a, err := resolveAsset(c, userID, channel.Id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset not found"})
 		return
 	}
-	body := readBody(c)
-	proxyAndPassthrough(c, gw, method, "/api/seedance/proxy/assets/"+a.UpstreamAssetID, nil, body, func(_ int, respBody []byte) {
-		_ = model.UpdateSeedanceAssetStatus(a.ID, a.Status, string(respBody))
-	})
+
+	// 解析请求体
+	var req service.UpdateAssetRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid request"})
+		return
+	}
+
+	// 使用适配器更新素材
+	if err := adapter.UpdateAsset(a.UpstreamAssetID, req); err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+
+	// 更新本地数据库
+	_ = model.UpdateSeedanceAssetStatus(a.ID, a.Status, "")
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
 // DELETE /api/seedance/assets/:id
+// 使用适配器模式重构版本
 func SeedanceDeleteAsset(c *gin.Context) {
-	gw, ok := seedanceGetGW(c)
-	if !ok {
+	userID := c.GetInt("id")
+	userGroup := c.GetString("group")
+
+	// 获取适配器
+	adapter, channel, err := service.GetAssetAdapter(userGroup)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "message": err.Error()})
 		return
 	}
-	userID := c.GetInt("id")
-	a, err := resolveAsset(c, userID, gw.Channel.Id)
+
+	// 解析素材 ID
+	a, err := resolveAsset(c, userID, channel.Id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset not found"})
 		return
 	}
-	proxyAndPassthrough(c, gw, http.MethodDelete, "/api/seedance/proxy/assets/"+a.UpstreamAssetID, nil, nil, func(_ int, _ []byte) {
-		_ = model.SoftDeleteSeedanceAsset(a.ID, userID)
-	})
+
+	// 使用适配器删除素材
+	if err := adapter.DeleteAsset(a.UpstreamAssetID); err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+
+	// 软删除本地记录
+	_ = model.SoftDeleteSeedanceAsset(a.ID, userID)
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
 // ============================================================
