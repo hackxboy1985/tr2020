@@ -607,6 +607,8 @@ func imageTaskFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskRes
 					resultURL = rewriteResultURLWithMappings(resultURL, settings.RRUrlProxyBaseURL, settings.RRUrlProxyMappings)
 				case constant.ChannelTypeTudou:
 					resultURL = rewriteResultURLWithMappings(resultURL, settings.TdUrlProxyBaseURL, settings.TdUrlProxyMappings)
+				case constant.ChannelTypeZy:
+					resultURL = rewriteResultURLWithMappings(resultURL, settings.ZyUrlProxyBaseURL, settings.ZyUrlProxyMappings)
 				}
 			}
 		}

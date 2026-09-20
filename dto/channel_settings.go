@@ -74,6 +74,13 @@ type ChannelOtherSettings struct {
 	TdUrlTTLHours      int               `json:"td_url_ttl_hours,omitempty"`
 	TdUrlProxyBaseURL  string            `json:"td_url_proxy_base_url,omitempty"`
 	TdUrlProxyMappings map[string]string `json:"td_url_proxy_mappings,omitempty"`
+	// Zy 渠道配置
+	// ZyUrlTTLHours: 上游图片 URL 有效期（小时）。默认 0 表示不限期，直接返回上游原始 URL。
+	// ZyUrlProxyBaseURL: 对外图片代理基础地址，配置后替换上游 URL 的 scheme/host，原路径和 query 保持不变。
+	// ZyUrlProxyMappings: 多域名映射代理配置，key 为原始域名，value 为代理基础 URL。优先级高于 ZyUrlProxyBaseURL。
+	ZyUrlTTLHours      int               `json:"zy_url_ttl_hours,omitempty"`
+	ZyUrlProxyBaseURL  string            `json:"zy_url_proxy_base_url,omitempty"`
+	ZyUrlProxyMappings map[string]string `json:"zy_url_proxy_mappings,omitempty"`
 	// SaveResponseBody 为 true 时，将上游响应体（脱敏后）保存到消费日志的 Other 字段，用于调试
 	SaveResponseBody bool `json:"save_response_body,omitempty"`
 }

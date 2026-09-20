@@ -170,6 +170,19 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
       models: 'gpt-image-2-all',
     },
   },
+  61: {
+    id: 61,
+    name: CHANNEL_TYPES[61],
+    icon: 'openai',
+    hints: {
+      baseUrl: 'Required. Upstream base URL, e.g. https://your-zy-host',
+      key: 'Zy API Key (Authorization: Bearer <key>)',
+      models:
+        'gpt-image-2,gpt-image-2-2K,gpt-image-2-4K,gpt-image-2.5,gpt-image-2.5-flare,gpt-image-2.5-sunburst',
+      other:
+        '可选，配置结果图片 URL 的有效期与对外代理地址。\n\n示例：\n{"zy_url_ttl_hours":5,"zy_url_proxy_base_url":"https://img.example.com/oss"}\n\n字段说明：\nzy_url_ttl_hours — 上游图片 URL 有效期（小时）。留空或 0 表示不限期，直接返回上游原始 URL\nzy_url_proxy_base_url — 对外图片代理基础地址，替换上游 URL 的 scheme/host\nzy_url_proxy_mappings — 多域名映射代理，如 {"cdn1.zy.com":"https://img.example.com/oss"}\n\n默认路径：\n提交 → /v1/videos\n查询 → /v1/videos/{task_id}',
+    },
+  },
 }
 
 /**

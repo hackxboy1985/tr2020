@@ -103,6 +103,7 @@ import { JsonEditor } from '@/components/json-editor'
 import { PosterPathConfigEditor } from '../poster-path-config-editor'
 import { RRPathConfigEditor } from '../rr-path-config-editor'
 import { TdConfigEditor } from '../td-config-editor'
+import { ZyConfigEditor } from '../zy-config-editor'
 import { MultiSelect } from '@/components/multi-select'
 import {
   SecureVerificationDialog,
@@ -1892,6 +1893,26 @@ export function ChannelMutateDrawer({
                             <FormLabel>{t('URL Config')}</FormLabel>
                             <FormControl>
                               <TdConfigEditor
+                                value={field.value ?? ''}
+                                onChange={field.onChange}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+
+                    {/* Zy (type 61) - URL TTL + proxy base URL config */}
+                    {currentType === 61 && (
+                      <FormField
+                        control={form.control}
+                        name='other'
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('URL Config')}</FormLabel>
+                            <FormControl>
+                              <ZyConfigEditor
                                 value={field.value ?? ''}
                                 onChange={field.onChange}
                               />

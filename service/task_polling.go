@@ -458,6 +458,8 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 				ttlHours = otherSettings.RRUrlTTLHours
 			case constant.ChannelTypeTudou:
 				ttlHours = otherSettings.TdUrlTTLHours
+			case constant.ChannelTypeZy:
+				ttlHours = otherSettings.ZyUrlTTLHours
 			}
 			if ttlHours > 0 {
 				task.PrivateData.ExpireAt = now + int64(ttlHours)*3600
@@ -549,13 +551,29 @@ func truncateBase64(s string) string {
 	return s[:maxKeep] + "..."
 }
 
+// appendsFinalResponseBodyToSubmitLog 判断某渠道在任务完成后，
+// 是否采用「把 final_response_body 追加到原始提交日志」的模式，
+// 而不是新建一条「查询结果」日志。
+//
+// 各渠道独立登记，互不影响；新增渠道只需在此处追加自己的 case。
+func appendsFinalResponseBodyToSubmitLog(channelType int) bool {
+	switch channelType {
+	case constant.ChannelTypeTudou, constant.ChannelTypeRR:
+		return true
+	case constant.ChannelTypeZy:
+		return true
+	default:
+		return false
+	}
+}
+
 func recordTaskCompletionLog(task *model.Task, responseBody []byte) {
 	if task == nil {
 		return
 	}
 
-	// Td/RR 渠道：将最终响应体追加到原始提交日志，不单独新建"查询结果"日志
-	if ch, err := model.CacheGetChannel(task.ChannelId); err == nil && (ch.Type == constant.ChannelTypeTudou || ch.Type == constant.ChannelTypeRR) {
+	// 追加模式渠道：将最终响应体追加到原始提交日志，不单独新建"查询结果"日志
+	if ch, err := model.CacheGetChannel(task.ChannelId); err == nil && appendsFinalResponseBodyToSubmitLog(ch.Type) {
 		extra := map[string]interface{}{}
 		if len(responseBody) > 0 {
 			extra["final_response_body"] = TruncateBody(string(responseBody))

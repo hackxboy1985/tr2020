@@ -117,6 +117,14 @@ func VideoProxy(c *gin.Context) {
 			return
 		}
 		videoURL = task.GetResultURL()
+	case constant.ChannelTypeZy:
+		// zy 上游图片 URL 默认 5 小时有效；仅在渠道配置了 TTL 时才做过期拦截
+		if expireAt := task.PrivateData.ExpireAt; expireAt > 0 && time.Now().Unix() > expireAt {
+			videoProxyError(c, http.StatusGone, "url_expired",
+				"Image URL has expired. Please regenerate the image.")
+			return
+		}
+		videoURL = task.GetResultURL()
 	default:
 		// Video URL is stored in PrivateData.ResultURL (fallback to FailReason for old data)
 		videoURL = task.GetResultURL()

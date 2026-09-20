@@ -58,6 +58,7 @@ const (
 	ChannelTypePoster         = 58
 	ChannelTypeRR             = 59
 	ChannelTypeTudou          = 60
+	ChannelTypeZy             = 61
 	ChannelTypeDummy          // this one is only for count, do not add any channel after this
 
 )
@@ -124,6 +125,7 @@ var ChannelBaseURLs = []string{
 	"",                                          //58 poster
 	"https://www.runninghub.ai",                 //59 rr
 	"https://api.ai-tudou.net",                  //60 tudou
+	"",                                          //61 zy（上游域名由渠道单独配置）
 }
 
 var ChannelTypeNames = map[int]string{
@@ -184,6 +186,7 @@ var ChannelTypeNames = map[int]string{
 	ChannelTypePoster:         "Poster",
 	ChannelTypeRR:             "RR",
 	ChannelTypeTudou:          "Td",
+	ChannelTypeZy:             "Zy",
 }
 
 func GetChannelTypeName(channelType int) string {

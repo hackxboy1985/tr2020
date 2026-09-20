@@ -39,6 +39,11 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 		return handleTudouImageTask(c, info, imageReq)
 	}
 
+	// Zy is an async image channel (upstream /v1/videos style): hand off to the task submit pipeline.
+	if info.ChannelType == constant.ChannelTypeZy {
+		return handleZyImageTask(c, info, imageReq)
+	}
+
 	request, err := common.DeepCopy(imageReq)
 	if err != nil {
 		return types.NewError(fmt.Errorf("failed to copy request to ImageRequest: %w", err), types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
@@ -224,6 +229,43 @@ func convertImageRequestToTudouTaskSubmitReq(req *dto.ImageRequest) relaycommon.
 	return taskReq
 }
 
+// convertImageRequestToZyTaskSubmitReq converts an OpenAI ImageRequest to a TaskSubmitReq for Zy channel.
+// Zy 上游接受 aspect_ratio 与 size 二选一，以及 image_size / resolution 档位，均从 Extra 扩展字段读取。
+func convertImageRequestToZyTaskSubmitReq(req *dto.ImageRequest) relaycommon.TaskSubmitReq {
+	taskReq := relaycommon.TaskSubmitReq{
+		Prompt: req.Prompt,
+		Size:   req.Size,
+	}
+	// aspect_ratio：下游也可直接传该字段，优先级高于 size
+	if v, ok := req.Extra["aspect_ratio"]; ok {
+		var aspectRatio string
+		if err := common.Unmarshal(v, &aspectRatio); err == nil {
+			taskReq.AspectRatio = aspectRatio
+		}
+	}
+	// image_size / resolution：分辨率档位，二者等价
+	if v, ok := req.Extra["image_size"]; ok {
+		var imageSize string
+		if err := common.Unmarshal(v, &imageSize); err == nil {
+			taskReq.ImageSize = imageSize
+		}
+	}
+	if v, ok := req.Extra["resolution"]; ok {
+		var resolution string
+		if err := common.Unmarshal(v, &resolution); err == nil {
+			taskReq.Resolution = resolution
+		}
+	}
+	// Extract image URLs for image-to-image requests
+	if len(req.Images) > 0 {
+		var imgs []string
+		if err := common.Unmarshal(req.Images, &imgs); err == nil {
+			taskReq.Images = imgs
+		}
+	}
+	return taskReq
+}
+
 // handleRRImageTask handles image generation for the RR async channel.
 // It refunds the sync pre-consume done by Relay, then runs the full async task pipeline.
 func handleRRImageTask(c *gin.Context, info *relaycommon.RelayInfo, imageReq *dto.ImageRequest) *types.NewAPIError {
@@ -371,6 +413,88 @@ func handleTudouImageTask(c *gin.Context, info *relaycommon.RelayInfo, imageReq 
 	}
 
 	logger.LogInfo(c, fmt.Sprintf("Tudou image task submitted: taskId=%s upstreamId=%s quota=%d",
+		info.PublicTaskID, result.UpstreamTaskID, result.Quota))
+
+	// 返回任务提交响应给用户：自己的 task_id 和 submitted 状态
+	c.JSON(http.StatusOK, gin.H{
+		"id":      info.PublicTaskID,
+		"status":  "submitted",
+		"created": task.CreatedAt,
+	})
+
+	return nil
+}
+
+// handleZyImageTask handles image generation for the Zy async channel.
+// 上游为 /v1/videos 风格的异步任务接口：提交返回任务 ID，再由轮询服务拉取结果。
+func handleZyImageTask(c *gin.Context, info *relaycommon.RelayInfo, imageReq *dto.ImageRequest) *types.NewAPIError {
+	// Refund the pre-consume that Relay's sync billing path already charged.
+	if info.Billing != nil {
+		info.Billing.Refund(c)
+		info.Billing = nil
+	}
+
+	// Convert and store task request in context
+	taskReq := convertImageRequestToZyTaskSubmitReq(imageReq)
+	c.Set("task_request", taskReq)
+
+	// Initialize TaskRelayInfo if needed
+	if info.TaskRelayInfo == nil {
+		info.TaskRelayInfo = &relaycommon.TaskRelayInfo{}
+	}
+
+	result, taskErr := RelayTaskSubmit(c, info)
+	if taskErr != nil {
+		return types.NewErrorWithStatusCode(taskErr.Error, types.ErrorCodeBadResponseStatusCode, taskErr.StatusCode)
+	}
+
+	// Settle billing and log consumption
+	if settleErr := service.SettleBilling(c, info, result.Quota); settleErr != nil {
+		common.SysError("settle Zy image task billing error: " + settleErr.Error())
+	}
+
+	// Store request body for logging
+	if bs, bsErr := common.GetBodyStorage(c); bsErr == nil {
+		if _, seekErr := bs.Seek(0, io.SeekStart); seekErr == nil {
+			if bodyBytes, readErr := io.ReadAll(bs); readErr == nil && len(bodyBytes) > 0 {
+				c.Set(string(constant.ContextKeyVideoRequestBody), string(bodyBytes))
+			}
+		}
+	}
+	if taskReq.Prompt != "" {
+		c.Set(string(constant.ContextKeyPromptToSave), taskReq.Prompt)
+	}
+
+	service.LogTaskConsumption(c, info)
+
+	task := model.InitTask(result.Platform, info)
+	task.PrivateData.UpstreamTaskID = result.UpstreamTaskID
+	task.PrivateData.BillingSource = info.BillingSource
+	task.PrivateData.SubscriptionId = info.SubscriptionId
+	task.PrivateData.TokenId = info.TokenId
+	task.PrivateData.BillingContext = &model.TaskBillingContext{
+		ModelPrice:      info.PriceData.ModelPrice,
+		GroupRatio:      info.PriceData.GroupRatioInfo.GroupRatio,
+		ModelRatio:      info.PriceData.ModelRatio,
+		OtherRatios:     info.PriceData.OtherRatios,
+		OriginModelName: info.OriginModelName,
+		PerCallBilling:  info.PriceData.UsePrice,
+	}
+	task.Quota = result.Quota
+	task.Data = result.TaskData
+	task.Action = info.Action
+	task.Properties.Input = taskReq.Prompt
+	if rb := c.GetString(string(constant.ContextKeyVideoRequestBody)); rb != "" {
+		task.PrivateData.RequestBody = service.TruncateBody(rb)
+	}
+	if len(result.TaskData) > 0 {
+		task.PrivateData.SubmitRespBody = service.TruncateBody(string(result.TaskData))
+	}
+	if insertErr := task.Insert(); insertErr != nil {
+		common.SysError("insert Zy image task error: " + insertErr.Error())
+	}
+
+	logger.LogInfo(c, fmt.Sprintf("Zy image task submitted: taskId=%s upstreamId=%s quota=%d",
 		info.PublicTaskID, result.UpstreamTaskID, result.Quota))
 
 	// 返回任务提交响应给用户：自己的 task_id 和 submitted 状态
