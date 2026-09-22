@@ -1,0 +1,563 @@
+{
+  "info": {
+    "name": "Seedance 客户 API 0.6.4 — 视频与素材",
+    "description": "先阅读 VIDEO_API.md 和 RETENTION.md。成片自动保存完成后可下载至完成后 7 天；素材读取签名 7 天，每用户素材上限 512 MiB。素材管理、预检查与回调是平台扩展。生成会计费、删除改变可见性，请逐项手动执行，不要批量运行。使用独立幂等键，提交结果不明时先查询，不盲目重试。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{api_key}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "01 查询可用模型",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/v1/models"
+      }
+    },
+    {
+      "name": "02 查询接口能力",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/seedance/capabilities"
+      }
+    },
+    {
+      "name": "03 创建视频（付费，手动执行）",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{idempotency_key}}"
+          }
+        ],
+        "url": "{{base_url}}/v1/videos",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model\": \"seedance-2.0-1080p\",\n  \"prompt\": \"蓝色与金色的抽象光影缓慢流动\",\n  \"seconds\": 5,\n  \"size\": \"1920x1080\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "04 查询任务",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/v1/videos/{{task_id}}"
+      }
+    },
+    {
+      "name": "05 下载第一个输出（保存响应为文件）",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/v1/videos/{{task_id}}/content"
+      }
+    },
+    {
+      "name": "06 任务列表",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/v1/videos?page=1&page_size=20"
+      }
+    },
+    {
+      "name": "07 上传 PNG（手动选择本地文件）",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "image/png"
+          }
+        ],
+        "url": "{{base_url}}/seedance/media/upload?title=reference&group_id={{group_id}}",
+        "body": {
+          "mode": "file",
+          "file": {
+            "src": ""
+          }
+        },
+        "description": "先创建分组并填写 group_id，选择 PNG 原始文件；上传后查询至素材就绪再引用。"
+      }
+    },
+    {
+      "name": "查询素材",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/seedance/media",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"get\",\n  \"id\": \"{{asset_id}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "批量查询素材",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/seedance/media",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"batch_get\",\n  \"ids\": [\n    \"{{asset_id}}\"\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "修改素材",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/seedance/media",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"update\",\n  \"id\": \"{{asset_id}}\",\n  \"title\": \"参考图\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "搜索素材",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/seedance/media",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"search\",\n  \"keyword\": \"参考\",\n  \"page\": 1,\n  \"page_size\": 20\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "媒体库列表",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/seedance/media?page=1&page_size=20"
+      }
+    },
+    {
+      "name": "创建分组",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/seedance/media/groups",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"create\",\n  \"name\": \"项目素材\",\n  \"description\": \"本项目使用\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "查询分组",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/seedance/media/groups",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"get\",\n  \"id\": \"{{group_id}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "分组列表",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/seedance/media/groups",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"list\",\n  \"page\": 1,\n  \"page_size\": 20\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "修改分组",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/seedance/media/groups",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"update\",\n  \"id\": \"{{group_id}}\",\n  \"name\": \"新分组名\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "素材移入分组",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/seedance/media",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"update\",\n  \"id\": \"{{asset_id}}\",\n  \"group_id\": \"{{group_id}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "素材首帧生成（付费，手动执行）",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{image_idempotency_key}}"
+          }
+        ],
+        "url": "{{base_url}}/v1/videos",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model\": \"seedance-2.0-1080p\",\n  \"content\": [\n    {\n      \"type\": \"text\",\n      \"text\": \"光影缓慢流动\"\n    },\n    {\n      \"type\": \"image_url\",\n      \"image_url\": {\n        \"url\": \"asset://{{asset_id}}\"\n      },\n      \"role\": \"first_frame\"\n    }\n  ],\n  \"duration\": 5,\n  \"ratio\": \"16:9\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "删除素材（手动执行）",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/seedance/media",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"delete\",\n  \"ids\": [\n    \"{{asset_id}}\"\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "删除空分组（手动执行）",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/seedance/media/groups",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"delete\",\n  \"id\": \"{{group_id}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "隐藏终态任务（手动执行）",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": "{{base_url}}/v1/videos/{{task_id}}"
+      }
+    },
+    {
+      "name": "检查视频内容响应头",
+      "request": {
+        "method": "HEAD",
+        "header": [],
+        "url": "{{base_url}}/v1/videos/{{task_id}}/content",
+        "description": "任务 completed 后执行；检查头部，不下载文件正文。"
+      }
+    },
+    {
+      "name": "本人素材引用生成（付费，手动执行）",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{asset_idempotency_key}}"
+          }
+        ],
+        "url": "{{base_url}}/v1/videos",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model\": \"seedance-2.0-1080p\",\n  \"prompt\": \"参考图片画面缓慢运动\",\n  \"seconds\": 5,\n  \"size\": \"1920x1080\",\n  \"input_reference\": \"asset://{{asset_id}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "导入图片并关联素材组",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/seedance/media",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"import\",\n  \"url\": \"{{reference_image_url}}\",\n  \"media_type\": \"image\",\n  \"title\": \"参考图片\",\n  \"group_id\": \"{{group_id}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "查询已登记回调状态",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/seedance/callbacks/{{task_id}}",
+        "description": "仅适用于已配置回调并登记成功的任务；没有登记时返回 404。"
+      }
+    },
+    {
+      "name": "素材适用预检查（不生成、不扣费）",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/seedance/media/preflight",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"asset_id\": \"{{asset_id}}\",\n  \"model\": \"seedance-2.0-1080p\",\n  \"media_type\": \"video\",\n  \"role\": \"reference_video\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "更新素材标签",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/seedance/media",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"update\",\n  \"id\": \"{{asset_id}}\",\n  \"tags\": [\n    \"demo\"\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "按标签查询素材",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/seedance/media?tag=demo"
+      }
+    },
+    {
+      "name": "分段读取视频前 1024 字节",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Range",
+            "value": "bytes=0-1023"
+          }
+        ],
+        "url": "{{base_url}}/v1/videos/{{task_id}}/content"
+      }
+    },
+    {
+      "name": "上传 MP4 参考视频（手动选择本地文件）",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "video/mp4"
+          }
+        ],
+        "url": "{{base_url}}/seedance/media/upload?title=video-reference&group_id={{group_id}}",
+        "body": {
+          "mode": "file",
+          "file": {}
+        }
+      }
+    },
+    {
+      "name": "视频参考生成（付费，手动执行）",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Idempotency-Key",
+            "value": "{{video_reference_idempotency_key}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/v1/videos",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model\": \"seedance-2.0-1080p\",\n  \"duration\": 10,\n  \"ratio\": \"16:9\",\n  \"n\": 1,\n  \"content\": [\n    {\n      \"type\": \"text\",\n      \"text\": \"以参考视频中的环境为依据，讲述人物发现遗失物、归还失主并互相致谢的连贯短故事。\"\n    },\n    {\n      \"type\": \"video_url\",\n      \"video_url\": {\n        \"url\": \"asset://{{asset_id}}\"\n      },\n      \"role\": \"reference_video\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

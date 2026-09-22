@@ -1180,7 +1180,7 @@ export function processTokenChartData(
           ],
         },
         dimension: {
-          updateTitle: (title, data?: unknown) => {
+          updateTitle: (title: any, data?: unknown) => {
             const dimensionInfo = Array.isArray(data)
               ? (data[0] as {
                   value?: string | number

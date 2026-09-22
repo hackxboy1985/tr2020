@@ -1,0 +1,14 @@
+{
+  "version": "0.6.4",
+  "source_commit": "5c2cb28a85d016a11b2e18e97d3d36f1d805adf5",
+  "files": {
+    "CLIENT_API.md": "01baebb6a18e6d3461821ae67d0e304f8657d169b0b1af836aac72336c3742a3",
+    "Seedance_API客户接口文档_0.6.4.md": "d51cb415ceebad45bd8f9f7c289028e8fbba6fd5ab3cec6f1b9df1c5eb82c131",
+    "docs/REPAIR_API.md": "9b1cfd443cd025fe3237e9ab0e448649a150ed574c1e8e849863acb4003a8214",
+    "docs/RETENTION.md": "8164dd458772069d79b9e1a590700f58d42ac999152e12379fb5fdaae09c141f",
+    "docs/Seedance.postman_collection.json": "a153b5a661bc66cfd9164ddebca13aec580356309df890f6b8296613beee6161",
+    "docs/Seedance.postman_environment.json": "6309ce27afcfb811188ab47f482bfdb656cac19457c381b03cf74ed75214227d",
+    "docs/VIDEO_API.md": "1e9c3cb2c60c0340738b084084a6eae5686660f4e0d216499e12867af18541d6",
+    "阅读说明.txt": "d737c7b00925968a427c58a053e865204b89bc1b2bc6259b7bf5eff69f75bcbd"
+  }
+}
