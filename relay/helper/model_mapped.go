@@ -34,21 +34,27 @@ func ModelMappedHelper(c *gin.Context, info *common.RelayInfo, request dto.Reque
 			generalRequest, ok := request.(*dto.GeneralOpenAIRequest)
 			if !ok {
 				// 非GeneralOpenAIRequest类型，降级到V1
-				return applyModelMappingV1(modelMapping, mappingModelName, info)
-			}
+				err := applyModelMappingV1(modelMapping, mappingModelName, info)
+				if err != nil {
+					return err
+				}
+			} else {
+				mappedModel, isModelMapped, err := applyModelMappingV2(modelMapping, generalRequest, mappingModelName)
+				if err != nil {
+					return err
+				}
 
-			mappedModel, isModelMapped, err := applyModelMappingV2(modelMapping, generalRequest, mappingModelName)
-			if err != nil {
-				return err
-			}
-
-			if isModelMapped {
-				info.IsModelMapped = true
-				info.UpstreamModelName = mappedModel
+				if isModelMapped {
+					info.IsModelMapped = true
+					info.UpstreamModelName = mappedModel
+				}
 			}
 		} else {
 			// 使用V1简单映射
-			return applyModelMappingV1(modelMapping, mappingModelName, info)
+			err := applyModelMappingV1(modelMapping, mappingModelName, info)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -60,6 +66,12 @@ func ModelMappedHelper(c *gin.Context, info *common.RelayInfo, request dto.Reque
 		info.UpstreamModelName = finalUpstreamModelName
 		info.OriginModelName = ratio_setting.WithCompactModelSuffix(finalUpstreamModelName)
 	}
+
+	// 确保 UpstreamModelName 始终有值
+	if info.UpstreamModelName == "" {
+		info.UpstreamModelName = mappingModelName
+	}
+
 	if request != nil {
 		request.SetModelName(info.UpstreamModelName)
 	}
