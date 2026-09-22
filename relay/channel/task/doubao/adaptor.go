@@ -272,11 +272,18 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	if upstreamPath == "" {
 		upstreamPath = "/api/v3/contents/generations/tasks"
 	}
-	_ = fmt.Sprintf("%s%s", a.baseURL, upstreamPath)
-	// logger.LogInfo(c, fmt.Sprintf("doubao video upstream URL: %s", upstreamURL))
+	upstreamURL := fmt.Sprintf("%s%s", a.baseURL, upstreamPath)
 
-	// 打印最终发往上游的请求体，方便排查转换问题
-	// logger.LogInfo(c, fmt.Sprintf("doubao video upstream request body: %s", data))
+	// 打印调试信息
+	common.SysLog(fmt.Sprintf("[Doubao Video] ========== 上游请求信息 =========="))
+	common.SysLog(fmt.Sprintf("[Doubao Video] Base URL: %s", a.baseURL))
+	common.SysLog(fmt.Sprintf("[Doubao Video] Generate Path: %s", a.videoGeneratePath))
+	common.SysLog(fmt.Sprintf("[Doubao Video] Fetch Path: %s", a.videoFetchPath))
+	common.SysLog(fmt.Sprintf("[Doubao Video] 完整上游 URL: %s", upstreamURL))
+	common.SysLog(fmt.Sprintf("[Doubao Video] 上游模型名: %s", info.UpstreamModelName))
+	common.SysLog(fmt.Sprintf("[Doubao Video] 请求体: %s", string(data)))
+	common.SysLog(fmt.Sprintf("[Doubao Video] ====================================="))
+
 	// 保存到 context，供 savePrompt 写入 prompt_logs.request_body
 	c.Set(string(constant.ContextKeyVideoRequestBody), string(data))
 
