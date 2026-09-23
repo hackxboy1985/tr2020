@@ -381,6 +381,7 @@ func SeedanceCreateAsset(c *gin.Context) {
 		GroupID     string `json:"GroupId"`
 		URL         string `json:"URL"`
 		AssetType   string `json:"AssetType"`
+		Type        string `json:"Type"`        // 兼容字段：支持 Type 作为 AssetType 的别名
 		Name        string `json:"Name"`
 		ProjectName string `json:"ProjectName"` // 官方字段：项目名称（可选）
 		Force       bool   `json:"Force"`       // true=强制重新上传，忽略本地缓存
@@ -394,6 +395,11 @@ func SeedanceCreateAsset(c *gin.Context) {
 	// 如果未指定 ProjectName，默认使用 "default"
 	if req.ProjectName == "" {
 		req.ProjectName = "default"
+	}
+
+	// 兼容处理：如果 AssetType 为空，使用 Type 字段
+	if req.AssetType == "" && req.Type != "" {
+		req.AssetType = req.Type
 	}
 
 	// 获取适配器（支持根据模型名选择渠道）
