@@ -18,14 +18,20 @@ Seedance 2.0 测试脚本
   ./test-seedance-simple.sh --execute [选项]
   ./test-seedance-simple.sh --fetch-ark <task_id> [选项]
   ./test-seedance-simple.sh --test-asset [选项]
+  ./test-seedance-simple.sh --query-asset <asset_id> [选项]
 
 命令:
   --execute          执行完整测试（创建素材 + 提交视频任务 + 轮询状态）
   --fetch-ark        使用 ARK 格式查询任务（会实时调用上游）
   --test-asset       仅测试素材上传（上传 + 轮询状态，不生成视频）
+  --query-asset      查询指定素材的状态（根据 ASSET_API_FORMAT 选择接口格式）
+                     支持多种输入格式:
+                       - asset-20260923121923-gtqgb (原始 asset_id)
+                       - asset://asset-20260923121923-gtqgb (asset 引用格式)
+                       - 12345 (local_id 数字，仅 Action 格式支持)
 
 必需参数:
-  需要指定 --execute 或 --fetch-ark 或 --test-asset 其中之一
+  需要指定 --execute 或 --fetch-ark 或 --test-asset 或 --query-asset 其中之一
 
 资产接口格式选项:
   ASSET_API_FORMAT=restful (默认)
@@ -75,6 +81,18 @@ Seedance 2.0 测试脚本
   # 示例 6: 使用 ARK 格式查询任务（实时调用上游）
   ./test-seedance-simple.sh --fetch-ark task_5uIdqhOnT05FvKvRzG0ogqPvjp6TWnG6
 
+  # 示例 7: 查询素材状态（RESTful 格式）
+  ASSET_API_FORMAT=restful ./test-seedance-simple.sh --query-asset asset-20260923121923-gtqgb
+
+  # 示例 8: 查询素材状态（Action 格式）
+  ASSET_API_FORMAT=action ./test-seedance-simple.sh --query-asset asset-20260923121923-gtqgb
+
+  # 示例 9: 使用 asset:// 引用格式查询
+  ./test-seedance-simple.sh --query-asset asset://asset-20260923121923-gtqgb
+
+  # 示例 10: 使用 local_id 数字查询
+  ./test-seedance-simple.sh --query-asset 12345
+
 注意事项:
   - 首次运行会自动上传角色图到资产库
   - 资产激活可能需要等待 10-30 秒
@@ -102,6 +120,18 @@ if [[ "$1" == "--fetch-ark" ]]; then
     exit 1
   fi
   MODE="fetch-ark"
+elif [[ "$1" == "--query-asset" ]]; then
+  # 查询素材状态模式
+  QUERY_ASSET_ID="$2"
+  if [[ -z "$QUERY_ASSET_ID" ]]; then
+    echo -e "${RED}错误: 缺少素材 ID${NC}"
+    echo "用法: $0 --query-asset <asset_id>"
+    echo "示例: $0 --query-asset asset-20260923121923-gtqgb"
+    echo ""
+    echo "提示: 可通过 ASSET_API_FORMAT 环境变量指定接口格式（restful 或 action）"
+    exit 1
+  fi
+  MODE="query-asset"
 elif [[ "$1" == "--execute" ]]; then
   MODE="execute"
 elif [[ "$1" == "--test-asset" ]]; then
@@ -112,7 +142,7 @@ fi
 
 # ---------- 配置区（按需修改）----------
 NEWAPI_BASE_URL="${NEWAPI_BASE_URL:-http://book2:3000}"
-NEWAPI_API_KEY="${NEWAPI_API_KEY:-sk-2V6P5nj3JLnJrSprBxHe4pdwkttZEFJxYPeYcVjCK7g7QHXO}"
+NEWAPI_API_KEY="${NEWAPI_API_KEY:-sk-2V6P5nj3JLnJrSprBxHe4pdwkttZEFJxYPeYcVjCK7g7QHX}"
 
 # 资产接口格式：
 #   "restful" - RESTful 格式（默认）: POST /api/seedance/assets
@@ -120,7 +150,7 @@ NEWAPI_API_KEY="${NEWAPI_API_KEY:-sk-2V6P5nj3JLnJrSprBxHe4pdwkttZEFJxYPeYcVjCK7g
 ASSET_API_FORMAT="${ASSET_API_FORMAT:-restful}"
 
 # 视频模型 260128
-MODEL="${MODEL:-doubao-seedance-2-0-sd}"
+MODEL="${MODEL:-doubao-seedance-2-0}"
 
 # 请求参数（Ark 原生格式，字段在根级）
 PROMPT="${PROMPT:-女子人物面对镜头自然说话（使用音频1声音）："你好，我是归一体验官"}"
@@ -312,9 +342,9 @@ query_log() {
 
 check_deps
 
-# 如果是 ARK 查询模式，跳过主流程
-if [[ "$MODE" == "fetch-ark" ]]; then
-  # ARK 查询逻辑在后面
+# 如果是 ARK 查询模式或素材查询模式，跳过主流程
+if [[ "$MODE" == "fetch-ark" ]] || [[ "$MODE" == "query-asset" ]]; then
+  # 查询逻辑在后面
   :
 else
   # 执行完整测试流程
@@ -403,8 +433,8 @@ elif [ -n "$ROLE_IMAGE_URL" ]; then
         ASSET_QUERY_URL="${NEWAPI_BASE_URL}/api/seedance/assets/v2/?Action=GetAsset&Version=2024-01-01"
         log_info "查询 URL: POST ${ASSET_QUERY_URL}"
 
-        # Action 格式需要 POST + Body
-        ASSET_QUERY_BODY=$(jq -n --arg id "$ASSET_UPSTREAM_ID" '{Id:$id}')
+        # Action 格式需要 POST + Body（使用 AssetId 字段）
+        ASSET_QUERY_BODY=$(jq -n --arg id "$ASSET_UPSTREAM_ID" '{AssetId:$id}')
         ASSET_STATUS_RESP=$(curl -s -X POST "${ASSET_QUERY_URL}" \
           -H "Authorization: Bearer ${NEWAPI_API_KEY}" \
           -H "Content-Type: application/json" \
@@ -776,6 +806,118 @@ if [[ "$MODE" == "test-asset" ]]; then
   log_error "轮询超时（${MAX_POLL_COUNT} 次），素材仍未完成"
   log_info "最后状态: ${CURRENT_STATUS}"
   exit 1
+fi
+
+# ============================================================
+# 查询素材状态模式
+# ============================================================
+if [[ "$MODE" == "query-asset" ]]; then
+  log_title "查询素材状态"
+
+  # 智能解析输入：支持多种格式
+  # 1. asset-20260923121923-gtqgb (原始ID)
+  # 2. asset://asset-20260923121923-gtqgb (asset引用)
+  # 3. 12345 (local_id数字)
+  PARSED_ASSET_ID=""
+  QUERY_BY_LOCAL_ID=false
+
+  if [[ "$QUERY_ASSET_ID" =~ ^asset://(.+)$ ]]; then
+    # asset:// 引用格式，提取真实ID
+    PARSED_ASSET_ID="${BASH_REMATCH[1]}"
+    log_info "检测到 asset:// 引用，提取 ID: ${PARSED_ASSET_ID}"
+  elif [[ "$QUERY_ASSET_ID" =~ ^[0-9]+$ ]]; then
+    # 纯数字，按 local_id 查询
+    PARSED_ASSET_ID="$QUERY_ASSET_ID"
+    QUERY_BY_LOCAL_ID=true
+    log_info "检测到数字 ID，将按 local_id 查询: ${PARSED_ASSET_ID}"
+  else
+    # 原始 asset-id
+    PARSED_ASSET_ID="$QUERY_ASSET_ID"
+  fi
+
+  log_info "API Base URL: ${NEWAPI_BASE_URL}"
+  log_info "查询标识: ${PARSED_ASSET_ID}"
+  log_info "查询方式: $([ "$QUERY_BY_LOCAL_ID" = true ] && echo "local_id" || echo "asset_id")"
+  log_info "接口格式: ${ASSET_API_FORMAT}"
+  echo ""
+
+  # 根据接口格式和查询方式选择不同的查询路径
+  if [[ "$ASSET_API_FORMAT" == "action" ]]; then
+    # Action 格式: POST /api/seedance/assets/v2/?Action=GetAsset&Version=2024-01-01
+    QUERY_URL="${NEWAPI_BASE_URL}/api/seedance/assets/v2/?Action=GetAsset&Version=2024-01-01"
+
+    if [[ "$QUERY_BY_LOCAL_ID" == true ]]; then
+      QUERY_BODY=$(jq -n --argjson lid "$PARSED_ASSET_ID" '{LocalId:$lid}')
+    else
+      QUERY_BODY=$(jq -n --arg id "$PARSED_ASSET_ID" '{AssetId:$id}')
+    fi
+
+    log_info "请求方式: POST"
+    log_info "请求 URL: ${QUERY_URL}"
+    log_info "请求体:"
+    echo "$QUERY_BODY" | jq '.'
+    echo ""
+
+    QUERY_RESP=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${QUERY_URL}" \
+      -H "Authorization: Bearer ${NEWAPI_API_KEY}" \
+      -H "Content-Type: application/json" \
+      -d "$QUERY_BODY")
+  else
+    # RESTful 格式: GET /api/seedance/assets/{id}
+    QUERY_URL="${NEWAPI_BASE_URL}/api/seedance/assets/${PARSED_ASSET_ID}"
+
+    log_info "请求方式: GET"
+    log_info "请求 URL: ${QUERY_URL}"
+    echo ""
+
+    QUERY_RESP=$(curl -s -w "\nHTTP_CODE:%{http_code}" "${QUERY_URL}" \
+      -H "Authorization: Bearer ${NEWAPI_API_KEY}")
+  fi
+
+  # 解析响应
+  QUERY_HTTP_CODE=$(echo "$QUERY_RESP" | grep "HTTP_CODE:" | cut -d: -f2)
+  QUERY_BODY=$(echo "$QUERY_RESP" | sed '/HTTP_CODE:/d')
+
+  log_info "HTTP 状态码: ${QUERY_HTTP_CODE}"
+  echo ""
+  log_info "响应体:"
+  echo "$QUERY_BODY" | jq '.' 2>/dev/null || echo "$QUERY_BODY"
+  echo ""
+
+  # 提取关键信息
+  if [[ "$QUERY_HTTP_CODE" == "200" ]]; then
+    # 两种格式都使用 Result 包裹
+    ASSET_ID=$(echo "$QUERY_BODY" | jq -r '.Result.Id // ""')
+    ASSET_STATUS=$(echo "$QUERY_BODY" | jq -r '.Result.Status // "unknown"')
+    ASSET_NAME=$(echo "$QUERY_BODY" | jq -r '.Result.Name // ""')
+    ASSET_TYPE=$(echo "$QUERY_BODY" | jq -r '.Result.AssetType // ""')
+    GROUP_ID=$(echo "$QUERY_BODY" | jq -r '.Result.GroupId // ""')
+    LOCAL_ID=$(echo "$QUERY_BODY" | jq -r '.Result.LocalId // ""')
+
+    log_title "素材信息"
+    [[ -n "$ASSET_ID" ]] && log_info "素材 ID: ${ASSET_ID}"
+    [[ -n "$LOCAL_ID" ]] && log_info "Local ID: ${LOCAL_ID}"
+    log_info "状态: ${ASSET_STATUS}"
+    [[ -n "$ASSET_NAME" ]] && log_info "名称: ${ASSET_NAME}"
+    [[ -n "$ASSET_TYPE" ]] && log_info "类型: ${ASSET_TYPE}"
+    [[ -n "$GROUP_ID" ]] && log_info "分组 ID: ${GROUP_ID}"
+
+    if [[ "$ASSET_STATUS" == "Active" ]]; then
+      log_ok "素材已激活，可以使用"
+      [[ -n "$ASSET_ID" ]] && echo "" && log_info "asset:// 引用格式: asset://${ASSET_ID}"
+    elif [[ "$ASSET_STATUS" == "Processing" ]] || [[ "$ASSET_STATUS" == "" ]]; then
+      log_warn "素材正在处理中，请稍后再查询"
+    elif [[ "$ASSET_STATUS" == "Failed" ]]; then
+      log_error "素材处理失败"
+    else
+      log_info "素材状态: ${ASSET_STATUS}"
+    fi
+  else
+    log_error "查询失败 (HTTP ${QUERY_HTTP_CODE})"
+    exit 1
+  fi
+
+  exit 0
 fi
 
 echo ""
