@@ -500,20 +500,29 @@ curl -X POST \
   -H 'Authorization: Bearer sk-<NewAPI Token>' \
   -H 'Content-Type: application/json' \
   -d '{
-    "Name": "我的素材组",
-    "Description": "用于存放项目素材"
+    "Name": "demo-portrait-group",
+    "Description": "虚拟人像素材组示例",
+    "GroupType": "AIGC",
+    "ProjectName": "default"
   }'
 ```
+
+**请求参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| Name | string | 是 | 素材组名称 |
+| Description | string | 否 | 素材组描述 |
+| GroupType | string | 否 | 素材组类型，默认 "AIGC" |
+| ProjectName | string | 否 | 项目名称，默认 "default" |
 
 **响应示例：**
 
 ```json
 {
-  "GroupId": "group_xxxxxxxx",
-  "Name": "我的素材组",
-  "Description": "用于存放项目素材",
-  "CreatedAt": 1787912449,
-  "UpdatedAt": 1787912449
+  "Result": {
+    "Id": "group-20240514212750-b5e9m"
+  }
 }
 ```
 
@@ -525,26 +534,31 @@ curl -X POST \
   -H 'Authorization: Bearer sk-<NewAPI Token>' \
   -H 'Content-Type: application/json' \
   -d '{
-    "GroupId": "group_xxxxxxxx",
-    "Type": "image",
-    "Url": "https://example.com/image.jpg",
-    "Name": "参考图片",
-    "Tags": ["参考", "人物"]
+    "GroupId": "group-20240514212750-b5e9m",
+    "URL": "https://example.com/image.jpg",
+    "Name": "demo-portrait-image",
+    "AssetType": "Image",
+    "ProjectName": "default"
   }'
 ```
+
+**请求参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| GroupId | string | 是 | 素材组 ID |
+| URL | string | 是 | 素材文件 URL |
+| Name | string | 是 | 素材名称 |
+| AssetType | string | 是 | 素材类型（Image/Video/Audio） |
+| ProjectName | string | 否 | 项目名称，默认 "default" |
 
 **响应示例：**
 
 ```json
 {
-  "AssetId": "asset_xxxxxxxx",
-  "GroupId": "group_xxxxxxxx",
-  "Type": "image",
-  "Url": "https://example.com/image.jpg",
-  "Name": "参考图片",
-  "Tags": ["参考", "人物"],
-  "CreatedAt": 1787912449,
-  "UpdatedAt": 1787912449
+  "Result": {
+    "Id": "asset-20240514212750-a3f8k"
+  }
 }
 ```
 
@@ -556,33 +570,56 @@ curl -X POST \
   -H 'Authorization: Bearer sk-<NewAPI Token>' \
   -H 'Content-Type: application/json' \
   -d '{
-    "GroupId": "group_xxxxxxxx",
     "PageNumber": 1,
     "PageSize": 20
   }'
 ```
 
+**请求参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| PageNumber | int | 否 | 页码，默认 1 |
+| PageSize | int | 否 | 每页数量，默认 10 |
+| Filter.GroupIds | string[] | 否 | 按分组 ID 过滤 |
+| Filter.Statuses | string[] | 否 | 按状态过滤（Active/Processing/Failed） |
+| ProjectName | string | 否 | 项目名称 |
+
 **响应示例：**
 
 ```json
 {
-  "Assets": [
-    {
-      "AssetId": "asset_xxxxxxxx",
-      "GroupId": "group_xxxxxxxx",
-      "Type": "image",
-      "Url": "https://example.com/image.jpg",
-      "Name": "参考图片",
-      "Tags": ["参考", "人物"],
-      "CreatedAt": 1787912449,
-      "UpdatedAt": 1787912449
-    }
-  ],
-  "Total": 1,
-  "PageNumber": 1,
-  "PageSize": 20
+  "ResponseMetadata": {
+    "RequestId": "202405142130001A2B3C4D5E6F708192",
+    "Action": "ListAssets",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {
+    "Items": [
+      {
+        "Id": "asset-20240514212750-a3f8k",
+        "Name": "demo-portrait-image",
+        "URL": "https://ark-asset.cn-beijing.volcengine.com/...",
+        "GroupId": "group-20240514212750-b5e9m",
+        "AssetType": "Image",
+        "Status": "Active",
+        "ProjectName": "default",
+        "CreateTime": "2024-05-14T21:27:50Z",
+        "UpdateTime": "2024-05-14T21:30:00Z"
+      }
+    ],
+    "TotalCount": 100,
+    "PageNumber": 1,
+    "PageSize": 20
+  }
 }
 ```
+
+**说明：**
+- 列表查询返回本地缓存的数据（性能更好）
+- 单个素材查询时会实时从上游获取最新状态
 
 #### 4. 查询素材组列表
 
@@ -597,23 +634,40 @@ curl -X POST \
   }'
 ```
 
+**请求参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| PageNumber | int | 否 | 页码，默认 1 |
+| PageSize | int | 否 | 每页数量，默认 10 |
+| ProjectName | string | 否 | 项目名称 |
+
 **响应示例：**
 
 ```json
 {
-  "Groups": [
-    {
-      "GroupId": "group_xxxxxxxx",
-      "Name": "我的素材组",
-      "Description": "用于存放项目素材",
-      "AssetCount": 5,
-      "CreatedAt": 1787912449,
-      "UpdatedAt": 1787912449
-    }
-  ],
-  "Total": 1,
-  "PageNumber": 1,
-  "PageSize": 20
+  "ResponseMetadata": {
+    "RequestId": "20260923133134B1E6CA0F0C74501BB986",
+    "Action": "ListAssetGroups",
+    "Version": "2024-01-01",
+    "Service": "ark",
+    "Region": "cn-beijing"
+  },
+  "Result": {
+    "Items": [
+      {
+        "Id": "group-20240514212750-b5e9m",
+        "Name": "demo-portrait-group",
+        "Description": "虚拟人像素材组示例",
+        "GroupType": "AIGC",
+        "CreateTime": "2024-05-14T21:27:50Z",
+        "UpdateTime": "2024-05-14T21:30:00Z"
+      }
+    ],
+    "TotalCount": 5,
+    "PageNumber": 1,
+    "PageSize": 20
+  }
 }
 ```
 
@@ -625,20 +679,31 @@ curl -X POST \
   -H 'Authorization: Bearer sk-<NewAPI Token>' \
   -H 'Content-Type: application/json' \
   -d '{
-    "GroupId": "group_xxxxxxxx"
+    "Id": "group-20240514212750-b5e9m",
+    "ProjectName": "default"
   }'
 ```
+
+**请求参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| Id | string | 是 | 素材组 ID（也支持 GroupId） |
+| ProjectName | string | 否 | 项目名称 |
 
 **响应示例：**
 
 ```json
 {
-  "GroupId": "group_xxxxxxxx",
-  "Name": "我的素材组",
-  "Description": "用于存放项目素材",
-  "AssetCount": 5,
-  "CreatedAt": 1787912449,
-  "UpdatedAt": 1787912449
+  "Result": {
+    "Id": "group-20240514212750-b5e9m",
+    "Name": "demo-portrait-group",
+    "Description": "虚拟人像素材组示例",
+    "GroupType": "AIGC",
+    "ProjectName": "default",
+    "CreateTime": "2024-05-14T21:27:50Z",
+    "UpdateTime": "2024-05-14T21:30:00Z"
+  }
 }
 ```
 
@@ -650,20 +715,29 @@ curl -X POST \
   -H 'Authorization: Bearer sk-<NewAPI Token>' \
   -H 'Content-Type: application/json' \
   -d '{
-    "GroupId": "group_xxxxxxxx",
-    "Name": "更新后的素材组名称",
-    "Description": "更新后的描述"
+    "Id": "group-20240514212750-b5e9m",
+    "Name": "demo-portrait-group-renamed",
+    "Description": "更新后的虚拟人像素材组描述",
+    "ProjectName": "default"
   }'
 ```
+
+**请求参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| Id | string | 是 | 素材组 ID（也支持 GroupId） |
+| Name | string | 否 | 新的素材组名称 |
+| Description | string | 否 | 新的描述 |
+| ProjectName | string | 否 | 项目名称 |
 
 **响应示例：**
 
 ```json
 {
-  "GroupId": "group_xxxxxxxx",
-  "Name": "更新后的素材组名称",
-  "Description": "更新后的描述",
-  "UpdatedAt": 1787912550
+  "Result": {
+    "Id": "group-20240514212750-b5e9m"
+  }
 }
 ```
 
@@ -675,15 +749,23 @@ curl -X POST \
   -H 'Authorization: Bearer sk-<NewAPI Token>' \
   -H 'Content-Type: application/json' \
   -d '{
-    "GroupId": "group_xxxxxxxx"
+    "Id": "group-20240514212750-b5e9m",
+    "ProjectName": "default"
   }'
 ```
+
+**请求参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| Id | string | 是 | 素材组 ID（也支持 GroupId） |
+| ProjectName | string | 否 | 项目名称（可选，会被忽略） |
 
 **响应示例：**
 
 ```json
 {
-  "Success": true
+  "success": true
 }
 ```
 
@@ -695,25 +777,41 @@ curl -X POST \
   -H 'Authorization: Bearer sk-<NewAPI Token>' \
   -H 'Content-Type: application/json' \
   -d '{
-    "AssetId": "asset_xxxxxxxx"
+    "Id": "asset-20240514212750-a3f8k",
+    "ProjectName": "default"
   }'
 ```
+
+**请求参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| Id | string | 是 | 素材 ID（也支持 AssetId） |
+| ProjectName | string | 否 | 项目名称 |
 
 **响应示例：**
 
 ```json
 {
-  "AssetId": "asset_xxxxxxxx",
-  "GroupId": "group_xxxxxxxx",
-  "Type": "image",
-  "Url": "https://example.com/image.jpg",
-  "Name": "参考图片",
-  "Tags": ["参考", "人物"],
-  "Size": 1024000,
-  "CreatedAt": 1787912449,
-  "UpdatedAt": 1787912449
+  "Result": {
+    "Id": "asset-20240514212750-a3f8k",
+    "Name": "demo-portrait-image",
+    "Status": "Active",
+    "GroupId": "group-20240514212750-b5e9m",
+    "AssetType": "Image",
+    "URL": "https://ark-asset.cn-beijing.volcengine.com/...",
+    "CreateTime": "2024-05-14T21:27:50Z",
+    "UpdateTime": "2024-05-14T21:30:00Z",
+    "Moderation": {
+      "Strategy": "Default"
+    }
+  }
 }
 ```
+
+**说明：**
+- 获取素材详情会实时查询上游，返回最新状态和临时签名 URL
+- URL 有效期为 24 小时
 
 #### 9. 更新素材
 
@@ -723,20 +821,27 @@ curl -X POST \
   -H 'Authorization: Bearer sk-<NewAPI Token>' \
   -H 'Content-Type: application/json' \
   -d '{
-    "AssetId": "asset_xxxxxxxx",
-    "Name": "更新后的素材名称",
-    "Tags": ["更新", "新标签"]
+    "Id": "asset-20240514212750-a3f8k",
+    "Name": "demo-portrait-image-renamed",
+    "ProjectName": "default"
   }'
 ```
+
+**请求参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| Id | string | 是 | 素材 ID（也支持 AssetId） |
+| Name | string | 否 | 新的素材名称 |
+| ProjectName | string | 否 | 项目名称 |
 
 **响应示例：**
 
 ```json
 {
-  "AssetId": "asset_xxxxxxxx",
-  "Name": "更新后的素材名称",
-  "Tags": ["更新", "新标签"],
-  "UpdatedAt": 1787912550
+  "Result": {
+    "Id": "asset-20240514212750-a3f8k"
+  }
 }
 ```
 
@@ -748,17 +853,75 @@ curl -X POST \
   -H 'Authorization: Bearer sk-<NewAPI Token>' \
   -H 'Content-Type: application/json' \
   -d '{
-    "AssetId": "asset_xxxxxxxx"
+    "Id": "asset-20240514212750-a3f8k",
+    "ProjectName": "default"
   }'
 ```
+
+**请求参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| Id | string | 是 | 素材 ID（也支持 AssetId） |
+| ProjectName | string | 否 | 项目名称（可选，会被忽略） |
 
 **响应示例：**
 
 ```json
 {
-  "Success": true
+  "success": true
 }
 ```
+
+### 素材类型
+
+| 类型 | 说明 | 用途 |
+| --- | --- | --- |
+| Image | 图片素材 | 作为参考图片用于 image2video 生成 |
+| Video | 视频素材 | 作为参考视频用于视频续写 |
+| Audio | 音频素材 | 作为参考音频用于音频生成 |
+
+### 接口兼容性说明
+
+**字段名兼容：**
+
+本系统完全兼容火山官方 API 格式，支持以下字段名：
+
+| 接口 | 官方字段 | 扩展支持 | 说明 |
+| --- | --- | --- | --- |
+| GetAsset | `Id` | `AssetId` | 两者都支持 |
+| GetAssetGroup | `Id` | `GroupId` | 两者都支持 |
+| UpdateAsset | `Id` | `AssetId` | 两者都支持 |
+| UpdateAssetGroup | `Id` | `GroupId` | 两者都支持 |
+| DeleteAsset | `Id` | `AssetId` | 两者都支持 |
+| DeleteAssetGroup | `Id` | `GroupId` | 两者都支持 |
+
+**ProjectName 字段：**
+- 所有接口都支持可选的 `ProjectName` 字段
+- 创建素材时，如果未指定，默认使用 `"default"`
+- 查询和删除操作中，`ProjectName` 字段可选（会被忽略）
+
+**响应字段完整性：**
+
+| 接口 | 返回字段 | 说明 |
+| --- | --- | --- |
+| CreateAsset | `Id` | 创建成功返回素材 ID |
+| GetAsset | `Id`, `Name`, `Status`, `GroupId`, `AssetType`, `URL`, `CreateTime`, `UpdateTime`, `Moderation` | 完整字段 |
+| UpdateAsset | `Id` | 更新成功返回素材 ID |
+| DeleteAsset | `success: true` | 删除成功标志 |
+| CreateAssetGroup | `Id` | 创建成功返回分组 ID |
+| GetAssetGroup | `Id`, `Name`, `Description`, `GroupType`, `ProjectName`, `CreateTime`, `UpdateTime` | 完整字段 |
+| UpdateAssetGroup | `Id` | 更新成功返回分组 ID |
+| DeleteAssetGroup | `success: true` | 删除成功标志 |
+| ListAssets | 包含 `ResponseMetadata` 和 `Result.Items` | 官方标准格式 |
+| ListAssetGroups | 包含 `ResponseMetadata` 和 `Result.Items` | 官方标准格式 |
+
+**数据来源说明：**
+
+| 接口类型 | 数据来源 | 性能 | 字段完整性 |
+| --- | --- | --- | --- |
+| 单个查询（GetAsset/GetAssetGroup） | 实时查询上游 | 较慢 | 完整（包含临时 URL） |
+| 列表查询（ListAssets/ListAssetGroups） | 本地数据库缓存 | 快速 | 基本字段（不含临时 URL） |
 
 ### 素材类型
 
