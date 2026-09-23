@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -225,6 +226,15 @@ func handleUpdateAsset(c *gin.Context) {
 		}})
 		return
 	}
+
+	// 从 reqBody 中移除 Id 和 AssetId，只保留 Name、ProjectName（忽略 Tags 等其他字段）
+	delete(reqBody, "Id")
+	delete(reqBody, "AssetId")
+	delete(reqBody, "Tags") // 忽略 Tags 字段，保持与官方一致
+
+	// 重新编码 body 供后续 BindJSON 使用
+	newBodyBytes, _ := json.Marshal(reqBody)
+	c.Request.Body = io.NopCloser(bytes.NewReader(newBodyBytes))
 
 	// 将 AssetId 设置到 URL 参数中
 	c.Params = append(c.Params, gin.Param{Key: "id", Value: assetID})
