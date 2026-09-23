@@ -366,12 +366,13 @@ func SeedanceCreateAsset(c *gin.Context) {
 
 	// 解析请求体
 	var req struct {
-		GroupID   string `json:"GroupId"`
-		URL       string `json:"URL"`
-		AssetType string `json:"AssetType"`
-		Name      string `json:"Name"`
-		Force     bool   `json:"Force"` // true=强制重新上传，忽略本地缓存
-		Model     string `json:"Model"` // 可选：指定模型名，用于选择对应渠道
+		GroupID     string `json:"GroupId"`
+		URL         string `json:"URL"`
+		AssetType   string `json:"AssetType"`
+		Name        string `json:"Name"`
+		ProjectName string `json:"ProjectName"` // 官方字段：项目名称（可选）
+		Force       bool   `json:"Force"`       // true=强制重新上传，忽略本地缓存
+		Model       string `json:"Model"`       // 可选：指定模型名，用于选择对应渠道
 	}
 	if err := c.BindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid request"})
@@ -416,10 +417,11 @@ func SeedanceCreateAsset(c *gin.Context) {
 
 	// 使用适配器创建素材
 	createReq := service.CreateAssetRequest{
-		GroupID:   req.GroupID,
-		URL:       req.URL,
-		AssetType: req.AssetType,
-		Name:      req.Name,
+		GroupID:     req.GroupID,
+		URL:         req.URL,
+		AssetType:   req.AssetType,
+		Name:        req.Name,
+		ProjectName: req.ProjectName,
 	}
 
 	resp, err := adapter.CreateAsset(createReq)
