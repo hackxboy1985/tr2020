@@ -107,7 +107,7 @@ func handleGetAssetGroup(c *gin.Context) {
 	SeedanceGetAssetGroup(c)
 }
 
-// handleUpdateAssetGroup 从 body 中提取 GroupId 并调用 SeedancePutAssetGroup
+// handleUpdateAssetGroup 从 body 中提取 GroupId 或 Id 并调用 SeedancePutAssetGroup
 func handleUpdateAssetGroup(c *gin.Context) {
 	bodyBytes, _ := io.ReadAll(c.Request.Body)
 	var reqBody map[string]interface{}
@@ -119,10 +119,15 @@ func handleUpdateAssetGroup(c *gin.Context) {
 		return
 	}
 
-	groupID, ok := reqBody["GroupId"].(string)
-	if !ok || groupID == "" {
+	// 兼容官方格式：优先使用 GroupId，其次使用 Id
+	var groupID string
+	if id, ok := reqBody["GroupId"].(string); ok && id != "" {
+		groupID = id
+	} else if id, ok := reqBody["Id"].(string); ok && id != "" {
+		groupID = id
+	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]interface{}{
-			"message": "GroupId is required",
+			"message": "GroupId or Id is required",
 			"type":    "invalid_request_error",
 		}})
 		return
@@ -133,7 +138,7 @@ func handleUpdateAssetGroup(c *gin.Context) {
 	SeedancePutAssetGroup(c)
 }
 
-// handleDeleteAssetGroup 从 body 中提取 GroupId 并调用 SeedanceDeleteAssetGroup
+// handleDeleteAssetGroup 从 body 中提取 GroupId 或 Id 并调用 SeedanceDeleteAssetGroup
 func handleDeleteAssetGroup(c *gin.Context) {
 	bodyBytes, _ := io.ReadAll(c.Request.Body)
 	var reqBody map[string]interface{}
@@ -145,10 +150,15 @@ func handleDeleteAssetGroup(c *gin.Context) {
 		return
 	}
 
-	groupID, ok := reqBody["GroupId"].(string)
-	if !ok || groupID == "" {
+	// 兼容官方格式：优先使用 GroupId，其次使用 Id
+	var groupID string
+	if id, ok := reqBody["GroupId"].(string); ok && id != "" {
+		groupID = id
+	} else if id, ok := reqBody["Id"].(string); ok && id != "" {
+		groupID = id
+	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]interface{}{
-			"message": "GroupId is required",
+			"message": "GroupId or Id is required",
 			"type":    "invalid_request_error",
 		}})
 		return
@@ -190,7 +200,7 @@ func handleGetAsset(c *gin.Context) {
 	SeedanceGetAsset(c)
 }
 
-// handleUpdateAsset 从 body 中提取 AssetId 并调用 SeedancePutAsset
+// handleUpdateAsset 从 body 中提取 AssetId 或 Id 并调用 SeedancePutAsset
 func handleUpdateAsset(c *gin.Context) {
 	bodyBytes, _ := io.ReadAll(c.Request.Body)
 	var reqBody map[string]interface{}
@@ -202,10 +212,15 @@ func handleUpdateAsset(c *gin.Context) {
 		return
 	}
 
-	assetID, ok := reqBody["AssetId"].(string)
-	if !ok || assetID == "" {
+	// 兼容官方格式：优先使用 AssetId，其次使用 Id
+	var assetID string
+	if id, ok := reqBody["AssetId"].(string); ok && id != "" {
+		assetID = id
+	} else if id, ok := reqBody["Id"].(string); ok && id != "" {
+		assetID = id
+	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]interface{}{
-			"message": "AssetId is required",
+			"message": "AssetId or Id is required",
 			"type":    "invalid_request_error",
 		}})
 		return
@@ -216,7 +231,7 @@ func handleUpdateAsset(c *gin.Context) {
 	SeedancePutAsset(c)
 }
 
-// handleDeleteAsset 从 body 中提取 AssetId 并调用 SeedanceDeleteAsset
+// handleDeleteAsset 从 body 中提取 AssetId 或 Id 并调用 SeedanceDeleteAsset
 func handleDeleteAsset(c *gin.Context) {
 	bodyBytes, _ := io.ReadAll(c.Request.Body)
 	var reqBody map[string]interface{}
@@ -228,10 +243,15 @@ func handleDeleteAsset(c *gin.Context) {
 		return
 	}
 
-	assetID, ok := reqBody["AssetId"].(string)
-	if !ok || assetID == "" {
+	// 兼容官方格式：优先使用 AssetId，其次使用 Id
+	var assetID string
+	if id, ok := reqBody["AssetId"].(string); ok && id != "" {
+		assetID = id
+	} else if id, ok := reqBody["Id"].(string); ok && id != "" {
+		assetID = id
+	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": map[string]interface{}{
-			"message": "AssetId is required",
+			"message": "AssetId or Id is required",
 			"type":    "invalid_request_error",
 		}})
 		return
