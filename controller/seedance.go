@@ -379,6 +379,11 @@ func SeedanceCreateAsset(c *gin.Context) {
 		return
 	}
 
+	// 如果未指定 ProjectName，默认使用 "default"
+	if req.ProjectName == "" {
+		req.ProjectName = "default"
+	}
+
 	// 获取适配器（支持根据模型名选择渠道）
 	adapter, channel, err := service.GetAssetAdapterByModel(userGroup, req.Model)
 	if err != nil {
