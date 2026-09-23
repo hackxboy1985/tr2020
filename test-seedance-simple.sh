@@ -19,6 +19,9 @@ Seedance 2.0 测试脚本
   ./test-seedance-simple.sh --fetch-ark <task_id> [选项]
   ./test-seedance-simple.sh --test-asset [选项]
   ./test-seedance-simple.sh --query-asset <asset_id> [选项]
+  ./test-seedance-simple.sh --list-assets [选项]
+  ./test-seedance-simple.sh --query-group <group_id> [选项]
+  ./test-seedance-simple.sh --list-groups [选项]
 
 命令:
   --execute          执行完整测试（创建素材 + 提交视频任务 + 轮询状态）
@@ -29,9 +32,12 @@ Seedance 2.0 测试脚本
                        - asset-20260923121923-gtqgb (原始 asset_id)
                        - asset://asset-20260923121923-gtqgb (asset 引用格式)
                        - 12345 (local_id 数字，仅 Action 格式支持)
+  --list-assets      查询资产列表（支持分页和过滤）
+  --query-group      查询指定分组的状态
+  --list-groups      查询分组列表（支持分页）
 
 必需参数:
-  需要指定 --execute 或 --fetch-ark 或 --test-asset 或 --query-asset 其中之一
+  需要指定以上命令之一
 
 资产接口格式选项:
   ASSET_API_FORMAT=restful (默认)
@@ -93,6 +99,27 @@ Seedance 2.0 测试脚本
   # 示例 10: 使用 local_id 数字查询
   ./test-seedance-simple.sh --query-asset 12345
 
+  # 示例 11: 查询资产列表（RESTful 格式）
+  ./test-seedance-simple.sh --list-assets
+
+  # 示例 12: 查询资产列表（Action 格式，带分页）
+  PAGE=2 PAGE_SIZE=20 ASSET_API_FORMAT=action ./test-seedance-simple.sh --list-assets
+
+  # 示例 13: 查询资产列表（过滤特定分组）
+  FILTER_GROUP_ID=group-20260923113043-xtrjc ./test-seedance-simple.sh --list-assets
+
+  # 示例 14: 查询分组状态（RESTful 格式）
+  ./test-seedance-simple.sh --query-group group-20260923113043-xtrjc
+
+  # 示例 15: 查询分组状态（Action 格式）
+  ASSET_API_FORMAT=action ./test-seedance-simple.sh --query-group group-20260923113043-xtrjc
+
+  # 示例 16: 查询分组列表
+  ./test-seedance-simple.sh --list-groups
+
+  # 示例 17: 查询分组列表（Action 格式，带分页）
+  PAGE=1 PAGE_SIZE=15 ASSET_API_FORMAT=action ./test-seedance-simple.sh --list-groups
+
 注意事项:
   - 首次运行会自动上传角色图到资产库
   - 资产激活可能需要等待 10-30 秒
@@ -132,6 +159,22 @@ elif [[ "$1" == "--query-asset" ]]; then
     exit 1
   fi
   MODE="query-asset"
+elif [[ "$1" == "--list-assets" ]]; then
+  MODE="list-assets"
+elif [[ "$1" == "--query-group" ]]; then
+  # 查询分组状态模式
+  QUERY_GROUP_ID="$2"
+  if [[ -z "$QUERY_GROUP_ID" ]]; then
+    echo -e "${RED}错误: 缺少分组 ID${NC}"
+    echo "用法: $0 --query-group <group_id>"
+    echo "示例: $0 --query-group group-20260923113043-xtrjc"
+    echo ""
+    echo "提示: 可通过 ASSET_API_FORMAT 环境变量指定接口格式（restful 或 action）"
+    exit 1
+  fi
+  MODE="query-group"
+elif [[ "$1" == "--list-groups" ]]; then
+  MODE="list-groups"
 elif [[ "$1" == "--execute" ]]; then
   MODE="execute"
 elif [[ "$1" == "--test-asset" ]]; then
@@ -142,12 +185,20 @@ fi
 
 # ---------- 配置区（按需修改）----------
 NEWAPI_BASE_URL="${NEWAPI_BASE_URL:-http://book2:3000}"
-NEWAPI_API_KEY="${NEWAPI_API_KEY:-sk-2V6P5nj3JLnJrSprBxHe4pdwkttZEFJxYPeYcVjCK7g7QHX}"
+NEWAPI_API_KEY="${NEWAPI_API_KEY:-sk-2V6P5nj3JLnJrSprBxHe4pdwkttZEFJxYPeYcVjCK7g7QHXO}"
 
 # 资产接口格式：
 #   "restful" - RESTful 格式（默认）: POST /api/seedance/assets
 #   "action"  - Action 格式: POST /api/seedance/assets/v2/?Action=CreateAsset&Version=2024-01-01
 ASSET_API_FORMAT="${ASSET_API_FORMAT:-restful}"
+
+# 分页参数
+PAGE="${PAGE:-1}"
+PAGE_SIZE="${PAGE_SIZE:-10}"
+
+# 过滤参数（用于 list-assets）
+FILTER_GROUP_ID="${FILTER_GROUP_ID:-}"
+FILTER_UPSTREAM_ASSET_ID="${FILTER_UPSTREAM_ASSET_ID:-}"
 
 # 视频模型 260128
 MODEL="${MODEL:-doubao-seedance-2-0}"
@@ -342,8 +393,8 @@ query_log() {
 
 check_deps
 
-# 如果是 ARK 查询模式或素材查询模式，跳过主流程
-if [[ "$MODE" == "fetch-ark" ]] || [[ "$MODE" == "query-asset" ]]; then
+# 如果是查询模式，跳过主流程
+if [[ "$MODE" == "fetch-ark" ]] || [[ "$MODE" == "query-asset" ]] || [[ "$MODE" == "list-assets" ]] || [[ "$MODE" == "query-group" ]] || [[ "$MODE" == "list-groups" ]]; then
   # 查询逻辑在后面
   :
 else
@@ -849,7 +900,8 @@ if [[ "$MODE" == "query-asset" ]]; then
     if [[ "$QUERY_BY_LOCAL_ID" == true ]]; then
       QUERY_BODY=$(jq -n --argjson lid "$PARSED_ASSET_ID" '{LocalId:$lid}')
     else
-      QUERY_BODY=$(jq -n --arg id "$PARSED_ASSET_ID" '{AssetId:$id}')
+      # 兼容官方格式：同时支持 AssetId 和 Id 字段
+      QUERY_BODY=$(jq -n --arg id "$PARSED_ASSET_ID" '{AssetId:$id,Id:$id}')
     fi
 
     log_info "请求方式: POST"
@@ -912,6 +964,239 @@ if [[ "$MODE" == "query-asset" ]]; then
     else
       log_info "素材状态: ${ASSET_STATUS}"
     fi
+  else
+    log_error "查询失败 (HTTP ${QUERY_HTTP_CODE})"
+    exit 1
+  fi
+
+  exit 0
+fi
+
+# ============================================================
+# 查询资产列表模式
+# ============================================================
+if [[ "$MODE" == "list-assets" ]]; then
+  log_title "查询资产列表"
+
+  log_info "API Base URL: ${NEWAPI_BASE_URL}"
+  log_info "接口格式: ${ASSET_API_FORMAT}"
+  log_info "分页: 第 ${PAGE} 页，每页 ${PAGE_SIZE} 条"
+  [[ -n "$FILTER_GROUP_ID" ]] && log_info "过滤分组: ${FILTER_GROUP_ID}"
+  [[ -n "$FILTER_UPSTREAM_ASSET_ID" ]] && log_info "过滤素材ID: ${FILTER_UPSTREAM_ASSET_ID}"
+  echo ""
+
+  # 根据接口格式选择不同的查询路径
+  if [[ "$ASSET_API_FORMAT" == "action" ]]; then
+    # Action 格式: POST /api/seedance/assets/v2/?Action=ListAssets&Version=2024-01-01
+    QUERY_URL="${NEWAPI_BASE_URL}/api/seedance/assets/v2/?Action=ListAssets&Version=2024-01-01"
+
+    QUERY_BODY=$(jq -n \
+      --argjson page "$PAGE" \
+      --argjson size "$PAGE_SIZE" \
+      --arg gid "$FILTER_GROUP_ID" \
+      --arg aid "$FILTER_UPSTREAM_ASSET_ID" \
+      '{PageNumber:$page,PageSize:$size} + (if $gid != "" then {GroupId:$gid} else {} end) + (if $aid != "" then {Id:$aid} else {} end)')
+
+    log_info "请求方式: POST"
+    log_info "请求 URL: ${QUERY_URL}"
+    log_info "请求体:"
+    echo "$QUERY_BODY" | jq '.'
+    echo ""
+
+    QUERY_RESP=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${QUERY_URL}" \
+      -H "Authorization: Bearer ${NEWAPI_API_KEY}" \
+      -H "Content-Type: application/json" \
+      -d "$QUERY_BODY")
+  else
+    # RESTful 格式: GET /api/seedance/assets?page=1&page_size=10
+    QUERY_URL="${NEWAPI_BASE_URL}/api/seedance/assets?page=${PAGE}&page_size=${PAGE_SIZE}"
+    [[ -n "$FILTER_GROUP_ID" ]] && QUERY_URL="${QUERY_URL}&group_id=${FILTER_GROUP_ID}"
+    [[ -n "$FILTER_UPSTREAM_ASSET_ID" ]] && QUERY_URL="${QUERY_URL}&upstream_asset_id=${FILTER_UPSTREAM_ASSET_ID}"
+
+    log_info "请求方式: GET"
+    log_info "请求 URL: ${QUERY_URL}"
+    echo ""
+
+    QUERY_RESP=$(curl -s -w "\nHTTP_CODE:%{http_code}" "${QUERY_URL}" \
+      -H "Authorization: Bearer ${NEWAPI_API_KEY}")
+  fi
+
+  QUERY_HTTP_CODE=$(echo "$QUERY_RESP" | grep "HTTP_CODE:" | cut -d: -f2)
+  QUERY_BODY=$(echo "$QUERY_RESP" | sed '/HTTP_CODE:/d')
+
+  log_info "HTTP 状态码: ${QUERY_HTTP_CODE}"
+  echo ""
+  log_info "响应体:"
+  echo "$QUERY_BODY" | jq '.'
+  echo ""
+
+  # 提取资产列表
+  if [[ "$QUERY_HTTP_CODE" == "200" ]]; then
+    if [[ "$ASSET_API_FORMAT" == "action" ]]; then
+      TOTAL_COUNT=$(echo "$QUERY_BODY" | jq -r '.Result.TotalCount // 0')
+      ITEMS_COUNT=$(echo "$QUERY_BODY" | jq -r '.Result.Items | length')
+    else
+      TOTAL_COUNT=$(echo "$QUERY_BODY" | jq -r '.data.total // 0')
+      ITEMS_COUNT=$(echo "$QUERY_BODY" | jq -r '.data.items | length')
+    fi
+
+    log_title "资产列表统计"
+    log_info "总数: ${TOTAL_COUNT}"
+    log_info "当前页数量: ${ITEMS_COUNT}"
+    log_ok "查询成功"
+  else
+    log_error "查询失败 (HTTP ${QUERY_HTTP_CODE})"
+    exit 1
+  fi
+
+  exit 0
+fi
+
+# ============================================================
+# 查询分组模式
+# ============================================================
+if [[ "$MODE" == "query-group" ]]; then
+  log_title "查询分组状态"
+
+  # 智能解析输入：支持多种格式
+  PARSED_GROUP_ID=""
+  if [[ "$QUERY_GROUP_ID" =~ ^group://(.+)$ ]]; then
+    # group:// 引用格式，提取真实ID
+    PARSED_GROUP_ID="${BASH_REMATCH[1]}"
+    log_info "检测到 group:// 引用，提取 ID: ${PARSED_GROUP_ID}"
+  else
+    # 原始 group-id
+    PARSED_GROUP_ID="$QUERY_GROUP_ID"
+  fi
+
+  log_info "API Base URL: ${NEWAPI_BASE_URL}"
+  log_info "查询标识: ${PARSED_GROUP_ID}"
+  log_info "接口格式: ${ASSET_API_FORMAT}"
+  echo ""
+
+  # 根据接口格式选择不同的查询路径
+  if [[ "$ASSET_API_FORMAT" == "action" ]]; then
+    # Action 格式: POST /api/seedance/assets/v2/?Action=GetAssetGroup&Version=2024-01-01
+    QUERY_URL="${NEWAPI_BASE_URL}/api/seedance/assets/v2/?Action=GetAssetGroup&Version=2024-01-01"
+    # 兼容官方格式：同时支持 GroupId 和 Id 字段
+    QUERY_BODY=$(jq -n --arg id "$PARSED_GROUP_ID" '{GroupId:$id,Id:$id}')
+
+    log_info "请求方式: POST"
+    log_info "请求 URL: ${QUERY_URL}"
+    log_info "请求体:"
+    echo "$QUERY_BODY" | jq '.'
+    echo ""
+
+    QUERY_RESP=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${QUERY_URL}" \
+      -H "Authorization: Bearer ${NEWAPI_API_KEY}" \
+      -H "Content-Type: application/json" \
+      -d "$QUERY_BODY")
+  else
+    # RESTful 格式: GET /api/seedance/asset-groups/{id}
+    QUERY_URL="${NEWAPI_BASE_URL}/api/seedance/asset-groups/${PARSED_GROUP_ID}"
+
+    log_info "请求方式: GET"
+    log_info "请求 URL: ${QUERY_URL}"
+    echo ""
+
+    QUERY_RESP=$(curl -s -w "\nHTTP_CODE:%{http_code}" "${QUERY_URL}" \
+      -H "Authorization: Bearer ${NEWAPI_API_KEY}")
+  fi
+
+  QUERY_HTTP_CODE=$(echo "$QUERY_RESP" | grep "HTTP_CODE:" | cut -d: -f2)
+  QUERY_BODY=$(echo "$QUERY_RESP" | sed '/HTTP_CODE:/d')
+
+  log_info "HTTP 状态码: ${QUERY_HTTP_CODE}"
+  echo ""
+  log_info "响应体:"
+  echo "$QUERY_BODY" | jq '.'
+  echo ""
+
+  # 提取分组信息
+  if [[ "$QUERY_HTTP_CODE" == "200" ]]; then
+    GROUP_ID=$(echo "$QUERY_BODY" | jq -r '.Result.Id // ""')
+    GROUP_NAME=$(echo "$QUERY_BODY" | jq -r '.Result.Name // ""')
+    GROUP_DESC=$(echo "$QUERY_BODY" | jq -r '.Result.Description // ""')
+    GROUP_TYPE=$(echo "$QUERY_BODY" | jq -r '.Result.GroupType // ""')
+
+    log_title "分组信息"
+    [[ -n "$GROUP_ID" ]] && log_info "分组 ID: ${GROUP_ID}"
+    [[ -n "$GROUP_NAME" ]] && log_info "名称: ${GROUP_NAME}"
+    [[ -n "$GROUP_DESC" ]] && log_info "描述: ${GROUP_DESC}"
+    [[ -n "$GROUP_TYPE" ]] && log_info "类型: ${GROUP_TYPE}"
+
+    log_ok "查询成功"
+    [[ -n "$GROUP_ID" ]] && echo "" && log_info "group:// 引用格式: group://${GROUP_ID}"
+  else
+    log_error "查询失败 (HTTP ${QUERY_HTTP_CODE})"
+    exit 1
+  fi
+
+  exit 0
+fi
+
+# ============================================================
+# 查询分组列表模式
+# ============================================================
+if [[ "$MODE" == "list-groups" ]]; then
+  log_title "查询分组列表"
+
+  log_info "API Base URL: ${NEWAPI_BASE_URL}"
+  log_info "接口格式: ${ASSET_API_FORMAT}"
+  log_info "分页: 第 ${PAGE} 页，每页 ${PAGE_SIZE} 条"
+  echo ""
+
+  # 根据接口格式选择不同的查询路径
+  if [[ "$ASSET_API_FORMAT" == "action" ]]; then
+    # Action 格式: POST /api/seedance/assets/v2/?Action=ListAssetGroups&Version=2024-01-01
+    QUERY_URL="${NEWAPI_BASE_URL}/api/seedance/assets/v2/?Action=ListAssetGroups&Version=2024-01-01"
+    QUERY_BODY=$(jq -n --argjson page "$PAGE" --argjson size "$PAGE_SIZE" '{PageNumber:$page,PageSize:$size}')
+
+    log_info "请求方式: POST"
+    log_info "请求 URL: ${QUERY_URL}"
+    log_info "请求体:"
+    echo "$QUERY_BODY" | jq '.'
+    echo ""
+
+    QUERY_RESP=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${QUERY_URL}" \
+      -H "Authorization: Bearer ${NEWAPI_API_KEY}" \
+      -H "Content-Type: application/json" \
+      -d "$QUERY_BODY")
+  else
+    # RESTful 格式: GET /api/seedance/asset-groups?page=1&page_size=10
+    QUERY_URL="${NEWAPI_BASE_URL}/api/seedance/asset-groups?page=${PAGE}&page_size=${PAGE_SIZE}"
+
+    log_info "请求方式: GET"
+    log_info "请求 URL: ${QUERY_URL}"
+    echo ""
+
+    QUERY_RESP=$(curl -s -w "\nHTTP_CODE:%{http_code}" "${QUERY_URL}" \
+      -H "Authorization: Bearer ${NEWAPI_API_KEY}")
+  fi
+
+  QUERY_HTTP_CODE=$(echo "$QUERY_RESP" | grep "HTTP_CODE:" | cut -d: -f2)
+  QUERY_BODY=$(echo "$QUERY_RESP" | sed '/HTTP_CODE:/d')
+
+  log_info "HTTP 状态码: ${QUERY_HTTP_CODE}"
+  echo ""
+  log_info "响应体:"
+  echo "$QUERY_BODY" | jq '.'
+  echo ""
+
+  # 提取分组列表
+  if [[ "$QUERY_HTTP_CODE" == "200" ]]; then
+    if [[ "$ASSET_API_FORMAT" == "action" ]]; then
+      TOTAL_COUNT=$(echo "$QUERY_BODY" | jq -r '.Result.TotalCount // 0')
+      ITEMS_COUNT=$(echo "$QUERY_BODY" | jq -r '.Result.Items | length')
+    else
+      TOTAL_COUNT=$(echo "$QUERY_BODY" | jq -r '.data.total // 0')
+      ITEMS_COUNT=$(echo "$QUERY_BODY" | jq -r '.data.items | length')
+    fi
+
+    log_title "分组列表统计"
+    log_info "总数: ${TOTAL_COUNT}"
+    log_info "当前页数量: ${ITEMS_COUNT}"
+    log_ok "查询成功"
   else
     log_error "查询失败 (HTTP ${QUERY_HTTP_CODE})"
     exit 1
