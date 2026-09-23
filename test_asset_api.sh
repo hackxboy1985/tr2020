@@ -18,7 +18,7 @@
 set -u
 
 BASE_URL="${BASE_URL:-http://book2:3000}"
-API_KEY="${API_KEY:-}"
+API_KEY="${API_KEY:-sk-2V6P5nj3JLnJrSprBxHe4pdwkttZEFJxYPeYcVjCK7g7QHXO}"
 PROJECT_NAME="${PROJECT_NAME:-default}"
 VERSION="${VERSION:-2024-01-01}"
 
