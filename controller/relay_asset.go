@@ -134,6 +134,14 @@ func handleUpdateAssetGroup(c *gin.Context) {
 		return
 	}
 
+	// 从 reqBody 中移除 Id 和 GroupId，只保留更新字段
+	delete(reqBody, "Id")
+	delete(reqBody, "GroupId")
+
+	// 重新编码 body 供后续 BindJSON 使用
+	newBodyBytes, _ := json.Marshal(reqBody)
+	c.Request.Body = io.NopCloser(bytes.NewReader(newBodyBytes))
+
 	// 将 GroupId 设置到 URL 参数中
 	c.Params = append(c.Params, gin.Param{Key: "id", Value: groupID})
 	SeedancePutAssetGroup(c)
