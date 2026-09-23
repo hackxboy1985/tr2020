@@ -188,9 +188,15 @@ func (a *GatewayAssetAdapter) GetAsset(assetID string, query url.Values) (*Asset
 
 	var resp struct {
 		Result struct {
-			ID     string `json:"Id"`
-			Status string `json:"Status"`
-			Name   string `json:"Name"`
+			ID         string      `json:"Id"`
+			Status     string      `json:"Status"`
+			Name       string      `json:"Name"`
+			GroupID    string      `json:"GroupId"`
+			AssetType  string      `json:"AssetType"`
+			URL        string      `json:"URL"`
+			CreateTime string      `json:"CreateTime"`
+			UpdateTime string      `json:"UpdateTime"`
+			Moderation interface{} `json:"Moderation"`
 		} `json:"Result"`
 	}
 	if err := common.Unmarshal(respBody, &resp); err != nil {
@@ -198,10 +204,16 @@ func (a *GatewayAssetAdapter) GetAsset(assetID string, query url.Values) (*Asset
 	}
 
 	return &AssetResponse{
-		ID:      resp.Result.ID,
-		Name:    resp.Result.Name,
-		Status:  resp.Result.Status,
-		RawData: string(respBody),
+		ID:         resp.Result.ID,
+		Name:       resp.Result.Name,
+		Status:     resp.Result.Status,
+		GroupID:    resp.Result.GroupID,
+		AssetType:  resp.Result.AssetType,
+		URL:        resp.Result.URL,
+		CreateTime: resp.Result.CreateTime,
+		UpdateTime: resp.Result.UpdateTime,
+		Moderation: resp.Result.Moderation,
+		RawData:    string(respBody),
 	}, nil
 }
 

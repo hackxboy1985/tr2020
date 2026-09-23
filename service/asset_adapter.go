@@ -75,11 +75,15 @@ type AssetGroupResponse struct {
 
 // AssetResponse 素材响应（统一格式）
 type AssetResponse struct {
-	ID          string `json:"Id"`
-	GroupID     string `json:"GroupId"`
-	Name        string `json:"Name"`
-	AssetType   string `json:"AssetType"`
-	Status      string `json:"Status"`
-	SourceURL   string `json:"SourceUrl,omitempty"`
-	RawData     string `json:"-"` // 原始响应数据
+	ID          string      `json:"Id"`
+	GroupID     string      `json:"GroupId"`
+	Name        string      `json:"Name"`
+	AssetType   string      `json:"AssetType"`
+	Status      string      `json:"Status"`
+	SourceURL   string      `json:"SourceUrl,omitempty"`
+	URL         string      `json:"URL,omitempty"`
+	CreateTime  string      `json:"CreateTime,omitempty"`
+	UpdateTime  string      `json:"UpdateTime,omitempty"`
+	Moderation  interface{} `json:"Moderation,omitempty"`
+	RawData     string      `json:"-"` // 原始响应数据
 }

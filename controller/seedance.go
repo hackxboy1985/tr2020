@@ -600,6 +600,21 @@ func SeedanceGetAsset(c *gin.Context) {
 		"GroupId":   resp.GroupID,
 		"AssetType": resp.AssetType,
 	}
+
+	// 添加可选字段
+	if resp.URL != "" {
+		result["URL"] = resp.URL
+	}
+	if resp.CreateTime != "" {
+		result["CreateTime"] = resp.CreateTime
+	}
+	if resp.UpdateTime != "" {
+		result["UpdateTime"] = resp.UpdateTime
+	}
+	if resp.Moderation != nil {
+		result["Moderation"] = resp.Moderation
+	}
+
 	c.JSON(http.StatusOK, gin.H{"Result": result})
 }
 

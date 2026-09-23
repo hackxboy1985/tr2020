@@ -218,23 +218,31 @@ func (a *KwjmAssetAdapter) GetAsset(assetID string, query url.Values) (*AssetRes
 
 	// KWJM 查询接口返回完整信息
 	var resp struct {
-		ID        string `json:"Id"`
-		Name      string `json:"Name"`
-		Status    string `json:"Status"`
-		GroupID   string `json:"GroupId"`
-		AssetType string `json:"AssetType"`
+		ID         string      `json:"Id"`
+		Name       string      `json:"Name"`
+		Status     string      `json:"Status"`
+		GroupID    string      `json:"GroupId"`
+		AssetType  string      `json:"AssetType"`
+		URL        string      `json:"URL"`
+		CreateTime string      `json:"CreateTime"`
+		UpdateTime string      `json:"UpdateTime"`
+		Moderation interface{} `json:"Moderation"`
 	}
 	if err := common.Unmarshal(respBody, &resp); err != nil {
 		return nil, fmt.Errorf("parse response failed: %w", err)
 	}
 
 	return &AssetResponse{
-		ID:        resp.ID,
-		Name:      resp.Name,
-		Status:    resp.Status,
-		GroupID:   resp.GroupID,
-		AssetType: resp.AssetType,
-		RawData:   string(respBody),
+		ID:         resp.ID,
+		Name:       resp.Name,
+		Status:     resp.Status,
+		GroupID:    resp.GroupID,
+		AssetType:  resp.AssetType,
+		URL:        resp.URL,
+		CreateTime: resp.CreateTime,
+		UpdateTime: resp.UpdateTime,
+		Moderation: resp.Moderation,
+		RawData:    string(respBody),
 	}, nil
 }
 
