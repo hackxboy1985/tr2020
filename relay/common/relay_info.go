@@ -239,6 +239,9 @@ func (info *RelayInfo) InitChannelMeta(c *gin.Context) {
 	if info.Request != nil {
 		info.Request.SetModelName(info.OriginModelName)
 	}
+
+	// DEBUG: 打印 InitChannelMeta 后的模型名
+	common.SysLog(fmt.Sprintf("[InitChannelMeta] OriginModelName=%s, UpstreamModelName=%s", info.OriginModelName, info.UpstreamModelName))
 }
 
 func (info *RelayInfo) ToString() string {

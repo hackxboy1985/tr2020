@@ -70,6 +70,9 @@ func GeminiHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 		return types.NewError(err, types.ErrorCodeChannelModelMappedError, types.ErrOptionWithSkipRetry())
 	}
 
+	// DEBUG: 打印 ModelMappedHelper 后的模型名
+	common.SysLog(fmt.Sprintf("[ModelMappedHelper] OriginModelName=%s, UpstreamModelName=%s, IsModelMapped=%v", info.OriginModelName, info.UpstreamModelName, info.IsModelMapped))
+
 	if model_setting.GetGeminiSettings().ThinkingAdapterEnabled {
 		if isNoThinkingRequest(request) {
 			// check is thinking
