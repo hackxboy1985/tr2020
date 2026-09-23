@@ -274,15 +274,20 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	}
 	upstreamURL := fmt.Sprintf("%s%s", a.baseURL, upstreamPath)
 
-	// 打印调试信息
-	common.SysLog(fmt.Sprintf("[Doubao Video] ========== 上游请求信息 =========="))
-	common.SysLog(fmt.Sprintf("[Doubao Video] Base URL: %s", a.baseURL))
-	common.SysLog(fmt.Sprintf("[Doubao Video] Generate Path: %s", a.videoGeneratePath))
-	common.SysLog(fmt.Sprintf("[Doubao Video] Fetch Path: %s", a.videoFetchPath))
-	common.SysLog(fmt.Sprintf("[Doubao Video] 完整上游 URL: %s", upstreamURL))
-	common.SysLog(fmt.Sprintf("[Doubao Video] 上游模型名: %s", info.UpstreamModelName))
-	common.SysLog(fmt.Sprintf("[Doubao Video] 请求体: %s", string(data)))
-	common.SysLog(fmt.Sprintf("[Doubao Video] ====================================="))
+	// 只在渠道ID为8时打印调试信息
+	if info.ChannelId == 8 {
+		common.SysLog(fmt.Sprintf("[Doubao Video] ========== 上游请求信息 =========="))
+		common.SysLog(fmt.Sprintf("[Doubao Video] Channel ID: %d", info.ChannelId))
+		common.SysLog(fmt.Sprintf("[Doubao Video] Base URL: %s", a.baseURL))
+		common.SysLog(fmt.Sprintf("[Doubao Video] Generate Path: %s", a.videoGeneratePath))
+		common.SysLog(fmt.Sprintf("[Doubao Video] Fetch Path: %s", a.videoFetchPath))
+		common.SysLog(fmt.Sprintf("[Doubao Video] 完整上游 URL: %s", upstreamURL))
+		common.SysLog(fmt.Sprintf("[Doubao Video] 原始模型名: %s", info.OriginModelName))
+		common.SysLog(fmt.Sprintf("[Doubao Video] 上游模型名: %s", info.UpstreamModelName))
+		common.SysLog(fmt.Sprintf("[Doubao Video] 是否模型映射: %v", info.IsModelMapped))
+		common.SysLog(fmt.Sprintf("[Doubao Video] 请求体: %s", string(data)))
+		common.SysLog(fmt.Sprintf("[Doubao Video] ====================================="))
+	}
 
 	// 保存到 context，供 savePrompt 写入 prompt_logs.request_body
 	c.Set(string(constant.ContextKeyVideoRequestBody), string(data))
