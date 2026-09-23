@@ -46,6 +46,7 @@ type CreateAssetGroupRequest struct {
 type UpdateAssetGroupRequest struct {
 	Name        string `json:"Name,omitempty"`
 	Description string `json:"Description,omitempty"`
+	ProjectName string `json:"ProjectName,omitempty"`
 }
 
 // CreateAssetRequest 创建素材请求
@@ -59,7 +60,8 @@ type CreateAssetRequest struct {
 
 // UpdateAssetRequest 更新素材请求
 type UpdateAssetRequest struct {
-	Name string `json:"Name,omitempty"`
+	Name        string `json:"Name,omitempty"`
+	ProjectName string `json:"ProjectName,omitempty"`
 }
 
 // ===== 响应结构体（统一格式）=====
@@ -70,6 +72,9 @@ type AssetGroupResponse struct {
 	Name        string `json:"Name"`
 	Description string `json:"Description"`
 	GroupType   string `json:"GroupType"`
+	ProjectName string `json:"ProjectName,omitempty"`
+	CreateTime  string `json:"CreateTime,omitempty"`
+	UpdateTime  string `json:"UpdateTime,omitempty"`
 	RawData     string `json:"-"` // 原始响应数据，用于保存到数据库
 }
 

@@ -92,6 +92,9 @@ func (a *KwjmAssetAdapter) GetAssetGroup(groupID string) (*AssetGroupResponse, e
 		Name        string `json:"Name"`
 		Description string `json:"Description"`
 		GroupType   string `json:"GroupType"`
+		ProjectName string `json:"ProjectName"`
+		CreateTime  string `json:"CreateTime"`
+		UpdateTime  string `json:"UpdateTime"`
 	}
 	if err := common.Unmarshal(respBody, &resp); err != nil {
 		return nil, fmt.Errorf("parse response failed: %w", err)
@@ -102,6 +105,9 @@ func (a *KwjmAssetAdapter) GetAssetGroup(groupID string) (*AssetGroupResponse, e
 		Name:        resp.Name,
 		Description: resp.Description,
 		GroupType:   resp.GroupType,
+		ProjectName: resp.ProjectName,
+		CreateTime:  resp.CreateTime,
+		UpdateTime:  resp.UpdateTime,
 		RawData:     string(respBody),
 	}, nil
 }

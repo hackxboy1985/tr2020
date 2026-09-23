@@ -81,10 +81,13 @@ func (a *GatewayAssetAdapter) GetAssetGroup(groupID string) (*AssetGroupResponse
 
 	var resp struct {
 		Result struct {
-			ID   string `json:"Id"`
-			Name string `json:"Name"`
-			Desc string `json:"Description"`
-			Type string `json:"GroupType"`
+			ID          string `json:"Id"`
+			Name        string `json:"Name"`
+			Desc        string `json:"Description"`
+			Type        string `json:"GroupType"`
+			ProjectName string `json:"ProjectName"`
+			CreateTime  string `json:"CreateTime"`
+			UpdateTime  string `json:"UpdateTime"`
 		} `json:"Result"`
 	}
 	if err := common.Unmarshal(respBody, &resp); err != nil {
@@ -96,6 +99,9 @@ func (a *GatewayAssetAdapter) GetAssetGroup(groupID string) (*AssetGroupResponse
 		Name:        resp.Result.Name,
 		Description: resp.Result.Desc,
 		GroupType:   resp.Result.Type,
+		ProjectName: resp.Result.ProjectName,
+		CreateTime:  resp.Result.CreateTime,
+		UpdateTime:  resp.Result.UpdateTime,
 		RawData:     string(respBody),
 	}, nil
 }

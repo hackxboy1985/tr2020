@@ -219,6 +219,18 @@ func SeedanceGetAssetGroup(c *gin.Context) {
 		"Description": resp.Description,
 		"GroupType":   resp.GroupType,
 	}
+
+	// 添加可选字段
+	if resp.ProjectName != "" {
+		result["ProjectName"] = resp.ProjectName
+	}
+	if resp.CreateTime != "" {
+		result["CreateTime"] = resp.CreateTime
+	}
+	if resp.UpdateTime != "" {
+		result["UpdateTime"] = resp.UpdateTime
+	}
+
 	c.JSON(http.StatusOK, gin.H{"Result": result})
 }
 
