@@ -17,7 +17,7 @@
 
 set -u
 
-BASE_URL="${BASE_URL:-http://book:3000}"
+BASE_URL="${BASE_URL:-http://book2:3000}"
 API_KEY="${API_KEY:-}"
 PROJECT_NAME="${PROJECT_NAME:-default}"
 VERSION="${VERSION:-2024-01-01}"
@@ -165,14 +165,14 @@ case "$command" in
     ;;
   list-groups)
     body=$(jq -n --arg project "$PROJECT_NAME" \
-      '{Filter: {GroupType: "LivenessFace"}, PageNumber: 1, PageSize: 10, ProjectName: $project}')
+      '{Filter: {GroupType: "AIGC"}, PageNumber: 1, PageSize: 10, ProjectName: $project}')
     request "ListAssetGroups" "$body"
     ;;
   create-group)
     name="${1:-test_group_001}"
     title="${2:-测试素材组}"
     body=$(jq -n --arg name "$name" --arg title "$title" --arg project "$PROJECT_NAME" \
-      '{Name: $name, Title: $title, Description: "用于 API 测试的素材组", GroupType: "LivenessFace", ProjectName: $project}')
+      '{Name: $name, Title: $title, Description: "用于 API 测试的素材组", GroupType: "AIGC", ProjectName: $project}')
     request "CreateAssetGroup" "$body"
     ;;
   update-group)
