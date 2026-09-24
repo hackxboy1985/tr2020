@@ -83,9 +83,6 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 // BuildRequestURL 构建上游URL
 func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	fullUrl := fmt.Sprintf("%s%s", a.baseURL, EndpointGenerateAsync)
-	// 始终打印上游 URL，便于排查异步生图请求（BuildRequestURL 无 gin.Context，用 info.RequestId 关联请求）
-	logger.LogInfo(nil, fmt.Sprintf("Td upstream request URL: %s (request_id=%s, channel_id=%d, model=%s)",
-		fullUrl, info.RequestId, info.ChannelId, info.OriginModelName))
 	return fullUrl, nil
 }
 
@@ -178,11 +175,6 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		return
 	}
 	defer resp.Body.Close()
-
-	// 打印上游响应体用于调试
-	if common.LogUpstreamRequestEnabled {
-		logger.LogInfo(nil, fmt.Sprintf("Td upstream response: %s", string(responseBody)))
-	}
 
 	var sResp SubmitResponse
 	if err := common.Unmarshal(responseBody, &sResp); err != nil {
