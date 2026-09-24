@@ -108,9 +108,18 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		return nil, fmt.Errorf("invalid request type in context")
 	}
 
+	// 模型名：优先取模型映射后的上游模型名，未映射时回退到请求体中的模型名
+	model := info.UpstreamModelName
+	if model == "" {
+		model = req.Model
+	}
+	if strings.TrimSpace(model) == "" {
+		return nil, fmt.Errorf("model is required")
+	}
+
 	// 构建上游请求
 	upstreamReq := GenerateRequest{
-		Model:      "gpt-image-2-all", // 固定模型
+		Model:      model,
 		Prompt:     req.Prompt,
 		Size:       req.Size,
 		Resolution: req.Resolution,

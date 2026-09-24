@@ -6,7 +6,7 @@ package td
 
 // GenerateRequest 图像生成请求
 type GenerateRequest struct {
-	Model      string   `json:"model"`                // 固定传 gpt-image-2-all
+	Model      string   `json:"model"`                // 模型名，由请求/模型映射决定
 	Prompt     string   `json:"prompt"`               // 图像描述
 	Size       string   `json:"size,omitempty"`       // 画面比例，如 1:1 16:9 等
 	Resolution string   `json:"resolution"`           // 清晰度档位：1k 2k 4k
