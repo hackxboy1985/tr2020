@@ -239,14 +239,6 @@ func (info *RelayInfo) InitChannelMeta(c *gin.Context) {
 	if info.Request != nil {
 		info.Request.SetModelName(info.OriginModelName)
 	}
-
-	// 模型映射排查日志：记录 InitChannelMeta 对模型名的重置结果
-	common.SysLog(fmt.Sprintf(
-		"[ModelMapping] InitChannelMeta: retryIndex=%d channelId=%d channelType=%d | original_model(ctx)=%q | OriginModelName=%q -> UpstreamModelName=%q(已重置) | IsModelMapped=%v",
-		info.RetryIndex, channelMeta.ChannelId, channelMeta.ChannelType,
-		common.GetContextKeyString(c, constant.ContextKeyOriginalModel),
-		info.OriginModelName, info.UpstreamModelName, info.ChannelMeta.IsModelMapped,
-	))
 }
 
 func (info *RelayInfo) ToString() string {

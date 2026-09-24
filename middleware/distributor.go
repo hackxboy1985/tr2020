@@ -14,7 +14,6 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/i18n"
-	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/service"
@@ -453,15 +452,8 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 		common.SetContextKey(c, constant.ContextKeyChannelOrganization, *channel.OpenAIOrganization)
 	}
 	common.SetContextKey(c, constant.ContextKeyChannelAutoBan, channel.GetAutoBan())
-	modelMapping := channel.GetModelMapping()
-	common.SetContextKey(c, constant.ContextKeyChannelModelMapping, modelMapping)
+	common.SetContextKey(c, constant.ContextKeyChannelModelMapping, channel.GetModelMapping())
 	common.SetContextKey(c, constant.ContextKeyChannelStatusCodeMapping, channel.GetStatusCodeMapping())
-
-	// 模型映射排查日志：记录本次选中渠道时加载的映射配置（重试换渠道时会打印多条）
-	logger.LogInfo(c, fmt.Sprintf(
-		"[ModelMapping] 渠道上下文装载: channelId=%d channelName=%q channelType=%d | 请求模型(modelName)=%q | 该渠道映射配置=%q | use_channel=%v",
-		channel.Id, channel.Name, channel.Type, modelName, modelMapping, c.GetStringSlice("use_channel"),
-	))
 
 	key, index, newAPIError := channel.GetNextEnabledKey()
 	if newAPIError != nil {
