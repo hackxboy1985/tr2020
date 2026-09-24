@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/relay/channel"
 	"github.com/QuantumNous/new-api/relay/channel/openai"
@@ -130,9 +129,6 @@ func (a *Adaptor) Init(info *relaycommon.RelayInfo) {
 
 func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 
-	// DEBUG: 打印进入 GetRequestURL 时的模型名
-	common.SysLog(fmt.Sprintf("[GetRequestURL-Enter] UpstreamModelName=%s", info.UpstreamModelName))
-
 	if model_setting.GetGeminiSettings().ThinkingAdapterEnabled &&
 		!model_setting.ShouldPreserveThinkingSuffix(info.OriginModelName) {
 		// 新增逻辑：处理 -thinking-<budget> 格式
@@ -151,12 +147,7 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	version := model_setting.GetGeminiVersionSetting(info.UpstreamModelName)
 
 	if strings.HasPrefix(info.UpstreamModelName, "imagen") {
-		fullURL := fmt.Sprintf("%s/%s/models/%s:predict", info.ChannelBaseUrl, version, info.UpstreamModelName)
-		// DEBUG: 打印 imagen URL
-		if strings.Contains(fullURL, "/models/") {
-			common.SysLog(fmt.Sprintf("[GetRequestURL-Final] URL=%s, UpstreamModelName=%s", fullURL, info.UpstreamModelName))
-		}
-		return fullURL, nil
+		return fmt.Sprintf("%s/%s/models/%s:predict", info.ChannelBaseUrl, version, info.UpstreamModelName), nil
 	}
 
 	if strings.HasPrefix(info.UpstreamModelName, "text-embedding") ||
@@ -166,12 +157,7 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 		if info.IsGeminiBatchEmbedding {
 			action = "batchEmbedContents"
 		}
-		fullURL := fmt.Sprintf("%s/%s/models/%s:%s", info.ChannelBaseUrl, version, info.UpstreamModelName, action)
-		// DEBUG: 打印 embedding URL
-		if strings.Contains(fullURL, "/models/") {
-			common.SysLog(fmt.Sprintf("[GetRequestURL-Final] URL=%s, UpstreamModelName=%s", fullURL, info.UpstreamModelName))
-		}
-		return fullURL, nil
+		return fmt.Sprintf("%s/%s/models/%s:%s", info.ChannelBaseUrl, version, info.UpstreamModelName, action), nil
 	}
 
 	action := "generateContent"
@@ -181,14 +167,7 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 			info.DisablePing = true
 		}
 	}
-	fullURL := fmt.Sprintf("%s/%s/models/%s:%s", info.ChannelBaseUrl, version, info.UpstreamModelName, action)
-
-	// DEBUG: 只打印以 /v1beta/models 开头的 URL
-	if strings.Contains(fullURL, "/models/") {
-		common.SysLog(fmt.Sprintf("[GetRequestURL-Final] URL=%s, UpstreamModelName=%s", fullURL, info.UpstreamModelName))
-	}
-
-	return fullURL, nil
+	return fmt.Sprintf("%s/%s/models/%s:%s", info.ChannelBaseUrl, version, info.UpstreamModelName, action), nil
 }
 
 func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *relaycommon.RelayInfo) error {
