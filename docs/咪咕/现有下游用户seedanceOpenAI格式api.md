@@ -9,6 +9,15 @@
 
 **无需手动创建素材组**：首次上传时系统自动为当前用户创建默认素材组。
 
+素材分两类：
+
+| 类型 | 素材组来源 | 是否需要真人认证 |
+|------|-----------|-----------------|
+| 普通素材 / 数字人 | 系统自动创建默认组，或调用接口手动创建 | 否 |
+| 真人人像素材 | **必须先完成真人认证**，认证成功后由上游返回素材组 `group_id` | 是 |
+
+真人人像素材的完整流程见 [5、真人认证](#5真人认证真人人像素材)。
+
 ## 鉴权
 
 ```http
@@ -302,7 +311,281 @@ curl http://open.mints-id.com/v1/videos/task_xxxxxxxx \
 
 ---
 
+## 5、真人认证（真人人像素材）
+
+真人人像素材需要先完成 H5 活体认证。认证成功后由上游返回该用户的真人素材组 `group_id`，再向该组上传本人素材。
+
+整个流程**使用同一枚 API Token**，无需传递任何项目或上游鉴权信息。认证任务按用户隔离：查询时必须使用创建任务时的同一用户的 Token。
+
+### 5.1 创建真人认证任务
+
+```http
+POST /api/seedance/face-verifications
+```
+
+**请求体：**
+
+```json
+{
+  "return_url": "https://your-app.com/face-result"
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `return_url` | string | 否 | 认证完成后跳回的客户页面地址。跳转时只会附加 `verification_id` 和 `status` |
+
+请求体可传空对象 `{}`。
+
+**成功响应：**（HTTP `201`）
+
+```json
+{
+  "verification_id": "fv_a92f0a2edebba016ce8d7db24e2bafc8d7d1",
+  "status": "waiting_user",
+  "h5_url": "https://ark.volcengine.com/region:cn-beijing/mobile/livenees-face-manage/authorization?pl=xxx&uid=xxx",
+  "expires_at": 1790662929,
+  "request_id": "2fb619c1-f5dd-433c-a5f5-784d6288dd57"
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `verification_id` | string | 认证任务 ID，后续查询使用 |
+| `status` | string | 初始固定为 `waiting_user` |
+| `h5_url` | string | **交给终端用户打开**完成活体认证的地址 |
+| `expires_at` | int64 | 任务过期时间（Unix 时间戳，秒） |
+| `request_id` | string | 上游请求 ID，用于排查问题 |
+
+> **注意返回码是 `201` 而不是 `200`**，请按 2xx 判断成功。
+>
+> 调用方只需保存 `verification_id`，并引导终端用户打开 `h5_url`。**在用户完成 H5 流程前，不要调用素材创建接口。**
+
+### 5.2 查询认证任务
+
+```http
+GET /api/seedance/face-verifications/:id
+```
+
+`:id` 支持两种格式：
+
+- **上游 verification_id**：创建时响应里的 `verification_id`，例如 `fv_a92f0a2edebba016ce8d7db24e2bafc8d7d1`
+- **本地 ID**（数字）：列表接口返回的 `id`
+
+> ⚠️ **必须使用创建任务时同一用户的 Token 查询。** 认证任务按用户隔离，其他用户查询返回 `404`。
+>
+> 另外，本接口**只能查询到通过本系统创建的任务**。如果该 `verification_id` 是绕过本系统、直接在上游创建的，本地没有记录，会返回 `404`。
+
+**响应示例（认证成功）：**
+
+```json
+{
+  "verification_id": "fv_a92f0a2edebba016ce8d7db24e2bafc8d7d1",
+  "status": "verified",
+  "group_id": "group-xxxxxxxx",
+  "expires_at": 1790662929
+}
+```
+
+**响应示例（已过期）：**
+
+```json
+{
+  "verification_id": "fv_d010a631a7736a12f6c97dffaf9db8ca292a",
+  "status": "expired",
+  "expires_at": 1791428023,
+  "created_at": 1791427123,
+  "updated_at": 1791428035,
+  "error": {
+    "code": "FACE_VERIFICATION_EXPIRED",
+    "message": "Face verification session expired"
+  },
+  "request_id": "80244a9d-42de-4959-b058-85622a56e42b"
+}
+```
+
+**认证状态说明：**
+
+| status | 说明 |
+|--------|------|
+| `waiting_user` | 等待用户在 H5 页面完成认证 |
+| `callback_received` | 已收到 H5 成功回调 |
+| `resolving` | 正在获取认证结果 |
+| `verified` | 认证成功，此时响应中会带 `group_id` |
+| `failed` | 认证失败 |
+| `expired` | 认证任务已过期，需要重新创建 |
+
+建议间隔 3 秒轮询，直到 `status` 变为 `verified`（成功）、`failed` 或 `expired`（失败）。
+
+> **过期会话仍可查询**：任务过期后接口不会返回 `404`，而是返回 `status=expired` 及 `error` 详情。
+
+**成功响应字段说明：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `verification_id` | string | 认证任务 ID |
+| `status` | string | 认证状态，见上表 |
+| `group_id` | string | **真人素材组 ID**，仅 `status=verified` 时返回 |
+| `expires_at` | int64 | 任务过期时间（Unix 时间戳，秒） |
+| `error.code` | string | 错误码，认证失败或过期时返回 |
+| `error.message` | string | 错误信息，认证失败或过期时返回 |
+
+### 5.3 查询认证任务列表
+
+```http
+GET /api/seedance/face-verifications?p=1&page_size=20
+```
+
+只返回**当前 Token 所属用户**的认证任务。
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `p` | int | 页码，默认 1 |
+| `page_size` | int | 每页条数 |
+
+**响应示例：**
+
+```json
+{
+  "success": true,
+  "message": "",
+  "data": {
+    "page": 1,
+    "page_size": 20,
+    "total": 2,
+    "items": [
+      {
+        "id": 2,
+        "user_id": 2,
+        "channel_id": 2,
+        "verification_id": "fv_9567c4203ddbc98e48a66042602edd124789",
+        "status": "waiting_user",
+        "h5_url": "https://ark.volcengine.com/...",
+        "group_id": "",
+        "expires_at": 1791429587,
+        "created_at": 1791428687,
+        "updated_at": 1791428687
+      }
+    ]
+  }
+}
+```
+
+> `group_id` 在认证成功前是空字符串 `""`。
+
+### 5.4 向真人素材组上传素材
+
+认证成功后拿到 `group_id`，把它填入**素材创建接口**的 `GroupId` 字段即可（接口同 [1、创建素材](#1创建素材)）：
+
+```http
+POST /api/seedance/assets
+```
+
+```json
+{
+  "GroupId": "group-xxxxxxxx",
+  "URL": "https://example.com/face.jpg",
+  "AssetType": "Image",
+  "Name": "verified-face"
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `GroupId` | string | 是 | **5.2 认证成功后返回的 `group_id`** |
+| `URL` | string | 是 | 国内公网可访问的 HTTPS 文件地址 |
+| `AssetType` | string | 是 | `Image`、`Video` 或 `Audio` |
+| `Name` | string | 否 | 素材名称 |
+
+上传后同样轮询 [2、查询素材状态](#2查询素材状态)，直到 `Status` 变为 `Active`，再通过 `asset://<asset_id>` 用于视频生成。
+
+> 素材内容必须是**已完成认证的本人**，并满足上游素材要求。
+
+### 5.5 真人认证完整示例
+
+```bash
+BASE=http://open.mints-id.com
+TOKEN=sk-xxx
+
+# 1. 创建认证任务
+CREATE=$(curl -s -X POST $BASE/api/seedance/face-verifications \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"return_url":"https://your-app.com/face-result"}')
+
+VERIFICATION_ID=$(echo $CREATE | jq -r '.verification_id')
+H5_URL=$(echo $CREATE | jq -r '.h5_url')
+echo "verification_id=$VERIFICATION_ID"
+echo "请打开以下地址完成认证: $H5_URL"
+
+# 2. 轮询认证结果，直到 verified 拿到 group_id
+while true; do
+  RESULT=$(curl -s $BASE/api/seedance/face-verifications/$VERIFICATION_ID \
+    -H "Authorization: Bearer $TOKEN")
+  STATUS=$(echo $RESULT | jq -r '.status')
+  echo "face status=$STATUS"
+
+  case "$STATUS" in
+    verified)
+      GROUP_ID=$(echo $RESULT | jq -r '.group_id')
+      break
+      ;;
+    failed|expired)
+      echo $RESULT | jq .
+      exit 1
+      ;;
+  esac
+  sleep 3
+done
+
+echo "group_id=$GROUP_ID"
+
+# 3. 向真人组上传本人素材
+ASSET=$(curl -s -X POST $BASE/api/seedance/assets \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"GroupId\":\"$GROUP_ID\",\"URL\":\"https://example.com/face.jpg\",\"AssetType\":\"Image\",\"Name\":\"verified-face\"}")
+
+ASSET_ID=$(echo $ASSET | jq -r '.Result.Id')
+ASSET_REF=$(echo $ASSET | jq -r '.Result.AssetRef')
+echo "asset_id=$ASSET_ID, asset_ref=$ASSET_REF"
+
+# 4. 轮询素材直到 Active
+while true; do
+  STATUS=$(curl -s $BASE/api/seedance/assets/$ASSET_ID \
+    -H "Authorization: Bearer $TOKEN" | jq -r '.Result.Status')
+  echo "asset status=$STATUS"
+  [ "$STATUS" = "Active" ] && break
+  [ "$STATUS" = "Failed" ] && { echo "Failed"; exit 1; }
+  sleep 3
+done
+
+# 5. 视频生成（引用真人素材）
+curl -X POST $BASE/v1/video/generations \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"model\": \"doubao-seedance-2-0-260128\",
+    \"prompt\": \"人物面对镜头自然介绍产品\",
+    \"seconds\": \"5\",
+    \"images\": [\"$ASSET_REF\"],
+    \"metadata\": {\"resolution\": \"720p\", \"ratio\": \"16:9\"}
+  }"
+```
+
+### 5.6 常见错误
+
+| HTTP 状态码 | 说明 |
+|------------|------|
+| `404` | 认证任务不存在，或不属于当前 Token 所属用户 |
+| `502` | 上游请求失败 |
+| `503` | 未找到可用的上游渠道（渠道未配置或分组不匹配） |
+
+---
+
 ## 完整示例
+
+### 普通素材（自动创建素材组）
 
 ```bash
 # 1. 上传素材（推荐指定 Model）
@@ -337,4 +620,8 @@ curl -X POST http://open.mints-id.com/v1/video/generations \
     \"metadata\": {\"resolution\": \"720p\", \"ratio\": \"16:9\"}
   }"
 ```
+
+### 真人人像素材
+
+需先完成真人认证，完整流程见 [5.5 真人认证完整示例](#55-真人认证完整示例)。
 
