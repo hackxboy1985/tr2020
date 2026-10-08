@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	"github.com/QuantumNous/new-api/relay/channel"
 	taskcommon "github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -73,6 +74,45 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 	c.Set("task_request", req)
 	info.Action = constant.TaskActionGenerate
 	return nil
+}
+
+// InjectBillingParams 在计费表达式求值前注入 resolution 与 quality，
+// 便于管理员用 param("resolution") / param("quality") 按档位定价。
+//
+// 为什么必须显式注入：/v1/images/tasks 入口下计费发生在 RelayTaskSubmit 内部，
+// 若不注入则退回读取原始 HTTP body；而 /v1/images/generations 入口的 body 结构与
+// task 入口不同（resolution 是非标准字段），会导致 param() 取不到值而落到兜底档位。
+// 显式注入使两个入口的计费输入完全一致，与 Zy / RR 渠道的做法对齐。
+//
+// 注入"用户原始值"而非归一化值：
+//   - quality 保留 xhigh / max 等原始档位，管理员才能按档位区分定价
+//     （若归一化会把 hd→high，与用户直接传 high 无法区分）
+//   - resolution 原样下发，1k/2k/4k 与表达式中的字面量保持一致
+func (a *TaskAdaptor) InjectBillingParams(c *gin.Context, info *relaycommon.RelayInfo) {
+	req, err := relaycommon.GetTaskRequest(c)
+	if err != nil {
+		return
+	}
+
+	if info.BillingRequestInput == nil {
+		info.BillingRequestInput = &billingexpr.RequestInput{Body: []byte("{}")}
+	}
+
+	body := info.BillingRequestInput.Body
+
+	resolution := strings.TrimSpace(req.Resolution)
+	if resolution == "" {
+		resolution = Resolution1K
+	}
+	body = billingexpr.InjectBodyParam(body, "resolution", resolution)
+
+	quality := strings.TrimSpace(req.Quality)
+	if quality == "" {
+		quality = QualityMedium
+	}
+	body = billingexpr.InjectBodyParam(body, "quality", quality)
+
+	info.BillingRequestInput.Body = body
 }
 
 // BuildRequestURL 构建上游URL
