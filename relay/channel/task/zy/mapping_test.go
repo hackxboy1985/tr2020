@@ -139,8 +139,39 @@ func TestResolveSizeConfigInvalid(t *testing.T) {
 	}
 }
 
-// TestResolveSizeConfigAccepts8K 锁定 8K 为合法档位，且必须归一化为大写 8K，
-// 不能被 NormalizeResolution 的 default 分支静默降级成 1K。
+// TestResolutionCaseInsensitiveNormalizedToUpper 锁定 Zy 档位大小写兼容：
+// Zy 约定大写（1K/2K/4K/8K），用户传小写必须被接受并归一化为大写。
+func TestResolutionCaseInsensitiveNormalizedToUpper(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{"1K", "1K"}, {"1k", "1K"},
+		{"2K", "2K"}, {"2k", "2K"},
+		{"4K", "4K"}, {"4k", "4K"},
+		{"8K", "8K"}, {"8k", "8K"},
+		{" 4k ", "4K"}, // 首尾空白一并归一化
+	}
+
+	for _, tc := range cases {
+		cfg, _, err := resolveSizeConfig("", "", tc.input, "")
+		if err != nil {
+			t.Fatalf("image_size=%q 应合法: %v", tc.input, err)
+		}
+		if cfg.Resolution != tc.want {
+			t.Fatalf("image_size=%q 应归一化为 %q, 实际 %q", tc.input, tc.want, cfg.Resolution)
+		}
+		if got := NormalizeResolution(tc.input); got != tc.want {
+			t.Fatalf("NormalizeResolution(%q) = %q, 期望 %q", tc.input, got, tc.want)
+		}
+		if !IsValidResolution(tc.input) {
+			t.Fatalf("IsValidResolution(%q) 应为 true", tc.input)
+		}
+		t.Logf("image_size=%-6q → 归一化 %q", tc.input, tc.want)
+	}
+}
+
+// 锁定 8K 为合法档位，不能被 NormalizeResolution 的 default 分支静默降级成 1K。
 func TestResolveSizeConfigAccepts8K(t *testing.T) {
 	for _, input := range []string{"8K", "8k"} {
 		cfg, _, err := resolveSizeConfig("", "", input, "")
@@ -150,12 +181,6 @@ func TestResolveSizeConfigAccepts8K(t *testing.T) {
 		if cfg.Resolution != Resolution8K {
 			t.Fatalf("image_size=%s 应归一化为 %q, 实际 %q", input, Resolution8K, cfg.Resolution)
 		}
-	}
-	if got := NormalizeResolution("8k"); got != Resolution8K {
-		t.Fatalf("NormalizeResolution(8k) = %q, 期望 %q", got, Resolution8K)
-	}
-	if !IsValidResolution("8K") {
-		t.Fatal("IsValidResolution(8K) 应为 true")
 	}
 }
 

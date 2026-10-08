@@ -60,8 +60,63 @@ func TestQualityNoLongerRejected(t *testing.T) {
 	}
 }
 
-// 8k 必须通过本地校验，且原样透传到上游请求体。
-// Td 档位为小写约定（1k/2k/4k/8k），大小写敏感。
+// 档位大小写兼容：Td 约定小写（1k/2k/4k/8k），用户传大写必须被接受并归一化为小写。
+// 三个出口都要是小写：task_request、计费输入、上游请求体。
+// 若只放行不归一化，会出现「校验通过但 param("resolution") 匹配不上」而落到兜底档位。
+func TestResolutionCaseInsensitiveNormalizedToLower(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{"1k", "1k"}, {"1K", "1k"},
+		{"2k", "2k"}, {"2K", "2k"},
+		{"4k", "4k"}, {"4K", "4k"},
+		{"8k", "8k"}, {"8K", "8k"},
+		{" 4K ", "4k"}, // 首尾空白一并归一化
+	}
+
+	for _, tc := range cases {
+		body := `{"model":"gpt-image-2-all","prompt":"p","size":"16:9","resolution":"` + tc.input + `","quality":"high"}`
+		c := mkCtx(t, body)
+		info := mkInfo()
+		info.UpstreamModelName = "gpt-image-2-all"
+		info.OriginModelName = "gpt-image-2-all"
+
+		a := &TaskAdaptor{}
+		a.Init(info)
+		if taskErr := a.ValidateRequestAndSetAction(c, info); taskErr != nil {
+			t.Fatalf("resolution=%q 被拒绝: %s", tc.input, taskErr.Message)
+		}
+
+		// ① task_request 已写回小写
+		got, _ := relaycommon.GetTaskRequest(c)
+		if got.Resolution != tc.want {
+			t.Fatalf("resolution=%q: task_request 应为 %q, 实际 %q", tc.input, tc.want, got.Resolution)
+		}
+
+		// ② 计费表达式输入为小写，才能命中 param("resolution") 的字面量
+		a.InjectBillingParams(c, info)
+		if body := string(info.BillingRequestInput.Body); !strings.Contains(body, `"resolution":"`+tc.want+`"`) {
+			t.Fatalf("resolution=%q: 计费输入应为 %q, 实际 %s", tc.input, tc.want, body)
+		}
+
+		// ③ 上游请求体为小写
+		r, err := a.BuildRequestBody(c, info)
+		if err != nil {
+			t.Fatalf("build: %v", err)
+		}
+		raw, err := io.ReadAll(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := string(raw); !strings.Contains(got, `"resolution":"`+tc.want+`"`) {
+			t.Fatalf("resolution=%q: 上游请求体应为 %q, 实际 %s", tc.input, tc.want, got)
+		}
+		t.Logf("resolution=%-6q → 归一化 %q", tc.input, tc.want)
+	}
+}
+
+// 8k 档位（小写）通过校验并可被计费表达式识别。
 func TestResolution8KAccepted(t *testing.T) {
 	body := `{"model":"gpt-image-2-all","prompt":"p","size":"16:9","resolution":"8k","quality":"high"}`
 	c := mkCtx(t, body)
@@ -81,7 +136,7 @@ func TestResolution8KAccepted(t *testing.T) {
 		t.Fatalf("计费输入未注入 8k: %s", got)
 	}
 
-	// 上游请求体必须原样下发 8k
+	// 上游请求体必须下发 8k
 	r, err := a.BuildRequestBody(c, info)
 	if err != nil {
 		t.Fatalf("build: %v", err)

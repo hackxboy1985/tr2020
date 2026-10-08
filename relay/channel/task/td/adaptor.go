@@ -54,10 +54,12 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 		)
 	}
 
-	// 获取并验证 resolution（默认 1k）
+	// 获取并验证 resolution（默认 1k）。
+	// 归一化为小写写回 req，使计费注入与上游请求体统一使用小写字面量，
+	// 避免用户传 4K 时校验通过却在 param("resolution") 匹配不上。
 	resolution := req.Resolution
-	if resolution == "" {
-		resolution = "1k"
+	if strings.TrimSpace(resolution) == "" {
+		resolution = Resolution1K
 	}
 	if !isValidResolution(resolution) {
 		return service.TaskErrorWrapperLocal(
@@ -66,6 +68,7 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 			http.StatusBadRequest,
 		)
 	}
+	req.Resolution = NormalizeResolution(resolution)
 
 	// quality 不做本地白名单校验：上游对档位的支持会变化（例如 xhigh），
 	// 本地拒绝会误伤上游已支持的值，交由上游校验并返回其原始错误。
@@ -100,10 +103,7 @@ func (a *TaskAdaptor) InjectBillingParams(c *gin.Context, info *relaycommon.Rela
 
 	body := info.BillingRequestInput.Body
 
-	resolution := strings.TrimSpace(req.Resolution)
-	if resolution == "" {
-		resolution = Resolution1K
-	}
+	resolution := NormalizeResolution(req.Resolution)
 	body = billingexpr.InjectBodyParam(body, "resolution", resolution)
 
 	quality := strings.TrimSpace(req.Quality)
@@ -154,7 +154,7 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		Model:      model,
 		Prompt:     req.Prompt,
 		Size:       req.Size,
-		Resolution: req.Resolution,
+		Resolution: NormalizeResolution(req.Resolution),
 		Quality:    normalizeQuality(req.Quality),
 	}
 
@@ -166,9 +166,6 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	// 默认值
 	if upstreamReq.Size == "" {
 		upstreamReq.Size = "1:1"
-	}
-	if upstreamReq.Resolution == "" {
-		upstreamReq.Resolution = "1k"
 	}
 	if upstreamReq.Quality == "" {
 		upstreamReq.Quality = "medium"
@@ -333,9 +330,29 @@ func getStringFromMetadata(metadata map[string]interface{}, key, defaultValue st
 	return defaultValue
 }
 
+// NormalizeResolution 归一化分辨率档位为 Td 要求的小写形式 1k/2k/4k/8k。
+// 上游与计费表达式均以小写字面量为准，因此下游传大写（如 4K/8K）时必须转换，
+// 否则会出现「校验通过但 param("resolution") 匹配不上」而落到兜底档位。
+// 兼容任意大小写与首尾空白；空值返回 1k（Td 默认档）。
+func NormalizeResolution(resolution string) string {
+	switch strings.ToUpper(strings.TrimSpace(resolution)) {
+	case "1K":
+		return Resolution1K
+	case "2K":
+		return Resolution2K
+	case "4K":
+		return Resolution4K
+	case "8K":
+		return Resolution8K
+	default:
+		return Resolution1K
+	}
+}
+
+// isValidResolution 校验分辨率档位是否合法（大小写不敏感，空值合法取默认 1k）
 func isValidResolution(r string) bool {
-	switch r {
-	case Resolution1K, Resolution2K, Resolution4K, Resolution8K:
+	switch strings.ToUpper(strings.TrimSpace(r)) {
+	case "", "1K", "2K", "4K", "8K":
 		return true
 	}
 	return false

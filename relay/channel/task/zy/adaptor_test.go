@@ -49,6 +49,25 @@ func newTestInfo() *relaycommon.RelayInfo {
 	return info
 }
 
+// TestInjectBillingParamsNormalizesResolutionCase 复现完整链路，锁定 Zy 档位
+// 大小写兼容：用户传小写 4k，必须以大写 4K 注入计费表达式（Zy 约定大写），
+// 否则 param("resolution") == "4K" 匹配不上会落到兜底档位。
+func TestInjectBillingParamsNormalizesResolutionCase(t *testing.T) {
+	body := `{"model":"gpt-image-2.5-flare","prompt":"a cat","aspect_ratio":"16:9","resolution":"4k"}`
+	c := newTestContext(t, body)
+	info := newTestInfo()
+
+	adaptor := &TaskAdaptor{}
+	adaptor.Init(info)
+	require.Nil(t, adaptor.ValidateRequestAndSetAction(c, info))
+
+	adaptor.InjectBillingParams(c, info)
+	require.NotNil(t, info.BillingRequestInput)
+	got := string(info.BillingRequestInput.Body)
+	t.Logf("计费输入: %s", got)
+	require.Contains(t, got, `"resolution":"4K"`, "小写 4k 应归一化为大写 4K 注入计费")
+}
+
 // TestValidateKeepsAspectRatioFromImageRequest 复现真实入口链路：
 // handleZyImageTask 先把 dto.ImageRequest 转成 TaskSubmitReq 塞进 context，
 // 随后 ValidateBasicTaskRequest 会用请求体重新解析并覆盖。
