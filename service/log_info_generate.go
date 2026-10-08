@@ -291,3 +291,24 @@ func InjectTieredBillingInfo(other map[string]interface{}, relayInfo *relaycommo
 		}
 	}
 }
+
+// InjectTaskTieredBillingInfo 为异步任务日志注入动态计费信息。
+//
+// 与同步路径的 InjectTieredBillingInfo 的差异：
+// 任务（per-call）计费的档位在「预扣费」阶段就已确定（表达式只依赖 param()/header()，
+// 不依赖 token 数），结果存在 snapshot.EstimatedTier 中；任务路径也不会调用
+// TryTieredSettle，因此拿不到 TieredResult。这里直接读 snapshot，避免依赖结算结果。
+func InjectTaskTieredBillingInfo(other map[string]interface{}, relayInfo *relaycommon.RelayInfo) {
+	if relayInfo == nil || other == nil {
+		return
+	}
+	snap := relayInfo.TieredBillingSnapshot
+	if snap == nil || snap.BillingMode != "tiered_expr" {
+		return
+	}
+	other["billing_mode"] = "tiered_expr"
+	other["expr_b64"] = base64.StdEncoding.EncodeToString([]byte(snap.ExprString))
+	if snap.EstimatedTier != "" {
+		other["matched_tier"] = snap.EstimatedTier
+	}
+}

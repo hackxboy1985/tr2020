@@ -59,6 +59,10 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 	if upstreamRequestPath := c.GetString(string(constant.ContextKeyVideoRequestPath)); upstreamRequestPath != "" {
 		other["upstream_request_path"] = upstreamRequestPath
 	}
+	// 动态计费（tiered_expr）标记：与同步路径对齐，让日志详情能展示
+	// billing_mode / 表达式 / 命中档位。任务路径为 per-call 计费，
+	// 档位在预扣费时已确定并存入 TieredBillingSnapshot，此处直接取用。
+	InjectTaskTieredBillingInfo(other, info)
 	model.RecordConsumeLog(c, info.UserId, model.RecordConsumeLogParams{
 		ChannelId: info.ChannelId,
 		ModelName: info.OriginModelName,

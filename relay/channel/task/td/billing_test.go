@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 )
 
 const userExpr = `v2: param("resolution") == "2k" && param("quality") == "high" ? tier("resolution == 2k && quality == high", 0.1) : param("resolution") == "4k" && param("quality") == "high" ? tier("resolution == 4k && quality == high", 0.21) : param("resolution") == "2k" && param("quality") == "xhigh" ? tier("resolution == 2k && quality == xhigh", 0.2) : param("resolution") == "4k" && param("quality") == "xhigh" ? tier("resolution == 4k && quality == xhigh", 0.25) : param("resolution") == "2k" && param("quality") == "max" ? tier("resolution == 2k && quality == max", 0.25) : param("resolution") == "4k" && param("quality") == "max" ? tier("resolution == 4k && quality == max", 0.32) : tier("fallback", 0.2)`
@@ -82,3 +83,71 @@ func contains(s, sub string) bool {
 	return strings.Contains(s, sub)
 }
 
+
+// TestBothEntryPathsConverge 验证两个入口的计费输入一致。
+//
+// 两条路径最终都经由 RelayTaskSubmit → ValidateRequestAndSetAction（用原始 body
+// 重新解析 task_request）→ InjectBillingParams，因此计费输入只取决于客户端原始
+// body，与入口无关：
+//   /v1/images/generations  handler 预置的 task_request 会被 Validate 覆盖
+//   /v1/images/tasks        无 handler 预处理，Validate 直接解析
+func TestBothEntryPathsConverge(t *testing.T) {
+	rawBody := `{"model":"gpt-image-2.5-sunburst","prompt":"p","size":"16:9","resolution":"4k","quality":"high"}`
+
+	run := func(name string, preSet bool) float64 {
+		c := mkCtx(t, rawBody)
+		info := mkInfo()
+		a := &TaskAdaptor{}
+		a.Init(info)
+
+		if preSet {
+			// 模拟 handleTudouImageTask 的预置（随后会被 Validate 覆盖）
+			c.Set("task_request", relaycommon.TaskSubmitReq{
+				Prompt: "p", Size: "16:9", Resolution: "4k", Quality: "high",
+			})
+		}
+		if e := a.ValidateRequestAndSetAction(c, info); e != nil {
+			t.Fatalf("%s validate: %s", name, e.Message)
+		}
+		a.InjectBillingParams(c, info)
+
+		cost, trace, err := billingexpr.RunExprWithRequest(userExpr, billingexpr.TokenParams{}, *info.BillingRequestInput)
+		if err != nil {
+			t.Fatalf("%s run: %v", name, err)
+		}
+		t.Logf("%s → cost=%.4f tier=%q body=%s", name, cost, trace.MatchedTier, string(info.BillingRequestInput.Body))
+		return cost
+	}
+
+	costA := run("路径A /v1/images/generations", true)
+	costB := run("路径B /v1/images/tasks", false)
+
+	if costA != costB {
+		t.Fatalf("两个入口计费结果不一致: A=%.4f B=%.4f", costA, costB)
+	}
+	if costA != 0.21 {
+		t.Fatalf("应命中 4k+high = 0.21, 实际 %.4f", costA)
+	}
+}
+
+// TestInjectBillingParamsDefaults 缺省值与发往上游的默认值保持一致
+func TestInjectBillingParamsDefaults(t *testing.T) {
+	body := `{"model":"gpt-image-2-all","prompt":"p"}`
+	c := mkCtx(t, body)
+	info := mkInfo()
+	a := &TaskAdaptor{}
+	a.Init(info)
+	if e := a.ValidateRequestAndSetAction(c, info); e != nil {
+		t.Fatal(e.Message)
+	}
+	a.InjectBillingParams(c, info)
+	got := string(info.BillingRequestInput.Body)
+	t.Logf("缺省注入: %s", got)
+	// 与 BuildRequestBody 的默认值一致：resolution=1k, quality=medium
+	if !strings.Contains(got, `"resolution":"1k"`) {
+		t.Fatalf("resolution 缺省应为 1k: %s", got)
+	}
+	if !strings.Contains(got, `"quality":"medium"`) {
+		t.Fatalf("quality 缺省应为 medium: %s", got)
+	}
+}

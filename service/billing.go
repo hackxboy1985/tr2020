@@ -49,8 +49,19 @@ func SettleBilling(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, actualQuo
 				logger.FormatQuota(preConsumed),
 			))
 		} else {
-			logger.LogInfo(ctx, fmt.Sprintf("预扣费与实际消耗一致，无需调整：%s（按次计费）",
+			// 动态计费（tiered_expr）与普通按次计费都走这里，措辞需与实际模式一致，
+			// 否则日志会误导为「按次计费」。
+			billingDesc := "按次计费"
+			if relayInfo.TieredBillingSnapshot != nil {
+				if tier := relayInfo.TieredBillingSnapshot.EstimatedTier; tier != "" {
+					billingDesc = fmt.Sprintf("动态计费，命中阶梯 %s", tier)
+				} else {
+					billingDesc = "动态计费"
+				}
+			}
+			logger.LogInfo(ctx, fmt.Sprintf("预扣费与实际消耗一致，无需调整：%s（%s）",
 				logger.FormatQuota(actualQuota),
+				billingDesc,
 			))
 		}
 
