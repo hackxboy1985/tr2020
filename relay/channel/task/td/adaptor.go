@@ -66,15 +66,9 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 		)
 	}
 
-	// 获取并验证 quality（默认 medium）
-	quality := normalizeQuality(req.Quality)
-	if !isValidQuality(quality) {
-		return service.TaskErrorWrapperLocal(
-			fmt.Errorf("invalid quality: %s, must be one of: low, medium, high, standard, hd", req.Quality),
-			"invalid_request",
-			http.StatusBadRequest,
-		)
-	}
+	// quality 不做本地白名单校验：上游对档位的支持会变化（例如 xhigh），
+	// 本地拒绝会误伤上游已支持的值，交由上游校验并返回其原始错误。
+	// normalizeQuality 仍会把 standard/hd 转换为上游格式，未知值原样透传。
 
 	c.Set("task_request", req)
 	info.Action = constant.TaskActionGenerate
@@ -302,14 +296,6 @@ func getStringFromMetadata(metadata map[string]interface{}, key, defaultValue st
 func isValidResolution(r string) bool {
 	switch r {
 	case Resolution1K, Resolution2K, Resolution4K:
-		return true
-	}
-	return false
-}
-
-func isValidQuality(q string) bool {
-	switch q {
-	case QualityLow, QualityMedium, QualityHigh:
 		return true
 	}
 	return false
