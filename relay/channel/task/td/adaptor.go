@@ -61,7 +61,7 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 	}
 	if !isValidResolution(resolution) {
 		return service.TaskErrorWrapperLocal(
-			fmt.Errorf("invalid resolution: %s, must be one of: 1k, 2k, 4k", resolution),
+			fmt.Errorf("invalid resolution: %s, must be one of: 1k, 2k, 4k, 8k", resolution),
 			"invalid_request",
 			http.StatusBadRequest,
 		)
@@ -335,7 +335,7 @@ func getStringFromMetadata(metadata map[string]interface{}, key, defaultValue st
 
 func isValidResolution(r string) bool {
 	switch r {
-	case Resolution1K, Resolution2K, Resolution4K:
+	case Resolution1K, Resolution2K, Resolution4K, Resolution8K:
 		return true
 	}
 	return false

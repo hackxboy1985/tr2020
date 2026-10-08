@@ -11,6 +11,7 @@ const (
 	Resolution1K = "1K"
 	Resolution2K = "2K"
 	Resolution4K = "4K"
+	Resolution8K = "8K"
 )
 
 // AutoAspectRatio 表示由上游根据提示词自动推断比例
@@ -89,8 +90,8 @@ func IsRatioSize(size string) bool {
 	return strings.Contains(s, ":") && !strings.Contains(s, "x")
 }
 
-// NormalizeResolution 归一化分辨率档位为上游要求的 1K/2K/4K。
-// 接受 1k/1K/2k/4k 等写法，空值返回 1K（上游默认档）。
+// NormalizeResolution 归一化分辨率档位为上游要求的 1K/2K/4K/8K。
+// 接受 1k/1K/2k/4k/8k 等写法，空值返回 1K（上游默认档）。
 func NormalizeResolution(resolution string) string {
 	switch strings.ToUpper(strings.TrimSpace(resolution)) {
 	case "1K":
@@ -99,6 +100,8 @@ func NormalizeResolution(resolution string) string {
 		return Resolution2K
 	case "4K":
 		return Resolution4K
+	case "8K":
+		return Resolution8K
 	default:
 		return Resolution1K
 	}
@@ -107,7 +110,7 @@ func NormalizeResolution(resolution string) string {
 // IsValidResolution 校验分辨率档位是否合法（空值视为合法，取默认 1K）
 func IsValidResolution(resolution string) bool {
 	switch strings.ToUpper(strings.TrimSpace(resolution)) {
-	case "", "1K", "2K", "4K":
+	case "", "1K", "2K", "4K", "8K":
 		return true
 	default:
 		return false
@@ -139,7 +142,7 @@ func resolveSizeConfig(aspectRatio, size, imageSize, resolution string) (cfg Siz
 		requested = resolution
 	}
 	if !IsValidResolution(requested) {
-		return cfg, "", fmt.Errorf("invalid image_size/resolution: %s, must be one of: 1K, 2K, 4K", requested)
+		return cfg, "", fmt.Errorf("invalid image_size/resolution: %s, must be one of: 1K, 2K, 4K, 8K", requested)
 	}
 	// image_size 与 resolution 等价，同时传不同值属于请求错误
 	if strings.TrimSpace(imageSize) != "" && strings.TrimSpace(resolution) != "" &&

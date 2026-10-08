@@ -60,6 +60,41 @@ func TestQualityNoLongerRejected(t *testing.T) {
 	}
 }
 
+// 8k 必须通过本地校验，且原样透传到上游请求体。
+// Td 档位为小写约定（1k/2k/4k/8k），大小写敏感。
+func TestResolution8KAccepted(t *testing.T) {
+	body := `{"model":"gpt-image-2-all","prompt":"p","size":"16:9","resolution":"8k","quality":"high"}`
+	c := mkCtx(t, body)
+	info := mkInfo()
+	info.UpstreamModelName = "gpt-image-2-all"
+	info.OriginModelName = "gpt-image-2-all"
+
+	a := &TaskAdaptor{}
+	a.Init(info)
+	if taskErr := a.ValidateRequestAndSetAction(c, info); taskErr != nil {
+		t.Fatalf("resolution=8k 被拒绝: %s", taskErr.Message)
+	}
+
+	// 计费表达式输入必须拿到 8k，才能按 8k 档定价
+	a.InjectBillingParams(c, info)
+	if got := string(info.BillingRequestInput.Body); !strings.Contains(got, `"resolution":"8k"`) {
+		t.Fatalf("计费输入未注入 8k: %s", got)
+	}
+
+	// 上游请求体必须原样下发 8k
+	r, err := a.BuildRequestBody(c, info)
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	raw, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(raw); !strings.Contains(got, `"resolution":"8k"`) {
+		t.Fatalf("上游请求体未包含 8k: %s", got)
+	}
+}
+
 // xhigh 必须原样透传给上游，不能被改写或丢弃
 func TestQualityPassthroughToUpstream(t *testing.T) {
 	body := `{"size":"16:9","model":"gpt-image-2-all","prompt":"p","resolution":"4k","quality":"xhigh"}`

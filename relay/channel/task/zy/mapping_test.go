@@ -126,8 +126,8 @@ func TestResolveSizeConfigInvalid(t *testing.T) {
 		{"非法比例", "17:9", "", "", ""},
 		{"非法 size 比例", "", "17:9", "", ""},
 		{"非法 size 格式", "", "abc", "", ""},
-		{"非法档位", "", "", "8K", ""},
-		{"非法 resolution", "", "", "", "3K"},
+		{"非法档位", "", "", "3K", ""},
+		{"非法 resolution", "", "", "", "16K"},
 		{"image_size 与 resolution 冲突", "", "", "1K", "4K"},
 	}
 
@@ -136,6 +136,26 @@ func TestResolveSizeConfigInvalid(t *testing.T) {
 		if err == nil {
 			t.Errorf("%s: expected error, got nil", tc.name)
 		}
+	}
+}
+
+// TestResolveSizeConfigAccepts8K 锁定 8K 为合法档位，且必须归一化为大写 8K，
+// 不能被 NormalizeResolution 的 default 分支静默降级成 1K。
+func TestResolveSizeConfigAccepts8K(t *testing.T) {
+	for _, input := range []string{"8K", "8k"} {
+		cfg, _, err := resolveSizeConfig("", "", input, "")
+		if err != nil {
+			t.Fatalf("image_size=%s 应合法: %v", input, err)
+		}
+		if cfg.Resolution != Resolution8K {
+			t.Fatalf("image_size=%s 应归一化为 %q, 实际 %q", input, Resolution8K, cfg.Resolution)
+		}
+	}
+	if got := NormalizeResolution("8k"); got != Resolution8K {
+		t.Fatalf("NormalizeResolution(8k) = %q, 期望 %q", got, Resolution8K)
+	}
+	if !IsValidResolution("8K") {
+		t.Fatal("IsValidResolution(8K) 应为 true")
 	}
 }
 

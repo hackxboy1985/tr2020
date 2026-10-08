@@ -214,8 +214,8 @@ func TestValidateRejectsBadInput(t *testing.T) {
 		},
 		{
 			name: "档位非法",
-			body: `{"model":"gpt-image-2","prompt":"x","size":"1280x720","image_size":"8K"}`,
-			req:  relaycommon.TaskSubmitReq{Prompt: "x", Size: "1280x720", ImageSize: "8K"},
+			body: `{"model":"gpt-image-2","prompt":"x","size":"1280x720","image_size":"3K"}`,
+			req:  relaycommon.TaskSubmitReq{Prompt: "x", Size: "1280x720", ImageSize: "3K"},
 		},
 		{
 			name: "gpt-image-2.5 不支持 2K",

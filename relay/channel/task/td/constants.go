@@ -7,10 +7,10 @@ const (
 )
 
 const (
-	StatusSubmitted = "submitted"
+	StatusSubmitted  = "submitted"
 	StatusProcessing = "processing"
-	StatusCompleted = "completed"
-	StatusFailed    = "failed"
+	StatusCompleted  = "completed"
+	StatusFailed     = "failed"
 )
 
 // Resolution 清晰度档位
@@ -18,6 +18,7 @@ const (
 	Resolution1K = "1k"
 	Resolution2K = "2k"
 	Resolution4K = "4k"
+	Resolution8K = "8k"
 )
 
 // Quality 质量档位
