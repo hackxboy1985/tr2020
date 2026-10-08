@@ -295,3 +295,78 @@ func TestChannelTypeRegistered(t *testing.T) {
 }
 
 var _ = dto.TaskError{}
+
+// TestDoResponseWritesSubmitBody 验证 DoResponse 会向下游写出响应体。
+// 背景：/v1/images/tasks 入口由 controller.RelayTask 处理，其成功分支不写响应体，
+// 因此 adaptor 必须自己写；同时 handleZyImageTask 已不再写，避免重复写入导致
+// body 变成两段 JSON 拼接。
+func TestDoResponseWritesSubmitBody(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+
+	info := newTestInfo()
+	info.PublicTaskID = "task_public_1"
+	info.OriginModelName = "gpt-image-2-4K"
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader(`{"id":"task_upstream_1","status":"queued"}`)),
+	}
+
+	adaptor := &TaskAdaptor{}
+	adaptor.Init(info)
+
+	taskID, taskData, taskErr := adaptor.DoResponse(c, resp, info)
+	require.Nil(t, taskErr)
+	require.Equal(t, "task_upstream_1", taskID)
+	require.NotEmpty(t, taskData)
+
+	body := recorder.Body.String()
+	require.NotEmpty(t, body, "DoResponse 必须写出响应体，否则下游收到 200 空 body")
+
+	// 必须是一段合法 JSON，而不是多段拼接
+	var got map[string]any
+	require.NoError(t, common.Unmarshal([]byte(body), &got), "响应体应为单个合法 JSON，实际: %s", body)
+	require.Equal(t, "task_public_1", got["id"])
+	require.Equal(t, "image.task", got["object"])
+	require.Equal(t, "submitted", got["status"])
+	require.Equal(t, "gpt-image-2-4K", got["model"])
+}
+
+// TestDoResponseKeepsIdAndStatus 锁定老接口 /v1/images/generations 的兼容性契约：
+// id 必须是 info.PublicTaskID（即落库的公开 task_id），status 必须是 "submitted"。
+// 这两个字段是下游轮询程序的依赖，任何改动都必须让本测试失败。
+func TestDoResponseKeepsIdAndStatus(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+
+	info := newTestInfo()
+	info.PublicTaskID = "task_contract_1"
+	info.OriginModelName = "gpt-image-2-4K"
+
+	// InitTask 从嵌入的 TaskRelayInfo 读同一个字段，这里显式断言两者一致，
+	// 保证「返回给用户的 id」与「落库的 task_id」永不脱节。
+	require.NotNil(t, info.TaskRelayInfo)
+	require.Equal(t, info.PublicTaskID, info.TaskRelayInfo.PublicTaskID)
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader(`{"id":"task_upstream_9","status":"queued"}`)),
+	}
+
+	adaptor := &TaskAdaptor{}
+	adaptor.Init(info)
+	_, _, taskErr := adaptor.DoResponse(c, resp, info)
+	require.Nil(t, taskErr)
+
+	var got map[string]any
+	require.NoError(t, common.Unmarshal([]byte(recorder.Body.String()), &got))
+
+	require.Equal(t, "task_contract_1", got["id"], "id 必须是公开 task_id")
+	require.Equal(t, "submitted", got["status"], "status 必须是 submitted")
+
+	// 上游真实 ID 不得泄露给下游
+	require.NotEqual(t, "task_upstream_9", got["id"])
+}

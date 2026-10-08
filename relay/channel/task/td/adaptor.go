@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -205,6 +206,19 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 
 	// 保存响应体到 context，供 LogTaskConsumption 写入 other["response_body"]
 	c.Set(string(constant.ContextKeyVideoResponseBody), string(responseBody))
+
+	// 返回任务提交响应给用户：公开 task_id 与 submitted 状态。
+	// 说明：本 adaptor 是唯一写响应体的一方，覆盖两个入口——
+	//   /v1/images/tasks          → controller.RelayTask（其成功分支不写响应体）
+	//   /v1/images/generations    → handleTudouImageTask（不再自行写响应体，避免重复写入）
+	c.JSON(http.StatusOK, gin.H{
+		"id":      info.PublicTaskID,
+		"object":  "image.task",
+		"status":  "submitted",
+		"model":   info.OriginModelName,
+		"created": time.Now().Unix(),
+	})
+
 	return
 }
 

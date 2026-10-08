@@ -415,12 +415,8 @@ func handleTudouImageTask(c *gin.Context, info *relaycommon.RelayInfo, imageReq 
 	logger.LogInfo(c, fmt.Sprintf("Tudou image task submitted: taskId=%s upstreamId=%s quota=%d",
 		info.PublicTaskID, result.UpstreamTaskID, result.Quota))
 
-	// 返回任务提交响应给用户：自己的 task_id 和 submitted 状态
-	c.JSON(http.StatusOK, gin.H{
-		"id":      info.PublicTaskID,
-		"status":  "submitted",
-		"created": task.CreatedAt,
-	})
+	// 响应体由 adaptor 的 DoResponse 统一返回（与 RR 渠道一致），
+	// 以保证 /v1/images/generations 与 /v1/images/tasks 两个入口只写一次响应。
 
 	return nil
 }
@@ -497,12 +493,8 @@ func handleZyImageTask(c *gin.Context, info *relaycommon.RelayInfo, imageReq *dt
 	logger.LogInfo(c, fmt.Sprintf("Zy image task submitted: taskId=%s upstreamId=%s quota=%d",
 		info.PublicTaskID, result.UpstreamTaskID, result.Quota))
 
-	// 返回任务提交响应给用户：自己的 task_id 和 submitted 状态
-	c.JSON(http.StatusOK, gin.H{
-		"id":      info.PublicTaskID,
-		"status":  "submitted",
-		"created": task.CreatedAt,
-	})
+	// 响应体由 adaptor 的 DoResponse 统一返回（与 RR 渠道一致），
+	// 以保证 /v1/images/generations 与 /v1/images/tasks 两个入口只写一次响应。
 
 	return nil
 }
