@@ -59,6 +59,9 @@ func TestModelPriceHelperTieredUsesPreloadedRequestInput(t *testing.T) {
 	require.Equal(t, "stream", info.TieredBillingSnapshot.EstimatedTier)
 	require.Equal(t, billing_setting.BillingModeTieredExpr, info.TieredBillingSnapshot.BillingMode)
 	require.Equal(t, common.QuotaPerUnit, info.TieredBillingSnapshot.QuotaPerUnit)
+	// 命中档位的原始价格系数需冻结进 snapshot，日志据此展示 matched_price。
+	// tier("stream", p * 3) 在 p=1000 时系数为 3000。
+	require.Equal(t, 3000.0, info.TieredBillingSnapshot.EstimatedPrice)
 }
 
 func TestModelPriceHelperTieredV2UsesPerCallQuotaConversion(t *testing.T) {
@@ -104,4 +107,6 @@ func TestModelPriceHelperTieredV2UsesPerCallQuotaConversion(t *testing.T) {
 	require.NotNil(t, info.TieredBillingSnapshot)
 	require.Equal(t, 2, info.TieredBillingSnapshot.ExprVersion)
 	require.Equal(t, 0.04*float64(common.QuotaPerUnit), info.TieredBillingSnapshot.EstimatedQuotaBeforeGroup)
+	// v2 语义下系数即 $/次，命中 2K 档位应为 0.04。
+	require.Equal(t, 0.04, info.TieredBillingSnapshot.EstimatedPrice)
 }

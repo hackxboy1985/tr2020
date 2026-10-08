@@ -296,8 +296,10 @@ func InjectTieredBillingInfo(other map[string]interface{}, relayInfo *relaycommo
 //
 // 与同步路径的 InjectTieredBillingInfo 的差异：
 // 任务（per-call）计费的档位在「预扣费」阶段就已确定（表达式只依赖 param()/header()，
-// 不依赖 token 数），结果存在 snapshot.EstimatedTier 中；任务路径也不会调用
-// TryTieredSettle，因此拿不到 TieredResult。这里直接读 snapshot，避免依赖结算结果。
+// 不依赖 token 数），结果存在 snapshot.EstimatedTier / snapshot.EstimatedPrice 中；
+// 任务路径也不会调用 TryTieredSettle，因此拿不到 TieredResult。
+// 这里直接读 snapshot，避免依赖结算结果，并写入与同步路径同名的
+// matched_tier / matched_price 字段，保证前端日志详情展示一致。
 func InjectTaskTieredBillingInfo(other map[string]interface{}, relayInfo *relaycommon.RelayInfo) {
 	if relayInfo == nil || other == nil {
 		return
@@ -310,5 +312,12 @@ func InjectTaskTieredBillingInfo(other map[string]interface{}, relayInfo *relayc
 	other["expr_b64"] = base64.StdEncoding.EncodeToString([]byte(snap.ExprString))
 	if snap.EstimatedTier != "" {
 		other["matched_tier"] = snap.EstimatedTier
+	}
+	// 与同步路径 InjectTieredBillingInfo 对齐：命中档位的价格也写入日志，
+	// 供前端日志详情展示（否则 per-call 档位只能显示「按次计费」而无金额）。
+	// 任务路径不调用 TryTieredSettle，拿不到 TieredResult，
+	// 因此价格来自预扣费阶段冻结在 snapshot 里的 trace.MatchedPrice。
+	if snap.EstimatedPrice > 0 {
+		other["matched_price"] = snap.EstimatedPrice
 	}
 }

@@ -54,8 +54,11 @@ type BillingSnapshot struct {
 	EstimatedQuotaBeforeGroup float64 `json:"estimated_quota_before_group"`
 	EstimatedQuotaAfterGroup  int     `json:"estimated_quota_after_group"`
 	EstimatedTier             string  `json:"estimated_tier"`
-	QuotaPerUnit              float64 `json:"quota_per_unit"`
-	ExprVersion               int     `json:"expr_version"`
+	// EstimatedPrice 是命中档位的原始价格系数，语义与 TraceResult.MatchedPrice 一致：
+	// v2 为 $/次，v1 为 $/1M tokens。仅用于日志展示（matched_price），不参与额度换算。
+	EstimatedPrice float64 `json:"estimated_price"`
+	QuotaPerUnit   float64 `json:"quota_per_unit"`
+	ExprVersion    int     `json:"expr_version"`
 }
 
 // TieredResult holds everything needed after running tiered settlement.

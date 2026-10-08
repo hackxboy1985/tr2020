@@ -270,6 +270,7 @@ func modelPriceHelperTieredPerCall(c *gin.Context, info *relaycommon.RelayInfo, 
 		EstimatedQuotaBeforeGroup: quotaBeforeGroup,
 		EstimatedQuotaAfterGroup:  preConsumedQuota,
 		EstimatedTier:             trace.MatchedTier,
+		EstimatedPrice:            trace.MatchedPrice,
 		QuotaPerUnit:              common.QuotaPerUnit,
 		ExprVersion:               billingexpr.ExprVersion(exprStr),
 	}
@@ -338,6 +339,7 @@ func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptT
 		EstimatedPromptTokens:     promptTokens,
 		EstimatedCompletionTokens: estimatedCompletionTokens,
 		EstimatedTier:             trace.MatchedTier,
+		EstimatedPrice:            trace.MatchedPrice,
 		QuotaPerUnit:              common.QuotaPerUnit,
 		ExprVersion:               exprVersion,
 	}
