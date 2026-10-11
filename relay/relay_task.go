@@ -288,6 +288,7 @@ var fetchRespBuilders = map[int]func(c *gin.Context) (respBody []byte, taskResp 
 	relayconstant.RelayModeSunoFetch:          sunoFetchRespBodyBuilder,
 	relayconstant.RelayModeVideoFetchByID:     videoFetchByIDRespBodyBuilder,
 	relayconstant.RelayModeImageTaskFetchByID: imageTaskFetchByIDRespBodyBuilder,
+	relayconstant.RelayModeVideoTaskFetchByID: videoTaskFetchByIDRespBodyBuilder,
 }
 
 func RelayTaskFetch(c *gin.Context, relayMode int) (taskResp *dto.TaskError) {
@@ -620,6 +621,84 @@ func imageTaskFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskRes
 			}
 		}
 		resp["result"] = map[string]any{"data": imageData}
+	case model.TaskStatusFailure:
+		resp["error"] = map[string]string{
+			"message": originTask.FailReason,
+			"code":    "task_failed",
+		}
+	}
+
+	respBody, err = common.Marshal(resp)
+	if err != nil {
+		taskResp = service.TaskErrorWrapper(err, "marshal_response_failed", http.StatusInternalServerError)
+	}
+	return
+}
+
+// videoTaskFetchByIDRespBodyBuilder handles GET /v1/videos/tasks/:task_id
+//
+// 与 imageTaskFetchByIDRespBodyBuilder 分开实现，而不是复用后加参数：
+// 两者响应契约不同 —— 图片为 object="image.task" + result.data[].url，
+// 视频为 object="video.task" + result.video_url / result.videos[].url[]。
+// 分开可保证 /v1/images/tasks 的输出结构完全不受视频接入影响。
+func videoTaskFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *dto.TaskError) {
+	taskId := c.Param("task_id")
+	if taskId == "" {
+		taskId = c.GetString("task_id")
+	}
+	userId := c.GetInt("id")
+
+	originTask, exist, err := model.GetByTaskId(userId, taskId)
+	if err != nil {
+		taskResp = service.TaskErrorWrapper(err, "get_task_failed", http.StatusInternalServerError)
+		return
+	}
+	if !exist {
+		taskResp = service.TaskErrorWrapperLocal(errors.New("task_not_exist"), "task_not_exist", http.StatusBadRequest)
+		return
+	}
+
+	resp := map[string]any{
+		"id":      originTask.TaskID,
+		"object":  "video.task",
+		"status":  mapTaskStatusToImageStatus(originTask.Status),
+		"model":   originTask.Properties.OriginModelName,
+		"created": originTask.CreatedAt,
+	}
+
+	switch originTask.Status {
+	case model.TaskStatusSuccess:
+		resultURL := originTask.GetResultURL()
+		if originTask.ChannelId > 0 {
+			if ch, err := model.CacheGetChannel(originTask.ChannelId); err == nil {
+				settings := ch.GetOtherSettings()
+				switch ch.Type {
+				case constant.ChannelTypeTudou:
+					resultURL = rewriteResultURLWithMappings(resultURL, settings.TdUrlProxyBaseURL, settings.TdUrlProxyMappings)
+				case constant.ChannelTypeRR:
+					resultURL = rewriteResultURLWithMappings(resultURL, settings.RRUrlProxyBaseURL, settings.RRUrlProxyMappings)
+				case constant.ChannelTypeZy:
+					resultURL = rewriteResultURLWithMappings(resultURL, settings.ZyUrlProxyBaseURL, settings.ZyUrlProxyMappings)
+				}
+			}
+		}
+		// 对齐上游文档：result.video_url 为主，同时给出 result.videos[].url[] 兼容数组形式
+		var videos []map[string]any
+		var videoURL string
+		for _, u := range strings.Split(resultURL, ",") {
+			u = strings.TrimSpace(u)
+			if u == "" {
+				continue
+			}
+			if videoURL == "" {
+				videoURL = u
+			}
+			videos = append(videos, map[string]any{"url": []string{u}})
+		}
+		resp["result"] = map[string]any{
+			"video_url": videoURL,
+			"videos":    videos,
+		}
 	case model.TaskStatusFailure:
 		resp["error"] = map[string]string{
 			"message": originTask.FailReason,

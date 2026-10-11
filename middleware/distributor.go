@@ -319,6 +319,25 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 		if _, ok := c.Get("relay_mode"); !ok {
 			c.Set("relay_mode", relayMode)
 		}
+	} else if strings.HasPrefix(c.Request.URL.Path, "/v1/videos/tasks") && c.Request.Method == http.MethodGet {
+		// GET /v1/videos/tasks/:task_id — fetch video task status from local DB,
+		// no channel selection needed（与 images/tasks 一致）。
+		// 必须排在 video 提交分支之前：前缀重叠。
+		relayMode := relayconstant.RelayModeVideoTaskFetchByID
+		shouldSelectChannel = false
+		modelRequest.Model = getTaskOriginModelName(c)
+		c.Set("relay_mode", relayMode)
+	} else if strings.HasPrefix(c.Request.URL.Path, "/v1/videos/generations") {
+		// POST /v1/videos/generations — 视频任务提交。
+		// 与 /v1/images/generations 一样属于「同步入口但内部转异步任务」，
+		// 需要选渠道与计费，故不做 shouldSelectChannel=false。
+		relayMode := relayconstant.RelayModeImageTaskSubmit
+		c.Set("relay_mode", relayMode)
+		req, err := getModelFromRequest(c)
+		if err != nil {
+			return nil, false, err
+		}
+		modelRequest.Model = req.Model
 	} else if strings.HasPrefix(c.Request.URL.Path, "/v1/images/tasks") && c.Request.Method == http.MethodGet {
 		// GET /v1/images/tasks/:task_id — fetch task status from local DB, no channel selection needed
 		relayMode := relayconstant.RelayModeImageTaskFetchByID

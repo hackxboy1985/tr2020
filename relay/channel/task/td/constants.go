@@ -2,8 +2,29 @@ package td
 
 const (
 	EndpointGenerateAsync = "/v1/images/generations/async"
+	// EndpointVideoGenerate 视频任务提交入口。
+	// 三个视频模型（minimax-h3 / seedance-2.0 / seedance-2.5）共用同一路径，
+	// 差异只体现在参数取值边界上，由 videoModelSpecs 描述。
+	EndpointVideoGenerate = "/v1/videos/generations"
 	EndpointQueryTask     = "/v1/tasks/"
 	EndpointBatchQuery    = "/v1/tasks/batch"
+)
+
+// 视频模型名（上游模型名 / videoModelSpecs 的 key）
+const (
+	VideoModelMiniMaxH3  = "minimax-h3"
+	VideoModelSeedance20 = "seedance-2.0"
+	VideoModelSeedance25 = "seedance-2.5"
+)
+
+// 视频参数取值
+const (
+	Resolution720P    = "720p"
+	Resolution1080P   = "1080p"
+	Resolution2KVideo = "2k"
+
+	AspectRatio16x9 = "16:9"
+	AspectRatio9x16 = "9:16"
 )
 
 const (

@@ -120,6 +120,10 @@ func SetRelayRouter(router *gin.Engine) {
 		httpRouter.POST("/images/tasks", controller.RelayTask)
 		httpRouter.GET("/images/tasks/:task_id", controller.RelayTaskFetch)
 
+		// video task routes (async video generation, e.g. Td minimax-h3 / seedance)
+		httpRouter.POST("/videos/generations", controller.RelayTask)
+		httpRouter.GET("/videos/tasks/:task_id", controller.RelayTaskFetch)
+
 		// embedding related routes
 		httpRouter.POST("/embeddings", func(c *gin.Context) {
 			controller.Relay(c, types.RelayFormatEmbedding)

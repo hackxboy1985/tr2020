@@ -30,6 +30,11 @@ type TaskAdaptor struct {
 	ChannelType int
 	apiKey      string
 	baseURL     string
+	// videoTask 标记本次任务为视频分支。
+	// BuildRequestURL 的接口签名不提供 *gin.Context，无法从 context 读取
+	// task_request 的类型，故在校验阶段缓存该标记（做法与 RR 适配器缓存
+	// taskReq 一致）。
+	videoTask bool
 }
 
 func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
@@ -39,7 +44,30 @@ func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
 }
 
 // ValidateRequestAndSetAction 验证请求参数
+//
+// Td 渠道同时承载图片与视频两类上游接口：
+//   - 图片：POST /v1/images/generations/async
+//   - 视频：POST /v1/videos/generations（minimax-h3 / seedance-2.0 / seedance-2.5）
+//
+// 两者协议不同、参数集合不同，故在此分流：视频请求走 validateVideoRequest，
+// 其余保持原有图片校验逻辑不变。
 func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycommon.RelayInfo) *dto.TaskError {
+	// 先按视频结构体探测：只有视频路径或视频模型才会进入视频分支。
+	// 用独立结构体解析的原因见 video_dto.go 顶部说明。
+	var videoReq VideoGenerateRequest
+	if err := unmarshalVideoRequest(c, &videoReq); err != nil {
+		return service.TaskErrorWrapperLocal(err, "invalid_request", http.StatusBadRequest)
+	}
+	if isVideoRequest(c, videoReq.Model) {
+		if taskErr := a.validateVideoRequest(c, info, &videoReq); taskErr != nil {
+			return taskErr
+		}
+		a.videoTask = true
+		c.Set("task_request", videoReq)
+		info.Action = constant.TaskActionGenerate
+		return nil
+	}
+
 	var req relaycommon.TaskSubmitReq
 	if err := common.UnmarshalBodyReusable(c, &req); err != nil {
 		return service.TaskErrorWrapperLocal(err, "invalid_request", http.StatusBadRequest)
@@ -92,6 +120,21 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 //     （若归一化会把 hd→high，与用户直接传 high 无法区分）
 //   - resolution 原样下发，1k/2k/4k 与表达式中的字面量保持一致
 func (a *TaskAdaptor) InjectBillingParams(c *gin.Context, info *relaycommon.RelayInfo) {
+	// 视频分支：注入 duration / resolution / aspect_ratio，供 param() 分档定价
+	if videoReq, ok := getVideoRequest(c); ok {
+		if info.BillingRequestInput == nil {
+			info.BillingRequestInput = &billingexpr.RequestInput{Body: []byte("{}")}
+		}
+		body := info.BillingRequestInput.Body
+		if videoReq.Duration != nil {
+			body = billingexpr.InjectBodyParam(body, "duration", *videoReq.Duration)
+		}
+		body = billingexpr.InjectBodyParam(body, "resolution", videoReq.Resolution)
+		body = billingexpr.InjectBodyParam(body, "aspect_ratio", videoReq.AspectRatio)
+		info.BillingRequestInput.Body = body
+		return
+	}
+
 	req, err := relaycommon.GetTaskRequest(c)
 	if err != nil {
 		return
@@ -116,11 +159,16 @@ func (a *TaskAdaptor) InjectBillingParams(c *gin.Context, info *relaycommon.Rela
 }
 
 // BuildRequestURL 构建上游URL
+//
+// 视频分支使用 /v1/videos/generations，图片分支保持 /v1/images/generations/async。
+// 判别依据是 context 中 task_request 的具体类型（由 ValidateRequestAndSetAction 写入）。
 func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, error) {
-	fullUrl := fmt.Sprintf("%s%s", a.baseURL, EndpointGenerateAsync)
-	return fullUrl, nil
+	path := EndpointGenerateAsync
+	if a.videoTask {
+		path = EndpointVideoGenerate
+	}
+	return fmt.Sprintf("%s%s", a.baseURL, path), nil
 }
-
 // BuildRequestHeader 设置请求头
 func (a *TaskAdaptor) BuildRequestHeader(c *gin.Context, req *http.Request, info *relaycommon.RelayInfo) error {
 	req.Header.Set("Content-Type", "application/json")
@@ -131,6 +179,11 @@ func (a *TaskAdaptor) BuildRequestHeader(c *gin.Context, req *http.Request, info
 
 // BuildRequestBody 构建请求体
 func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayInfo) (io.Reader, error) {
+	// 视频分支：请求体已是 VideoGenerateRequest 形态，仅需补齐模型名后下发
+	if videoReq, ok := getVideoRequest(c); ok {
+		return a.buildVideoRequestBody(c, info, videoReq)
+	}
+
 	v, exists := c.Get("task_request")
 	if !exists {
 		return nil, fmt.Errorf("request not found in context")
@@ -239,12 +292,17 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 	c.Set(string(constant.ContextKeyVideoResponseBody), string(responseBody))
 
 	// 返回任务提交响应给用户：公开 task_id 与 submitted 状态。
-	// 说明：本 adaptor 是唯一写响应体的一方，覆盖两个入口——
+	// 说明：本 adaptor 是唯一写响应体的一方，覆盖多个入口——
 	//   /v1/images/tasks          → controller.RelayTask（其成功分支不写响应体）
 	//   /v1/images/generations    → handleTudouImageTask（不再自行写响应体，避免重复写入）
+	//   /v1/videos/generations    → 视频任务（object 为 video.task）
+	object := "image.task"
+	if a.videoTask {
+		object = "video.task"
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"id":      info.PublicTaskID,
-		"object":  "image.task",
+		"object":  object,
 		"status":  "submitted",
 		"model":   info.OriginModelName,
 		"created": time.Now().Unix(),
@@ -287,7 +345,19 @@ func (a *TaskAdaptor) FetchTask(baseUrl, key string, body map[string]any, proxy 
 }
 
 // ParseTaskResult 解析任务查询结果
+//
+// 图片与视频共用同一查询接口 GET /v1/tasks/{task_id}，差异仅在 result 内部字段：
+// 图片取 result.images[0].url[0]，视频取 result.video_url（回退 result.videos[0].url[0]）。
+//
+// 注意：不能用 adaptor 上的 videoTask 标记来分流。轮询（service/task_polling.go）
+// 会通过 GetTaskAdaptorFunc 新建适配器实例并重新 Init，提交阶段的标记不会带到
+// 查询阶段，用标记会导致视频结果被按图片解析而取不到 URL。
+// 因此改为**按响应体结构判定**（与 Zy 适配器做法一致）。
 func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, error) {
+	if isVideoTaskResponse(respBody) {
+		return parseVideoTaskResult(respBody)
+	}
+
 	var queryResp QueryTaskResponse
 	if err := common.Unmarshal(respBody, &queryResp); err != nil {
 		return nil, err

@@ -46,6 +46,11 @@ const (
 	RelayModeImageTaskSubmit
 	RelayModeImageTaskFetchByID
 
+	// RelayModeVideoTaskFetchByID 查询视频任务（GET /v1/videos/tasks/:task_id）。
+	// 与 RelayModeVideoFetchByID（Sora 等 OpenAI 风格 /v1/videos/{id}）区分：
+	// 前者查询本地任务库并返回 result.video_url，后者按上游协议转发。
+	RelayModeVideoTaskFetchByID
+
 	RelayModeRerank
 
 	RelayModeResponses
@@ -76,6 +81,10 @@ func Path2RelayMode(path string) int {
 	} else if strings.HasPrefix(path, "/v1/images/tasks/") {
 		// GET /v1/images/tasks/:task_id — fetch task status
 		relayMode = RelayModeImageTaskFetchByID
+	} else if strings.HasPrefix(path, "/v1/videos/tasks/") {
+		// GET /v1/videos/tasks/:task_id — fetch video task status
+		// 必须排在 /v1/videos/ 判定之前：前缀重叠，顺序颠倒会走错分支
+		relayMode = RelayModeVideoTaskFetchByID
 	} else if strings.HasPrefix(path, "/v1/images/tasks") {
 		// POST /v1/images/tasks — submit task
 		relayMode = RelayModeImageTaskSubmit

@@ -167,7 +167,10 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
     hints: {
       baseUrl: 'Default: https://api.ai-tudou.net',
       key: 'Td API Key (Authorization: Bearer <key>)',
-      models: 'gpt-image-2-all',
+      models:
+        'gpt-image-2-all,minimax-h3,seedance-2.0,seedance-2.5',
+      other:
+        '可选，配置结果 URL 的有效期与对外代理地址（图片与视频共用）。\n\n示例：\n{"td_url_ttl_hours":24,"td_url_proxy_base_url":"https://img.example.com/oss"}\n\n字段说明：\ntd_url_ttl_hours      — 上游 URL 有效期（小时），默认 24\ntd_url_proxy_base_url — 对外 URL 代理基础地址，替换上游 URL 的 scheme/host\ntd_url_proxy_mappings — 多域名映射代理，如 {"cdn1.td.com":"https://img.example.com/oss"}\n\n接口路径：\n图片提交 → /v1/images/generations/async\n视频提交 → /v1/videos/generations\n任务查询 → /v1/tasks/{task_id}',
     },
   },
   61: {
