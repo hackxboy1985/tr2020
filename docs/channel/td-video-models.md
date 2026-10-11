@@ -303,11 +303,39 @@ param("duration") == 20 && param("resolution") == "720p" ? tier(..., 0.5) : tier
 | 图片响应结构 | 实测确认完全未变 |
 | 能力矩阵边界 | 逐项实测（duration / 分辨率 / 图片数 / 视频数 / 音频数 / generate_audio） |
 | 模型映射 | `my-video → seedance-2.5` 正确命中 |
+| 端到端链路 | 对本地 new-api + mock 上游跑通，16/16 通过 |
+
+### 测试脚本
+
+`scripts/test_td_video.sh` 覆盖校验、提交、轮询、图片回归四类验证。
+
+```bash
+# 用法一：位置参数（与 scripts/td_test.sh 一致）
+./scripts/test_td_video.sh http://127.0.0.1:3000 sk-xxxxx
+
+# 用法二：环境变量
+NEWAPI_BASE_URL=http://127.0.0.1:3000 NEWAPI_TOKEN=sk-xxxxx ./scripts/test_td_video.sh
+
+# 只跑校验用例，不实际提交任务（不消耗额度）
+SKIP_E2E=1 ./scripts/test_td_video.sh http://127.0.0.1:3000 sk-xxxxx
+
+# 验证「未登记 spec 的模型被拒绝」
+SPEC_PROBE_MODEL=<渠道已配但未登记在 videoModelSpecs 的模型名> \
+  ./scripts/test_td_video.sh http://127.0.0.1:3000 sk-xxxxx
+```
+
+**两个使用注意**（脚本已内置预检，但排查时容易困惑）：
+
+1. 脚本会先做**渠道可用性预检**。若 Td 渠道未配置，分发器会返回 503
+   `No available channel`，请求根本到不了适配器，校验用例会「全部失败」。
+   预检会直接输出配置指引。
+2. `SPEC_PROBE_MODEL` **必须填「渠道已配置、但未登记在 videoModelSpecs」的模型名**。
+   填一个随便的未知模型名是测不到的 —— 那种情况在分发器就被 503 拦掉了。
 
 **未验证项**：
 
 1. **前端 typecheck 未执行** —— 编写环境中 `web/default/node_modules/.bin` 为空、`bun` 不存在。前端改动仅为 `hints` 对象内的字符串字面量，已人工核对类型（`hints.other` 是 `string?` 合法字段）与引号闭合，但**建议本地执行一次 `bun run typecheck`**。
-2. **未对真实上游发请求** —— 全部为单元测试与响应结构验证。上线前建议用真实 key 走一次完整链路。
+2. **未对真实上游发请求** —— 端到端测试用的是本地 mock 上游。已核对 new-api 实际发出的请求体（路径、参数、无图片字段污染）正确，但**上线前仍建议用真实土豆 key 走一次完整链路**。
 
 ---
 
