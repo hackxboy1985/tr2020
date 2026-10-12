@@ -17,6 +17,8 @@ var ChannelName = "doubao-video"
 var videoInputRatioMap = map[string]float64{
 	"doubao-seedance-2-0-260128":      28.0 / 46.0, // ~0.6087
 	"doubao-seedance-2-0-fast-260128": 22.0 / 37.0, // ~0.5946
+	"doubao-seedance-2-0-mini-260615": 14.0 / 23.0, // ~0.6087（含视频 14 / 不含视频 23）
+	"doubao-seedance-2-5-260628":      42.0 / 70.0, // 0.6（含视频 42 / 不含视频 70）
 }
 
 func GetVideoInputRatio(modelName string) (float64, bool) {
