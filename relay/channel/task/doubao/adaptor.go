@@ -281,7 +281,7 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 	// 模型未配置视频价格表时返回 nil —— 不附加任何倍率，走原有基础费率计费。
 	// ok=false 的唯一原因是 videoPriceMap 没有该模型，与传入的分辨率无关，
 	// 因此只需查询一次（基准价由下方按需查询）。
-	priceWithoutVideo, priceWithVideo, ok := GetVideoResolutionPrice(modelName, resolution)
+	resolutionPriceWithoutVideo, resolutionPriceWithVideo, ok := GetVideoResolutionPrice(modelName, resolution)
 	if !ok {
 		return nil
 	}
@@ -298,9 +298,9 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 	// 目标价：按是否携带视频输入，取该分辨率档的含视频价或不含视频价。
 	var targetPrice float64
 	if hasVideoInput {
-		targetPrice = priceWithVideo
+		targetPrice = resolutionPriceWithVideo
 	} else {
-		targetPrice = priceWithoutVideo
+		targetPrice = resolutionPriceWithoutVideo
 	}
 
 	ratio := targetPrice / baselineWithoutVideo
@@ -310,11 +310,11 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 	if info.ChannelMeta != nil {
 		upstreamModelName = info.ChannelMeta.UpstreamModelName
 	}
-	// 日志写成 "video_input=46/70=0.657143" 的形式直接展示分子分母，
-	// 便于一眼看出倍率取自哪个分辨率档、是否含视频，无需回查价格表。
-	// 用 %.0f 打印价格，避免 46.00 这类冗余小数影响可读性。
-	common.SysLog(fmt.Sprintf("[Doubao Video] EstimateBilling: originModel=%s, upstreamModel=%s, resolution=%s, hasVideoInput=%t, video_input=%.0f/%.0f=%.6f",
-		modelName, upstreamModelName, resolution, hasVideoInput, targetPrice, baselineWithoutVideo, ratio))
+	// 日志先给出查表输入（模型名 / 分辨率档 / 是否含视频）与查到的两个价格，
+	// 再以 "video_input=46/70=0.657143" 形式直接展示倍率的分子分母，
+	// 便于一眼核对倍率取自哪一档、哪个价格列，无需回查价格表。
+	common.SysLog(fmt.Sprintf("[Doubao Video] EstimateBilling: originModel=%s, upstreamModel=%s, resolution=%s, hasVideoInput=%t, resolutionPriceWithoutVideo=%.2f, resolutionPriceWithVideo=%.2f, baselineWithoutVideo=%.2f, video_input=%.0f/%.0f=%.6f",
+		modelName, upstreamModelName, resolution, hasVideoInput, resolutionPriceWithoutVideo, resolutionPriceWithVideo, baselineWithoutVideo, targetPrice, baselineWithoutVideo, ratio))
 
 	return map[string]float64{"video_input": ratio}
 }
