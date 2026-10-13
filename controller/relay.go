@@ -658,7 +658,10 @@ func RelayTask(c *gin.Context) {
 			task.PrivateData.SubmitRespBody = service.TruncateBody(string(result.TaskData))
 		}
 		if insertErr := task.Insert(); insertErr != nil {
-			common.SysError("insert task error: " + insertErr.Error())
+			// 落库失败不中断响应，但必须能事后关联到具体任务：
+			// 带上 taskId 才能在排查「查询接口查不到任务 / 轮询不推进」时
+			// 区分是「根本没落库」还是「落库了但状态没推进」。
+			common.SysError(fmt.Sprintf("insert task error: taskId=%s err=%s", relayInfo.PublicTaskID, insertErr.Error()))
 		}
 	}
 
