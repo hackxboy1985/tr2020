@@ -297,7 +297,11 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 		targetPrice = priceWithoutVideo
 	}
 
-	return map[string]float64{"video_input": targetPrice / baselineWithoutVideo}
+	ratio := targetPrice / baselineWithoutVideo
+	common.SysLog(fmt.Sprintf("[Doubao Video] EstimateBilling: model=%s, resolution=%s, hasVideoInput=%t, priceWithoutVideo=%.2f, priceWithVideo=%.2f, baselineWithoutVideo=%.2f, video_input=%.6f",
+		modelName, resolution, hasVideoInput, priceWithoutVideo, priceWithVideo, baselineWithoutVideo, ratio))
+
+	return map[string]float64{"video_input": ratio}
 }
 
 // almostEqualFloat 浮点近似相等判断（用于跳过 1.0 的中性倍率）。
