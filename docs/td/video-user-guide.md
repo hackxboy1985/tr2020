@@ -15,13 +15,14 @@
 - **任务模型**：提交即返回，异步生成，轮询取结果
 - **适用场景**：文生视频、图生视频、带参考视频/音频的视频生成
 
-当前支持三个模型：
+当前支持四个模型：
 
 | 模型名 | 说明 |
 |---|---|
 | `minimax-h3` | 支持参考图；不支持参考视频、参考音频与音效同步 |
 | `seedance-2.0` | 支持参考图/视频/音频与音效同步 |
 | `seedance-2.5` | 同上，时长与素材上限更高 |
+| `grok-imagine-video-1.5` | 时长枚举 6/10/15 秒；支持首帧图、首尾帧、多参考图；不支持参考视频/音频与音效同步 |
 
 > **模型名以你的账号实际可用为准**。请联系管理员确认可用模型清单与计费规则；若管理员配置了模型别名，提交时使用别名即可，无需关心内部分辨率映射。
 
@@ -57,39 +58,51 @@ Content-Type: application/json
 |---|---|---|---|---|
 | `model` | string | 是 | - | 视频模型名，见上表 |
 | `prompt` | string | 是 | - | 视频描述。不能为空或纯空白 |
-| `duration` | integer | 否 | `4` | 视频时长（秒），取值范围随模型而定 |
+| `duration` | integer | 见说明 | `4` | 视频时长（秒）。前三者可选；**`grok-imagine-video-1.5` 为必填且只能取枚举值** |
 | `resolution` | string | 否 | `720p` | 清晰度档位，取值随模型而定 |
-| `aspect_ratio` | string | 否 | `16:9` | 画面比例，只能取 `16:9` 或 `9:16` |
-| `images` | array&lt;string&gt; | 否 | - | 参考图数组，数量上限随模型而定 |
+| `aspect_ratio` | string | 否 | `16:9` | 画面比例。前三者只能取 `16:9` / `9:16`；grok 另支持 `1:1` |
+| `images` | array&lt;string&gt; | 否 | - | 参考图数组。**grok 不支持该字段** |
 | `videos` | array&lt;string&gt; | 否 | - | 参考视频数组，数量上限随模型而定 |
 | `audios` | array&lt;string&gt; | 否 | - | 参考音频数组，数量上限随模型而定 |
 | `generate_audio` | boolean | 否 | - | 是否同步生成音效。仅部分模型支持 |
+| `input_reference` | string \| object | 否 | - | **仅 grok**：单张首帧图。支持 URL 字符串或 `{"url":"..."}` 对象两种写法 |
+| `extra` | object | 见说明 | - | **仅 grok**：补充参数容器，至少含 `aspect_ratio`、`resolution`；多图参考也放在这里 |
 
-> `images` / `videos` / `audios` 中的每一项都应是**可公网访问的 HTTP/HTTPS URL**。
+> `images` / `videos` / `audios` 中的每一项都应是**可公网访问的 HTTP/HTTPS URL**，不接受本地路径或 base64。
 > `generate_audio` 显式传 `false` 与不传是两种不同语义，需要关闭时请显式传 `false`。
+>
+> **`grok-imagine-video-1.5` 的参数写法与另外三个模型不同**，使用前请先读第 3.4 节。
 
 ### 3.1 能力矩阵（重要）
 
-三个模型的参数边界**不相同**，超出边界的请求会被直接拒绝（HTTP 400），不会静默忽略：
+四个模型的参数边界**不相同**，超出边界的请求会被直接拒绝（HTTP 400），不会静默忽略：
 
-| 能力 | minimax-h3 | seedance-2.0 | seedance-2.5 |
-|---|---|---|---|
-| `duration` 范围（秒） | 3 – 15 | 3 – 15 | 4 – 30 |
-| `duration` 默认值 | 4 | 4 | 4 |
-| `resolution` 可选值 | `720p` / `1080p` / `2k` | 仅 `720p` | 仅 `720p` |
-| `resolution` 默认值 | `720p` | `720p` | `720p` |
-| `images` 上限 | 9 | 9 | 30 |
-| `videos` 上限 | 不支持 | 3 | 10 |
-| `audios` 上限 | 不支持 | 3 | 10 |
-| `generate_audio` | 不支持 | 支持 | 支持 |
+| 能力 | minimax-h3 | seedance-2.0 | seedance-2.5 | grok-imagine-video-1.5 |
+|---|---|---|---|---|
+| `duration` 取值 | 3 – 15 | 3 – 15 | 4 – 30 | **仅 6 / 10 / 15** |
+| `duration` 是否必填 | 否 | 否 | 否 | **是** |
+| `duration` 默认值 | 4 | 4 | 4 | -（必填） |
+| `resolution` 可选值 | `720p` / `1080p` / `2k` | 仅 `720p` | 仅 `720p` | 仅 `720p` |
+| `aspect_ratio` 可选值 | `16:9` / `9:16` | `16:9` / `9:16` | `16:9` / `9:16` | `16:9` / `9:16` / **`1:1`** |
+| `images` 上限 | 9 | 9 | 30 | **不支持该字段** |
+| `videos` 上限 | 不支持 | 3 | 10 | 不支持 |
+| `audios` 上限 | 不支持 | 3 | 10 | 不支持 |
+| `generate_audio` | 不支持 | 支持 | 支持 | 不支持 |
+| `input_reference` | 不支持 | 不支持 | 不支持 | **支持（1 张）** |
+| `extra.reference_images` | 不支持 | 不支持 | 不支持 | **支持（2~7 张）** |
+| `extra` | 不需要 | 不需要 | 不需要 | **必需** |
 
 通用约束：
 
-- `aspect_ratio` 只能取 `16:9` / `9:16`，默认 `16:9`；
+- `aspect_ratio` 默认 `16:9`；除 grok 外的模型只能取 `16:9` / `9:16`；
 - `audios` **不能单独使用**，必须同时提供 `images` 或 `videos`；
 - `model` 不在支持列表中的请求一律 400 拒绝。
 
-> **常见踩坑**：向 `seedance-2.0` 传 `duration: 16` 会失败（上限 15），需要长视频请改用 `seedance-2.5`；向 `seedance-2.0` / `seedance-2.5` 传 `resolution: 1080p` 也会失败（仅支持 `720p`）。
+> **常见踩坑**：
+> - 向 `seedance-2.0` 传 `duration: 16` 会失败（上限 15），需要长视频请改用 `seedance-2.5`；
+> - 向 `seedance-2.0` / `seedance-2.5` 传 `resolution: 1080p` 也会失败（仅支持 `720p`）；
+> - 向 `grok-imagine-video-1.5` 传 `duration: 7` 会失败——它的时长是**离散档位**，即使 7 落在 6~15 之间也不被接受；
+> - 参考图字段**不能跨模型混用**：前三者用 `images`，grok 用 `input_reference` + `extra.reference_images`。
 
 ### 3.2 请求示例
 
@@ -173,6 +186,111 @@ curl -X POST "https://your-new-api-domain/v1/videos/generations" \
 | `status` | string | 提交成功固定为 `submitted` |
 | `model` | string | 本次任务使用的模型名 |
 | `created` | integer | 创建时间戳（Unix 秒） |
+
+### 3.4 `grok-imagine-video-1.5` 专用写法
+
+该模型的参数协议与另外三个模型**不同**，请单独阅读本节。
+
+**① `duration` 必填，且只能取 6 / 10 / 15**
+
+它的时长是**离散档位**而非连续范围，传其它值一律 400：
+
+```bash
+# 正确
+"duration": 10
+
+# 错误：7 虽然落在 6~15 之间，但不是合法档位
+"duration": 7
+```
+
+**② 参考图有两条独立通道，单图与多图不能混用**
+
+| 场景 | 使用字段 | 说明 |
+|---|---|---|
+| 单张首帧 | `input_reference` | 支持 URL 字符串，或 `{"url":"..."}` 对象 |
+| 首尾帧（2 张） | `extra.reference_images` | 分别标注 `role` 为 `first_frame` / `last_frame` |
+| 多参考图（2~7 张） | `extra.reference_images` | `role` 统一为 `reference_image` |
+
+> **单张图不要放进 `extra.reference_images`**——上游会直接拒绝。单图请用 `input_reference`。
+
+**③ 该模型不支持 `images` 字段**
+
+`images` 是另外三个模型的参考图写法，grok 不接受，传了会 400。
+
+**④ 单张首帧**
+
+```bash
+curl -X POST "https://your-new-api-domain/v1/videos/generations" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "grok-imagine-video-1.5",
+    "prompt": "人物抬头向前走",
+    "duration": 10,
+    "aspect_ratio": "16:9",
+    "resolution": "720p",
+    "input_reference": "https://example.com/first.jpg",
+    "extra": { "aspect_ratio": "16:9", "resolution": "720p" }
+  }'
+```
+
+`input_reference` 也可写成对象形式：`{"url":"https://example.com/first.jpg"}`。
+
+**⑤ 首尾帧（2 张）**
+
+```bash
+curl -X POST "https://your-new-api-domain/v1/videos/generations" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "grok-imagine-video-1.5",
+    "prompt": "自然过渡，保持主体一致",
+    "duration": 10,
+    "aspect_ratio": "16:9",
+    "resolution": "720p",
+    "extra": {
+      "aspect_ratio": "16:9",
+      "resolution": "720p",
+      "reference_images": [
+        { "url": "https://example.com/first.jpg", "role": "first_frame" },
+        { "url": "https://example.com/last.jpg",  "role": "last_frame"  }
+      ]
+    }
+  }'
+```
+
+**⑥ 多参考图（2~7 张）**
+
+```bash
+curl -X POST "https://your-new-api-domain/v1/videos/generations" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "grok-imagine-video-1.5",
+    "prompt": "保持人物身份和服装一致",
+    "duration": 6,
+    "aspect_ratio": "16:9",
+    "resolution": "720p",
+    "extra": {
+      "aspect_ratio": "16:9",
+      "resolution": "720p",
+      "reference_images": [
+        { "url": "https://example.com/ref1.jpg", "role": "reference_image" },
+        { "url": "https://example.com/ref2.jpg", "role": "reference_image" }
+      ]
+    }
+  }'
+```
+
+**⑦ `1:1` 正方形**
+
+`aspect_ratio` 除 `16:9` / `9:16` 外，该模型还支持 `1:1`（另外三个模型不支持）。建议同时写进 `extra`：
+
+```bash
+-d '{ "model": "grok-imagine-video-1.5", "prompt": "...", "duration": 6,
+      "aspect_ratio": "1:1",
+      "extra": { "aspect_ratio": "1:1", "resolution": "720p" } }'
+```
 
 ---
 
@@ -386,6 +504,8 @@ if __name__ == "__main__":
 - 管理员也可能配置对外代理域名，此时返回的地址域名与上游不同，属正常现象，直接使用即可；
 - 地址过期或已失效后重新拉取同一地址可能返回错误，此时需要重新提交任务。
 
+> `grok-imagine-video-1.5` 的部分上游响应会在 `result.videos[].expires_at` 中给出过期时间戳（Unix 秒），可用于精确判断下载窗口。该字段非所有模型都会返回，**建议以 `result.video_url` 能否下载为准**，不要依赖该字段一定存在。
+
 ---
 
 ## 九、错误响应
@@ -409,14 +529,18 @@ if __name__ == "__main__":
 | `prompt is required` | `prompt` 缺失或为空白 | 补充 `prompt` |
 | `model is required` | `model` 缺失 | 补充 `model` |
 | `unsupported video model: xxx` | 模型名不在支持列表 | 改用受支持的模型名，或联系管理员开通 |
-| `invalid duration: N, model X supports A-B seconds` | 时长越界（含显式传 `0`） | 调整到模型允许范围内 |
+| `invalid duration: N, model X supports A-B seconds` | 时长超出该模型的**范围**（前三者） | 调整到模型允许范围内 |
+| `invalid duration: N, model X supports: 6, 10, 15 seconds` | 时长不在该模型的**枚举档位**内（grok） | 只能传 `6` / `10` / `15` |
+| `duration is required, model X supports: 6, 10, 15 seconds` | grok 未传 `duration` | 补上 `duration` |
 | `invalid resolution: X, model Y supports: ...` | 分辨率档位不属于该模型 | 按该模型允许的档位传值 |
-| `invalid aspect_ratio: X, must be one of: 16:9, 9:16` | 比例非法 | 只能传 `16:9` 或 `9:16` |
-| `too many reference images: N, model X allows at most M` | 参考图超上限 | 减少参考图 |
-| `model X does not support images` | 该模型不支持参考图 | 去掉 `images` |
+| `invalid aspect_ratio: X, must be one of: ...` | 比例非法 | 按提示给出的集合传值（grok 含 `1:1`） |
+| `too many reference images: N, model X allows at most M` | `images` 超上限 | 减少参考图 |
+| `too many reference images: N, model X allows at most M in extra.reference_images` | grok 的 `extra.reference_images` 超过 7 张 | 减少到 7 张以内 |
+| `single reference image must use input_reference, not extra.reference_images (upstream rejects this)` | grok 单图误放进 `extra.reference_images` | 改用 `input_reference` |
+| `model X does not support images` | 该模型不支持 `images` 字段（如 grok） | 去掉 `images`；grok 请改用 `input_reference` |
 | `too many reference videos: ...` / `model X does not support videos` | 参考视频超限或不支持 | 减少或去掉 `videos` |
 | `too many reference audios: ...` / `model X does not support audios` | 参考音频超限或不支持 | 减少或去掉 `audios` |
-| `audios cannot be used alone, at least one image or video is required` | 只传了音频 | 同时提供 `images` 或 `videos` |
+| `audios cannot be used alone, at least one image or video is required` | 只传了音频 | 同时提供 `images`（grok 用 `input_reference`）或 `videos` |
 | `model X does not support generate_audio` | 该模型不支持音效同步 | 去掉 `generate_audio`，或改用支持的模型 |
 
 ### 9.2 提交阶段（账号 / 路由类）
