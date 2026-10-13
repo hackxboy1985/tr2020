@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -69,24 +70,24 @@ type responseTask struct {
 	Model   string `json:"model"`
 	Status  string `json:"status"`
 	Content struct {
-		VideoURL      string `json:"video_url"`
-		LastFrameURL  string `json:"last_frame_url,omitempty"`
+		VideoURL     string `json:"video_url"`
+		LastFrameURL string `json:"last_frame_url,omitempty"`
 	} `json:"content"`
 	// Metadata 兼容下游为 new-api 时返回的 OpenAIVideo 格式（metadata.url 存视频地址）
-	Metadata               map[string]interface{} `json:"metadata,omitempty"`
-	Seed                   int                    `json:"seed,omitempty"`
-	Resolution             string                 `json:"resolution,omitempty"`
-	Duration               int                    `json:"duration,omitempty"`
-	Frames                 int                    `json:"frames,omitempty"`
-	Ratio                  string                 `json:"ratio,omitempty"`
-	FramesPerSecond        int                    `json:"framespersecond,omitempty"`
-	ServiceTier            string                 `json:"service_tier,omitempty"`
-	GenerateAudio          bool                   `json:"generate_audio,omitempty"`
-	OutputFormat           string                 `json:"output_format,omitempty"`
-	Draft                  bool                   `json:"draft,omitempty"`
-	DraftTaskID            string                 `json:"draft_task_id,omitempty"`
-	SafetyIdentifier       string                 `json:"safety_identifier,omitempty"`
-	ExecutionExpiresAfter  int                    `json:"execution_expires_after,omitempty"`
+	Metadata              map[string]interface{} `json:"metadata,omitempty"`
+	Seed                  int                    `json:"seed,omitempty"`
+	Resolution            string                 `json:"resolution,omitempty"`
+	Duration              int                    `json:"duration,omitempty"`
+	Frames                int                    `json:"frames,omitempty"`
+	Ratio                 string                 `json:"ratio,omitempty"`
+	FramesPerSecond       int                    `json:"framespersecond,omitempty"`
+	ServiceTier           string                 `json:"service_tier,omitempty"`
+	GenerateAudio         bool                   `json:"generate_audio,omitempty"`
+	OutputFormat          string                 `json:"output_format,omitempty"`
+	Draft                 bool                   `json:"draft,omitempty"`
+	DraftTaskID           string                 `json:"draft_task_id,omitempty"`
+	SafetyIdentifier      string                 `json:"safety_identifier,omitempty"`
+	ExecutionExpiresAfter int                    `json:"execution_expires_after,omitempty"`
 	// UpstreamTaskID 是豆包内部的源头任务 ID（如 cgt-... 格式）
 	UpstreamTaskID string `json:"upstream_task_id,omitempty"`
 	Tools          []struct {
@@ -113,11 +114,11 @@ type responseTask struct {
 
 type TaskAdaptor struct {
 	taskcommon.BaseBilling
-	ChannelType          int
-	apiKey               string
-	baseURL              string
-	videoGeneratePath    string
-	videoFetchPath       string
+	ChannelType       int
+	apiKey            string
+	baseURL           string
+	videoGeneratePath string
+	videoFetchPath    string
 }
 
 func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
@@ -183,8 +184,30 @@ func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
 // ValidateRequestAndSetAction parses body, validates fields and sets default action.
 func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycommon.RelayInfo) (taskErr *dto.TaskError) {
 	// Accept only POST /v1/video/generations as "generate" action.
-	return relaycommon.ValidateBasicTaskRequest(c, info, constant.TaskActionGenerate)
+	if taskErr = relaycommon.ValidateBasicTaskRequest(c, info, constant.TaskActionGenerate); taskErr != nil {
+		return taskErr
+	}
+
+	// 分辨率是计价的必要输入：解析不到（缺失或无法识别）直接拒绝请求，
+	// 不猜测、不兜底。解析结果缓存到 context，供 EstimateBilling 复用，
+	// 保证校验与计费使用同一个值。
+	req, err := relaycommon.GetTaskRequest(c)
+	if err != nil {
+		return service.TaskErrorWrapper(err, "get_task_request_failed", http.StatusBadRequest)
+	}
+	resolution := ResolveVideoResolution(&req)
+	if resolution == "" {
+		return service.TaskErrorWrapperLocal(
+			fmt.Errorf("resolution is required and must be one of: 480p, 720p, 1080p, 4k"),
+			"invalid_resolution", http.StatusBadRequest)
+	}
+	c.Set(contextKeyResolvedResolution, resolution)
+	return nil
 }
+
+// contextKeyResolvedResolution 缓存校验阶段解析出的分辨率，
+// 供 EstimateBilling 复用，避免二次解析产生不一致。
+const contextKeyResolvedResolution = "doubao_resolved_resolution"
 
 // BuildRequestURL constructs the upstream URL.
 func (a *TaskAdaptor) BuildRequestURL(_ *relaycommon.RelayInfo) (string, error) {
@@ -203,47 +226,154 @@ func (a *TaskAdaptor) BuildRequestHeader(_ *gin.Context, req *http.Request, _ *r
 	return nil
 }
 
-// EstimateBilling 检测请求 metadata 中是否包含视频输入，返回视频折扣 OtherRatio。
+// EstimateBilling 按「模型 + 输出分辨率 + 输入是否含视频」计算视频计费倍率。
+//
+// 计费基准：管理员将 ModelRatio / ModelPrice 配置为「480p/720p + 不含视频」标准价，
+// 即基准档不含视频价。relay 层用「管理员配的基准价 × 本函数返回的倍率」得出最终价，
+// 因此本函数的倍率分母必须取「基准档不含视频价」，才能与管理员配的基准价精确约分：
+//
+//	倍率 = 该档目标价 / 基准档(720p)不含视频价
+//	     = 该档目标价 / 管理员配的基准价
+//
+// 目标价按「有无视频输入」取该档的含视频价或不含视频价。
+// 因为分母已含分辨率溢价（如 1080p 的 77 相对 720p 的 70），
+// 单键即可同时表达「分辨率档位」与「视频输入折扣」两个维度，
+// 无需额外输出 resolution 键。
+//
+// 以 doubao-seedance-2.5（管理员基准价 70）为例：
+//
+//	480p/720p 不含视频 → 70/70 = 1.0      → 70
+//	1080p     不含视频 → 77/70 ≈ 1.1000   → 77
+//	480p/720p 含视频   → 42/70 = 0.6      → 42
+//	1080p     含视频   → 46/70 ≈ 0.6571   → 46
+//
+// 注意键名 video_input 是历史命名：返回值为「该档目标价相对基准档基准价的倍率」，
+// 已包含分辨率因素，并非单纯的视频输入折扣。
+//
+// 分辨率从两条路径解析：
+//   - OpenAI 兼容路径：/v1/videos 的 size / metadata.size
+//   - 官方 Ark 原生路径：/api/v3/contents/generations/tasks 的根级 resolution / metadata.resolution
 func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInfo) map[string]float64 {
 	req, err := relaycommon.GetTaskRequest(c)
 	if err != nil {
 		return nil
 	}
-	if hasVideoInMetadata(req.Metadata) {
-		if ratio, ok := GetVideoInputRatio(info.OriginModelName); ok {
-			return map[string]float64{"video_input": ratio}
-		}
+
+	// 模型名优先使用上游（映射后）模型名，回退到原始模型名
+	modelName := info.OriginModelName
+	if info.ChannelMeta != nil && info.ChannelMeta.UpstreamModelName != "" {
+		modelName = info.ChannelMeta.UpstreamModelName
 	}
-	return nil
+
+	// 1) 取输出分辨率：复用 ValidateRequestAndSetAction 校验阶段解析并缓存的结果，
+	//    保证校验与计费使用同一个值（校验阶段已确保非空，否则请求不会走到这里）。
+	resolution := c.GetString(contextKeyResolvedResolution)
+
+	// 2) 解析是否携带视频输入（metadata.content[].video_url / metadata.video_url）
+	hasVideoInput := hasVideoInMetadata(req.Metadata)
+
+	// 模型未配置视频价格表时返回 nil —— 不附加任何倍率，走原有基础费率计费。
+	// ok=false 的唯一原因是 videoPriceMap 没有该模型，与传入的分辨率无关，
+	// 因此只需查询一次（基准价由下方按需查询）。
+	priceWithoutVideo, priceWithVideo, ok := GetVideoResolutionPrice(modelName, resolution)
+	if !ok {
+		return nil
+	}
+
+	// 基准档价格：作为倍率的分母，必须与管理员配置的基准价（720p 不含视频价）
+	// 代表同一个值，才能在下游精确约分得到该档目标价。
+	// 基准档缺失或非正说明价格表配置错误：此时无法折算，返回 nil 走基础费率，
+	// 避免除以 0 得到 +Inf 导致预扣费失控。
+	baselineWithoutVideo, _, baselineOK := GetVideoResolutionPrice(modelName, ResolutionBaseline)
+	if !baselineOK || baselineWithoutVideo <= 0 {
+		return nil
+	}
+
+	// 目标价：按是否携带视频输入，取该分辨率档的含视频价或不含视频价。
+	var targetPrice float64
+	if hasVideoInput {
+		targetPrice = priceWithVideo
+	} else {
+		targetPrice = priceWithoutVideo
+	}
+
+	return map[string]float64{"video_input": targetPrice / baselineWithoutVideo}
 }
 
-// hasVideoInMetadata 直接检查 metadata 的 content 数组是否包含 video_url 条目，
-// 避免构建完整的上游 requestPayload。
+// almostEqualFloat 浮点近似相等判断（用于跳过 1.0 的中性倍率）。
+func almostEqualFloat(a, b float64) bool {
+	diff := a - b
+	if diff < 0 {
+		diff = -diff
+	}
+	return diff < 1e-9
+}
+
+// hasVideoInMetadata 检查 metadata 中是否包含视频输入（video_url 条目）。
+// 支持两种承载位置：
+//   - metadata.content[] 数组（Ark 原生格式）
+//   - metadata.video_url 扁平字段
+//
+// 注意：metadata["content"] 存在两种动态类型 ——
+// ValidateBasicTaskRequest 写入的是 []map[string]interface{}（Go 原生），
+// 而 JSON 反序列化得到的是 []interface{}。两者都要处理，否则 Ark 原生
+// 格式的视频输入会漏判。
 func hasVideoInMetadata(metadata map[string]interface{}) bool {
 	if metadata == nil {
 		return false
+	}
+	if v, exists := metadata["video_url"]; exists && v != nil && v != "" {
+		return true
 	}
 	contentRaw, ok := metadata["content"]
 	if !ok {
 		return false
 	}
-	contentSlice, ok := contentRaw.([]interface{})
-	if !ok {
-		return false
-	}
-	for _, item := range contentSlice {
-		itemMap, ok := item.(map[string]interface{})
-		if !ok {
-			continue
+
+	switch contentSlice := contentRaw.(type) {
+	case []map[string]interface{}:
+		for _, item := range contentSlice {
+			if contentItemHasVideo(item) {
+				return true
+			}
 		}
-		if itemMap["type"] == "video_url" {
-			return true
-		}
-		if _, has := itemMap["video_url"]; has {
-			return true
+	case []interface{}:
+		for _, item := range contentSlice {
+			itemMap, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if contentItemHasVideo(itemMap) {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+// contentItemHasVideo 判断单个 content 条目是否为视频素材。
+func contentItemHasVideo(item map[string]interface{}) bool {
+	if item == nil {
+		return false
+	}
+	if item["type"] == "video_url" {
+		return true
+	}
+	if _, has := item["video_url"]; has {
+		return true
+	}
+	return false
+}
+
+// responseResolution 从上游响应的嵌套字段中提取分辨率。
+// 部分上游把分辨率放在 metadata.resolution / content.resolution 中。
+func responseResolution(resTask responseTask) string {
+	if resTask.Metadata != nil {
+		if r := resolveResolutionFromMetadata(resTask.Metadata); r != "" {
+			return r
+		}
+	}
+	return ""
 }
 
 // BuildRequestBody converts request into Doubao specific format.
@@ -397,6 +527,14 @@ func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq) (*
 	metadata := req.Metadata
 	if err := taskcommon.UnmarshalMetadata(metadata, &r); err != nil {
 		return nil, errors.Wrap(err, "unmarshal metadata failed")
+	}
+
+	// 分辨率兜底：metadata 未携带 resolution 时，从请求的其它写法补齐（如
+	// 根级 resolution 或 content[] 内的 resolution），确保上游请求与计费同一口径。
+	if strings.TrimSpace(r.Resolution) == "" {
+		if resolution := ResolveVideoResolution(req); resolution != "" {
+			r.Resolution = resolution
+		}
 	}
 
 	// Re-merge image items extracted during parsing.
@@ -636,6 +774,8 @@ func (a *TaskAdaptor) ConvertToOpenAIVideo(originTask *model.Task) ([]byte, erro
 	}
 	if dResp.Resolution != "" {
 		openAIVideo.SetMetadata("resolution", dResp.Resolution)
+	} else if nested := responseResolution(dResp); nested != "" {
+		openAIVideo.SetMetadata("resolution", nested)
 	}
 	if dResp.FramesPerSecond > 0 {
 		openAIVideo.SetMetadata("framespersecond", dResp.FramesPerSecond)
