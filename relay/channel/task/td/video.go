@@ -129,29 +129,51 @@ func (a *TaskAdaptor) validateVideoRequest(
 		return badRequest("unsupported video model: %s", model)
 	}
 
-	// 时长：缺省填默认值；显式传值必须在模型范围内。
-	// Duration 为指针，故「未传」与「显式传 0」可区分 —— 后者会因小于
-	// MinDuration 被拒，不会被误当成缺省。
-	duration := spec.DefaultDuration
-	if req.Duration != nil {
-		if *req.Duration < spec.MinDuration || *req.Duration > spec.MaxDuration {
+	// 时长。
+	// 枚举模式（AllowedDurations 非空，如 grok 的 6/10/15）优先于范围模式。
+	// RequireDuration 为真时不允许缺省（grok 上游文档标 duration 必填）。
+	// Duration 为指针，故「未传」与「显式传 0」可区分 —— 后者不在枚举集合
+	// 或低于下限，一律被拒，不会被误当成缺省。
+	switch {
+	case len(spec.AllowedDurations) > 0:
+		if req.Duration == nil {
+			if spec.RequireDuration {
+				return badRequest(
+					"duration is required, model %s supports: %s seconds",
+					model, spec.durationHint(),
+				)
+			}
+			d := spec.DefaultDuration
+			req.Duration = &d
+		} else if !spec.supportsDuration(*req.Duration) {
 			return badRequest(
-				"invalid duration: %d, model %s supports %s seconds",
+				"invalid duration: %d, model %s supports: %s seconds",
 				*req.Duration, model, spec.durationHint(),
 			)
 		}
-		duration = *req.Duration
+	default:
+		duration := spec.DefaultDuration
+		if req.Duration != nil {
+			if !spec.supportsDuration(*req.Duration) {
+				return badRequest(
+					"invalid duration: %d, model %s supports %s seconds",
+					*req.Duration, model, spec.durationHint(),
+				)
+			}
+			duration = *req.Duration
+		}
+		req.Duration = &duration
 	}
-	req.Duration = &duration
 
-	// 画面比例：缺省 16:9
+	// 画面比例：缺省 16:9。
+	// 校验按模型区分（spec.AllowedAspectRatios），未声明的模型回退通用集合。
 	if strings.TrimSpace(req.AspectRatio) == "" {
 		req.AspectRatio = AspectRatio16x9
 	}
-	if !supportsAspectRatio(req.AspectRatio) {
+	if !spec.supportsAspectRatio(req.AspectRatio) {
 		return badRequest(
 			"invalid aspect_ratio: %s, must be one of: %s",
-			req.AspectRatio, strings.Join(allowedAspectRatios, ", "),
+			req.AspectRatio, spec.aspectRatioHint(),
 		)
 	}
 
@@ -205,6 +227,27 @@ func (a *TaskAdaptor) validateVideoRequest(
 		return badRequest("model %s does not support generate_audio", model)
 	}
 
+	// extra.reference_images 校验。
+	// 仅当模型声明了该通道上限（MaxExtraReferenceImages > 0）时进入 ——
+	// 存量三模型该字段为 0，天然跳过本段，行为完全不受影响。
+	if spec.MaxExtraReferenceImages > 0 {
+		refs := extractReferenceImages(req.Extra)
+		// 上游约束：单图必须走 input_reference，误用 extra.reference_images 会 400。
+		// 提前拦截并给出明确指引，避免用户拿到上游的晦涩报错。
+		if len(refs) == 1 {
+			return badRequest(
+				"single reference image must use input_reference, " +
+					"not extra.reference_images (upstream rejects this)",
+			)
+		}
+		if len(refs) > spec.MaxExtraReferenceImages {
+			return badRequest(
+				"too many reference images: %d, model %s allows at most %d in extra.reference_images",
+				len(refs), model, spec.MaxExtraReferenceImages,
+			)
+		}
+	}
+
 	// 记录解析后的上游模型名，供后续建体与查询使用
 	info.UpstreamModelName = model
 	if info.OriginModelName == "" {
@@ -212,6 +255,40 @@ func (a *TaskAdaptor) validateVideoRequest(
 	}
 
 	return nil
+}
+
+// extractReferenceImages 从 extra.reference_images 安全取出参考图条目。
+//
+// extra 是 map[string]any（上游字段集仍在演进），故不能假设元素类型：
+// 上游文档中元素为 {"url":..., "role":...} 对象，但为稳健起见同时兼容
+// 纯字符串写法。无法识别的元素**不计入**（宁可少算也不误报超限）。
+//
+// 返回 nil 表示未提供该字段或形态不符。
+func extractReferenceImages(extra map[string]any) []any {
+	if extra == nil {
+		return nil
+	}
+	raw, ok := extra[ExtraKeyReferenceImages]
+	if !ok || raw == nil {
+		return nil
+	}
+	switch v := raw.(type) {
+	case []any:
+		out := make([]any, 0, len(v))
+		for _, item := range v {
+			switch item.(type) {
+			case map[string]any, string:
+				out = append(out, item)
+			}
+		}
+		return out
+	case map[string]any:
+		// 单元素对象写法：上游要求单图走 input_reference，
+		// 这里计入 1 以便触发「单图误用」提示。
+		return []any{v}
+	default:
+		return nil
+	}
 }
 
 // ============================

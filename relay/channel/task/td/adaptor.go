@@ -276,7 +276,11 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		return
 	}
 
-	if sResp.Data.ID == "" {
+	// 任务 ID 位置按上游文档依次兜底：data.id → data.task_id → 顶层 id。
+	// 部分中继把 ID 放在顶层或 task_id 字段（见 grok 文档），
+	// 只读 data.id 会导致这类上游被误判为响应异常。
+	taskID = sResp.resolveTaskID()
+	if taskID == "" {
 		taskErr = service.TaskErrorWrapperLocal(
 			fmt.Errorf("task_id not found in response"),
 			"invalid_response",
@@ -285,7 +289,6 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		return
 	}
 
-	taskID = sResp.Data.ID
 	taskData = responseBody
 
 	// 保存响应体到 context，供 LogTaskConsumption 写入 other["response_body"]
@@ -300,6 +303,17 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 	if a.videoTask {
 		object = "video.task"
 	}
+
+	// 空响应体探针：仅在异常时输出，正常路径不产生任何日志。
+	//
+	// 背景：曾出现「HTTP 200 但响应体为空」的偶发问题（下游只看到 200，读不到 body）。
+	// 本 adaptor 是唯一写响应体的一方，故在此处判定 writer 原始状态：
+	//   - wroteBefore=true 表示响应在本函数之前已被写过，Gin/net-http 会丢弃本次
+	//     c.JSON 的内容，结果即「200 + 空 body」——这是最可疑的成因；
+	//   - size<=0 表示 c.JSON 之后仍未写入有效内容。
+	// 两种情况都属异常，打印一次便于事后定位；正常情况（wroteBefore=false 且 size>0）
+	// 完全静默，避免污染日志。
+	wroteBefore := c.Writer.Written()
 	c.JSON(http.StatusOK, gin.H{
 		"id":      info.PublicTaskID,
 		"object":  object,
@@ -307,6 +321,13 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		"model":   info.OriginModelName,
 		"created": time.Now().Unix(),
 	})
+	if wroteBefore || c.Writer.Size() <= 0 {
+		logger.LogError(c, fmt.Sprintf(
+			"Td DoResponse abnormal response write: wroteBefore=%v status=%d size=%d path=%s taskId=%s",
+			wroteBefore, c.Writer.Status(), c.Writer.Size(),
+			c.Request.URL.Path, info.PublicTaskID,
+		))
+	}
 
 	return
 }
@@ -432,6 +453,14 @@ func convertTudouStatus(status string) string {
 	switch status {
 	case StatusSubmitted:
 		return string(model.TaskStatusSubmitted)
+	case StatusQueued:
+		// 上游 grok 文档状态表含 queued（与 submitted 同义：已提交等待处理）。
+		// 未加此分支时该状态落 default → UNKNOWN，任务会卡到超时；
+		// 映射为 QUEUED 后可正常推进。
+		//
+		// 注意：本函数图片/视频分支共用。图片上游不发该状态，
+		// 新增此分支对图片链路无可观测影响（仅是把潜在的 UNKNOWN 改为正常态）。
+		return string(model.TaskStatusQueued)
 	case StatusProcessing:
 		return string(model.TaskStatusInProgress)
 	case StatusCompleted:

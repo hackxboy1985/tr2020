@@ -15,6 +15,11 @@ const (
 	VideoModelMiniMaxH3  = "minimax-h3"
 	VideoModelSeedance20 = "seedance-2.0"
 	VideoModelSeedance25 = "seedance-2.5"
+	// VideoModelGrokImagineVideo15 grok 视频模型。
+	// 与前三者路径相同（/v1/videos/generations + /v1/tasks/{id}），
+	// 但参数协议不同（extra 必填、duration 枚举、支持 1:1），
+	// 详见 docs/channel/td-grok-video-design.md。
+	VideoModelGrokImagineVideo15 = "grok-imagine-video-1.5"
 )
 
 // 视频参数取值
@@ -25,13 +30,25 @@ const (
 
 	AspectRatio16x9 = "16:9"
 	AspectRatio9x16 = "9:16"
+	// AspectRatio1x1 grok 专有比例，另外三个视频模型不支持。
+	AspectRatio1x1 = "1:1"
 )
 
 const (
 	StatusSubmitted  = "submitted"
+	StatusQueued     = "queued"
 	StatusProcessing = "processing"
 	StatusCompleted  = "completed"
 	StatusFailed     = "failed"
+)
+
+// extra 协议相关
+const (
+	// ExtraKeyReferenceImages grok 通过 extra.reference_images 传首尾帧/多参考图。
+	ExtraKeyReferenceImages = "reference_images"
+	// ExtraKeyAspectRatio / ExtraKeyResolution grok 要求 extra 至少含这两项。
+	ExtraKeyAspectRatio = "aspect_ratio"
+	ExtraKeyResolution  = "resolution"
 )
 
 // Resolution 清晰度档位

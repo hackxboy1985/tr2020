@@ -1,5 +1,7 @@
 package td
 
+import "strings"
+
 // ============================
 // Request structures
 // ============================
@@ -19,15 +21,35 @@ type GenerateRequest struct {
 // ============================
 
 // SubmitResponse 提交任务响应
+//
+// 任务 ID 的位置在不同上游/中继间不一致，按上游文档依次兜底：
+//
+//	data.id → data.task_id → 顶层 id
+//
+// 前两者见 grok 文档「任务 ID 取 data.id 或 data.task_id。
+// 部分中继也会把 ID 放在顶层 id」。
 type SubmitResponse struct {
+	// ID 部分中继把任务 ID 放在顶层，仅作兜底
+	ID   string `json:"id"`
 	Code int    `json:"code"`
 	Data struct {
 		ID            string `json:"id"`             // task_id
+		TaskID        string `json:"task_id"`        // 与 id 等价，见 grok 文档
 		Status        string `json:"status"`         // submitted
 		Progress      int    `json:"progress"`       // 0
 		Created       int64  `json:"created"`        // 创建时间戳
 		EstimatedTime int    `json:"estimated_time"` // 预估时间（秒）
 	} `json:"data"`
+}
+
+// resolveTaskID 按 data.id → data.task_id → 顶层 id 顺序取任务 ID。
+func (r SubmitResponse) resolveTaskID() string {
+	for _, candidate := range []string{r.Data.ID, r.Data.TaskID, r.ID} {
+		if v := strings.TrimSpace(candidate); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // QueryTaskResponse 查询任务响应
