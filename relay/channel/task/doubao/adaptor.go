@@ -259,11 +259,17 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 		return nil
 	}
 
-	// 模型名优先使用上游（映射后）模型名，回退到原始模型名
+	// 计费一律使用原始模型名（OriginModelName），与基础费率保持一致：
+	// relay_task.go:181 在 ModelMappedHelper 之后显式把 OriginModelName 复原为
+	// 用户请求的模型名，ModelPriceHelperPerCall（price.go:175）即按该名查基础费率。
+	// 本函数返回的倍率是乘在该基础费率上的，必须查同一套命名，否则会语义错位。
+	//
+	// 以下为使用上游（映射后）模型名的旧实现，暂时保留备查，不再启用：
+	// modelName := info.OriginModelName
+	// if info.ChannelMeta != nil && info.ChannelMeta.UpstreamModelName != "" {
+	// 	modelName = info.ChannelMeta.UpstreamModelName
+	// }
 	modelName := info.OriginModelName
-	if info.ChannelMeta != nil && info.ChannelMeta.UpstreamModelName != "" {
-		modelName = info.ChannelMeta.UpstreamModelName
-	}
 
 	// 1) 取输出分辨率：复用 ValidateRequestAndSetAction 校验阶段解析并缓存的结果，
 	//    保证校验与计费使用同一个值（校验阶段已确保非空，否则请求不会走到这里）。
@@ -298,8 +304,17 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 	}
 
 	ratio := targetPrice / baselineWithoutVideo
-	common.SysLog(fmt.Sprintf("[Doubao Video] EstimateBilling: model=%s, resolution=%s, hasVideoInput=%t, priceWithoutVideo=%.2f, priceWithVideo=%.2f, baselineWithoutVideo=%.2f, video_input=%.6f",
-		modelName, resolution, hasVideoInput, priceWithoutVideo, priceWithVideo, baselineWithoutVideo, ratio))
+	// 同时打印原始模型名与上游（映射后）模型名：
+	// 实际查表用的是 OriginModelName，UpstreamModelName 仅作对照便于排查映射配置。
+	upstreamModelName := ""
+	if info.ChannelMeta != nil {
+		upstreamModelName = info.ChannelMeta.UpstreamModelName
+	}
+	// 日志写成 "video_input=46/70=0.657143" 的形式直接展示分子分母，
+	// 便于一眼看出倍率取自哪个分辨率档、是否含视频，无需回查价格表。
+	// 用 %.0f 打印价格，避免 46.00 这类冗余小数影响可读性。
+	common.SysLog(fmt.Sprintf("[Doubao Video] EstimateBilling: originModel=%s, upstreamModel=%s, resolution=%s, hasVideoInput=%t, video_input=%.0f/%.0f=%.6f",
+		modelName, upstreamModelName, resolution, hasVideoInput, targetPrice, baselineWithoutVideo, ratio))
 
 	return map[string]float64{"video_input": ratio}
 }

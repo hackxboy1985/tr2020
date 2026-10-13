@@ -383,8 +383,12 @@ func TestEstimateBillingUnconfiguredModel(t *testing.T) {
 	}
 }
 
-// 模型映射：应以上游模型名查表
-func TestEstimateBillingUsesUpstreamModelName(t *testing.T) {
+// 模型映射：计费一律按原始模型名（OriginModelName）查表，与基础费率一致。
+//
+// relay_task.go:181 在 ModelMappedHelper 之后显式把 OriginModelName 复原为
+// 用户请求的模型名，ModelPriceHelperPerCall 即按该名查基础费率；
+// 本函数返回的倍率乘在该基础费率上，故必须查同一套命名。
+func TestEstimateBillingUsesOriginModelName(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	c, _ := newTestContext(`{"model":"my-alias","content":[{"type":"text","text":"p"}],"resolution":"1080p"}`)
 	info := &relaycommon.RelayInfo{
@@ -392,10 +396,25 @@ func TestEstimateBillingUsesUpstreamModelName(t *testing.T) {
 		ChannelMeta:     &relaycommon.ChannelMeta{UpstreamModelName: model20, IsModelMapped: true},
 	}
 	got := (&TaskAdaptor{}).EstimateBilling(c, info)
-	// 1080p 不含视频：51/46（上游 model20 的基准档不含视频价为 46）
+	// 原模型名 "my-alias" 不在价格表中，应按未配置处理：不附加任何倍率。
+	if len(got) != 0 {
+		t.Fatalf("应按原始模型名查表，未配置时返回 nil, got=%v", got)
+	}
+}
+
+// 原始模型名已在价格表中、且渠道配置了映射时，仍按原始模型名查表。
+func TestEstimateBillingOriginModelNameWinsOverUpstream(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	// 原模型名为 model25（价格表基准 70），上游映射为 model20（基准 46）。
+	c, _ := newTestContext(`{"model":"doubao-seedance-2-5-260628","content":[{"type":"text","text":"p"}],"resolution":"1080p"}`)
+	info := &relaycommon.RelayInfo{
+		OriginModelName: model25,
+		ChannelMeta:     &relaycommon.ChannelMeta{UpstreamModelName: model20, IsModelMapped: true},
+	}
+	got := (&TaskAdaptor{}).EstimateBilling(c, info)
 	videoRatio, hasVideo := got["video_input"]
-	if !hasVideo || !almostEqual(videoRatio, 51.0/46.0) {
-		t.Fatalf("模型映射后应按上游模型名查表, got=%v", got)
+	if !hasVideo || !almostEqual(videoRatio, 77.0/70.0) {
+		t.Fatalf("应按原始模型名 model25 查表（1080p 不含视频 = 77/70）, got=%v", got)
 	}
 	if len(got) != 1 {
 		t.Fatalf("应只返回 1 个倍率, got=%v", got)
