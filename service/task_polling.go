@@ -17,6 +17,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/bytedance/gopkg/util/gopool"
 
 	"github.com/samber/lo"
 )
@@ -133,6 +134,16 @@ func TaskPollingLoop() {
 
 			DispatchPlatformUpdate(platform, taskChannelM, taskM)
 		}
+
+		// 对象存储转存补扫。
+		//
+		// 为什么需要补扫：转存是异步 goroutine，进程重启会导致未完成的转存丢失，
+		// 使任务停留在「已成功但 OssURL 为空」的状态。此处定期重试，避免用户
+		// 因上游 URL 过期而永久失去结果。
+		//
+		// 未配置对象存储或未开启任何渠道开关时，函数内部直接返回，无额外开销。
+		RunOssTransferCompensation(ctx)
+
 		common.SysLog("任务进度轮询完成")
 	}
 }
@@ -466,6 +477,40 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 			}
 		}
 		shouldSettle = true
+
+		// 对象存储转存：判定并异步执行。
+		//
+		// 关键约束：
+		//  1. 位置必须在 shouldSettle 之后 —— 转存与计费完全解耦，转存失败绝不影响结算；
+		//  2. 必须异步（goroutine）—— 视频可达数百 MB，同步上传会阻塞轮询循环，
+		//     导致其他任务状态更新延迟；
+		//  3. 媒体类型按响应体结构判定（与结果解析同一判据），不能用适配器状态 ——
+		//     轮询会重建适配器实例，提交阶段的标记不会带过来。
+		//
+		// 未开启开关或未配置对象存储时，ShouldTransferToOss 直接返回 false，
+		// 不产生任何行为变化。
+		if ShouldTransferToOss(ch, task, taskResult.Url, MediaTypeIsVideo(responseBody)) {
+			// 传入 task 的副本，避免后台 goroutine 与主流程共享可变状态
+			taskForTransfer := *task
+			chForTransfer := ch
+			srcURL := taskResult.Url
+			isVideo := MediaTypeIsVideo(responseBody)
+			gopool.Go(func() {
+				// 使用独立 context：轮询的 ctx 可能在请求结束后被取消，
+				// 而转存需要在后台继续完成。
+				defer func() {
+					if r := recover(); r != nil {
+						logger.LogError(ctx, fmt.Sprintf(
+							"oss transfer panic task=%s: %v", taskForTransfer.TaskID, r))
+					}
+				}()
+				if err := TransferTaskResultToOss(context.Background(), &taskForTransfer, chForTransfer, srcURL, isVideo); err != nil {
+					// 失败已在函数内记录日志与失败表，此处无需重复处理。
+					// 明确吞掉错误：转存失败绝不影响主流程。
+					_ = err
+				}
+			})
+		}
 	case model.TaskStatusFailure:
 		logger.LogJson(ctx, fmt.Sprintf("Task %s failed", taskId), task)
 		task.Status = model.TaskStatusFailure

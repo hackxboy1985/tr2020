@@ -28,6 +28,8 @@ plans
 .cursor
 docs/RR
 
+.gotmp/
+
 electron/node_modules
 electron/dist
 data/

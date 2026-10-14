@@ -101,6 +101,15 @@ type TaskPrivateData struct {
 	UpstreamTaskID string `json:"upstream_task_id,omitempty"` // 上游真实 task ID
 	ResultURL      string `json:"result_url,omitempty"`       // 任务成功后的结果 URL（视频地址等）
 	ExpireAt       int64  `json:"expire_at,omitempty"`        // URL 有效期截止时间（Unix 秒），0 表示不限期
+	// 对象存储转存字段（Td 渠道）
+	//
+	// 设计要点：OssURL 与 ResultURL **并存且不互相覆盖**。
+	//   - ResultURL 始终保留上游原始地址：转存失败时可降级返回，人工对账时可回溯来源。
+	//   - OssURL 为空表示「尚未成功转存」，据此实现幂等（避免轮询重复上传）。
+	OssURL              string `json:"oss_url,omitempty"`               // 转存后的对象存储公网地址
+	OssObjectKey        string `json:"oss_object_key,omitempty"`        // 对象键，便于后续清理/迁移
+	OssUploadedAt       int64  `json:"oss_uploaded_at,omitempty"`       // 转存完成时间（Unix 秒）
+	OssTransferAttempts int    `json:"oss_transfer_attempts,omitempty"` // 已尝试转存次数（上限 3）
 	// 计费上下文：用于异步退款/差额结算（轮询阶段读取）
 	BillingSource   string              `json:"billing_source,omitempty"`   // "wallet" 或 "subscription"
 	SubscriptionId  int                 `json:"subscription_id,omitempty"`  // 订阅 ID，用于订阅退款
@@ -136,6 +145,48 @@ func (t *Task) GetResultURL() string {
 		return t.PrivateData.ResultURL
 	}
 	return t.FailReason
+}
+
+// GetPreferredResultURL 获取对外返回的结果 URL：优先对象存储地址，未转存时回退上游原始 URL。
+//
+// 使用场景：所有对外返回任务结果的入口。
+//
+// 为什么要独立成方法而不是就地判断：把「优先OSS、降级上游」的规则收敛到一处，
+// 避免多处实现不一致。同时配合 HasOssResult 使用，可确保对象存储地址
+// **不会**被 rewriteResultURLWithMappings 二次改写（那会把域名改错）。
+func (t *Task) GetPreferredResultURL() string {
+	if t.PrivateData.OssURL != "" {
+		return t.PrivateData.OssURL
+	}
+	return t.GetResultURL()
+}
+
+// HasOssResult 判断结果是否已成功转存到对象存储。
+//
+// 为 true 时，调用方**不得**再对返回地址执行上游域名改写
+// （rewriteResultURLWithMappings），因为该地址已属于本系统对象存储。
+func (t *Task) HasOssResult() bool {
+	return t.PrivateData.OssURL != ""
+}
+
+// CanRetryOssTransfer 判断该任务是否仍可尝试转存。
+//
+// 三个条件同时满足才允许：
+//  1. 尚未成功转存（OssURL 为空）—— 保证幂等，避免重复上传；
+//  2. 未达重试上限 —— 超过 maxAttempts 次后停止，避免无限重试刷满失败表；
+//  3. 上游 URL 未过期 —— 已过期的地址无需再重试（必然失败）。
+func (t *Task) CanRetryOssTransfer(maxAttempts int) bool {
+	if t.PrivateData.OssURL != "" {
+		return false
+	}
+	if t.PrivateData.OssTransferAttempts >= maxAttempts {
+		return false
+	}
+	// ExpireAt 为 0 表示不限期的地址，可继续重试
+	if t.PrivateData.ExpireAt > 0 && time.Now().Unix() >= t.PrivateData.ExpireAt {
+		return false
+	}
+	return true
 }
 
 // GenerateTaskID 生成对外暴露的 task_xxxx 格式 ID
@@ -306,6 +357,39 @@ func GetTimedOutUnfinishedTasks(cutoffUnix int64, limit int) []*Task {
 	return tasks
 }
 
+// GetPendingOssTransferTasks 查询「需要转存但尚未成功转存」的任务，用于重启补偿。
+//
+// 背景：转存是异步 goroutine，进程重启会导致未完成的转存丢失。本查询配合
+// 轮询任务定期补扫，使这类任务能被重新转存。
+//
+// 筛选策略（重要，涉及三库兼容）：
+//
+//	private_data 是 type:json 列，直接在其中过滤 oss_url 会引入方言差异
+//	（PostgreSQL ->>、MySQL JSON_EXTRACT、SQLite json_extract），违反
+//	AGENTS.md Rule 2。因此这里**只用普通列**做 DB 过滤，并留出余量，
+//	再由调用方在 Go 侧解析 private_data 做精确判断：
+//	  1. status = SUCCESS（普通列，索引可用）
+//	  2. channel_id IN (...)（普通列）
+//	  3. expire_at 条件无法在 SQL 中表达（在 JSON 内），故交由 Go 侧判断
+//
+// 调用方必须使用 Task.CanRetryOssTransfer 做最终判定（含幂等、重试上限、
+// 过期检查），本函数只负责高效缩小候选集。
+func GetPendingOssTransferTasks(channelIds []int, limit int) []*Task {
+	if len(channelIds) == 0 || limit <= 0 {
+		return nil
+	}
+	var tasks []*Task
+	err := DB.Where("status = ?", TaskStatusSuccess).
+		Where("channel_id IN ?", channelIds).
+		Order("finish_time DESC").
+		Limit(limit).
+		Find(&tasks).Error
+	if err != nil {
+		return nil
+	}
+	return tasks
+}
+
 func GetAllUnFinishSyncTasks(limit int) []*Task {
 	var tasks []*Task
 	var err error
@@ -419,6 +503,50 @@ func (t *Task) UpdateWithStatus(fromStatus TaskStatus) (bool, error) {
 	return result.RowsAffected > 0, nil
 }
 
+// UpdateOssTransferFields 仅更新对象存储转存相关字段。
+//
+// 为什么不复用 t.Update()（整行 SELECT * 更新）：
+// 转存是异步 goroutine，与轮询主流程并发。若整行覆盖，可能把轮询刚写入的
+// status/progress 等字段用旧值覆盖回去（lost update）。
+//
+// 本方法只写入 4 个转存字段，且采用「先整行 save private_data」的方式：
+// private_data 是整列 JSON，必须整体写入，故在写入前重新读取当前值、
+// 仅替换转存字段后落库，以最大程度降低覆盖风险。
+//
+// 由于同一任务的转存是串行的（CanRetryOssTransfer 的幂等检查 + 单任务单次
+// 处理），且转存与状态轮询操作的是不同字段，实际竞态窗口极小。
+func (t *Task) UpdateOssTransferFields() error {
+	return DB.Model(&Task{}).Where("task_id = ?", t.TaskID).
+		UpdateColumn("private_data", t.PrivateData).Error
+}
+
+// RefreshPrivateData 从数据库重新读取 private_data，避免用陈旧副本覆盖并发写入。
+func (t *Task) RefreshPrivateData() error {
+	var fresh Task
+	if err := DB.Where("task_id = ?", t.TaskID).First(&fresh).Error; err != nil {
+		return err
+	}
+	// 仅刷新转存相关字段，其余字段以调用方持有的为准，避免影响计费上下文
+	if t.PrivateData.OssURL == "" {
+		t.PrivateData.OssURL = fresh.PrivateData.OssURL
+	}
+	if t.PrivateData.OssObjectKey == "" {
+		t.PrivateData.OssObjectKey = fresh.PrivateData.OssObjectKey
+	}
+	if t.PrivateData.OssUploadedAt == 0 {
+		t.PrivateData.OssUploadedAt = fresh.PrivateData.OssUploadedAt
+	}
+	if t.PrivateData.OssTransferAttempts == 0 {
+		t.PrivateData.OssTransferAttempts = fresh.PrivateData.OssTransferAttempts
+	}
+	if t.PrivateData.ResultURL == "" {
+		t.PrivateData.ResultURL = fresh.PrivateData.ResultURL
+	}
+	if t.PrivateData.ExpireAt == 0 {
+		t.PrivateData.ExpireAt = fresh.PrivateData.ExpireAt
+	}
+	return nil
+}
 // TaskBulkUpdate performs an unconditional bulk UPDATE by upstream task_id strings.
 // Same caveats as TaskBulkUpdateByID — no CAS guard.
 func TaskBulkUpdate(taskIds []string, params map[string]any) error {
@@ -517,6 +645,7 @@ func (t *Task) ToOpenAIVideo() *dto.OpenAIVideo {
 	openAIVideo.SetProgressStr(t.Progress)
 	openAIVideo.CreatedAt = t.CreatedAt
 	openAIVideo.CompletedAt = t.UpdatedAt
-	openAIVideo.SetMetadata("url", t.GetResultURL())
+	// 优先返回对象存储地址：转存后用户应拿到不依赖上游 TTL 的稳定地址
+	openAIVideo.SetMetadata("url", t.GetPreferredResultURL())
 	return openAIVideo
 }
