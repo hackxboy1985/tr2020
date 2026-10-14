@@ -84,50 +84,61 @@ func VideoProxy(c *gin.Context) {
 		return
 	}
 
-	switch channel.Type {
-	case constant.ChannelTypeGemini:
-		apiKey := task.PrivateData.Key
-		if apiKey == "" {
-			logger.LogError(c.Request.Context(), fmt.Sprintf("Missing stored API key for Gemini task %s", taskID))
-			videoProxyError(c, http.StatusInternalServerError, "server_error", "API key not stored for task")
-			return
+	// 优先短路：结果已转存到对象存储时直接回源对象存储，
+	// 不再走各渠道的上游拉取逻辑。
+	//
+	// 这样处理的原因：
+	//  1. 对象存储地址不依赖上游 TTL，无需再做过期拦截（RR / Zy 分支的
+	//     expire_at 检查针对的是上游地址，对已转存的地址不适用）；
+	//  2. 避免用上游渠道的 Key 去请求本系统对象存储，造成无意义的鉴权与失败。
+	if ossURL := task.PrivateData.OssURL; ossURL != "" {
+		videoURL = ossURL
+	} else {
+		switch channel.Type {
+		case constant.ChannelTypeGemini:
+			apiKey := task.PrivateData.Key
+			if apiKey == "" {
+				logger.LogError(c.Request.Context(), fmt.Sprintf("Missing stored API key for Gemini task %s", taskID))
+				videoProxyError(c, http.StatusInternalServerError, "server_error", "API key not stored for task")
+				return
+			}
+			videoURL, err = getGeminiVideoURL(channel, task, apiKey)
+			if err != nil {
+				logger.LogError(c.Request.Context(), fmt.Sprintf("Failed to resolve Gemini video URL for task %s: %s", taskID, err.Error()))
+				videoProxyError(c, http.StatusBadGateway, "server_error", "Failed to resolve Gemini video URL")
+				return
+			}
+			req.Header.Set("x-goog-api-key", apiKey)
+		case constant.ChannelTypeVertexAi:
+			videoURL, err = getVertexVideoURL(channel, task)
+			if err != nil {
+				logger.LogError(c.Request.Context(), fmt.Sprintf("Failed to resolve Vertex video URL for task %s: %s", taskID, err.Error()))
+				videoProxyError(c, http.StatusBadGateway, "server_error", "Failed to resolve Vertex video URL")
+				return
+			}
+		case constant.ChannelTypeOpenAI, constant.ChannelTypeSora:
+			videoURL = fmt.Sprintf("%s/v1/videos/%s/content", baseURL, task.GetUpstreamTaskID())
+			req.Header.Set("Authorization", "Bearer "+channel.Key)
+		case constant.ChannelTypeRR:
+			// Check URL expiry before proxying
+			if expireAt := task.PrivateData.ExpireAt; expireAt > 0 && time.Now().Unix() > expireAt {
+				videoProxyError(c, http.StatusGone, "url_expired",
+					"Image URL has expired. Please regenerate the image.")
+				return
+			}
+			videoURL = task.GetResultURL()
+		case constant.ChannelTypeZy:
+			// zy 上游图片 URL 默认 5 小时有效；仅在渠道配置了 TTL 时才做过期拦截
+			if expireAt := task.PrivateData.ExpireAt; expireAt > 0 && time.Now().Unix() > expireAt {
+				videoProxyError(c, http.StatusGone, "url_expired",
+					"Image URL has expired. Please regenerate the image.")
+				return
+			}
+			videoURL = task.GetResultURL()
+		default:
+			// Video URL is stored in PrivateData.ResultURL (fallback to FailReason for old data)
+			videoURL = task.GetResultURL()
 		}
-		videoURL, err = getGeminiVideoURL(channel, task, apiKey)
-		if err != nil {
-			logger.LogError(c.Request.Context(), fmt.Sprintf("Failed to resolve Gemini video URL for task %s: %s", taskID, err.Error()))
-			videoProxyError(c, http.StatusBadGateway, "server_error", "Failed to resolve Gemini video URL")
-			return
-		}
-		req.Header.Set("x-goog-api-key", apiKey)
-	case constant.ChannelTypeVertexAi:
-		videoURL, err = getVertexVideoURL(channel, task)
-		if err != nil {
-			logger.LogError(c.Request.Context(), fmt.Sprintf("Failed to resolve Vertex video URL for task %s: %s", taskID, err.Error()))
-			videoProxyError(c, http.StatusBadGateway, "server_error", "Failed to resolve Vertex video URL")
-			return
-		}
-	case constant.ChannelTypeOpenAI, constant.ChannelTypeSora:
-		videoURL = fmt.Sprintf("%s/v1/videos/%s/content", baseURL, task.GetUpstreamTaskID())
-		req.Header.Set("Authorization", "Bearer "+channel.Key)
-	case constant.ChannelTypeRR:
-		// Check URL expiry before proxying
-		if expireAt := task.PrivateData.ExpireAt; expireAt > 0 && time.Now().Unix() > expireAt {
-			videoProxyError(c, http.StatusGone, "url_expired",
-				"Image URL has expired. Please regenerate the image.")
-			return
-		}
-		videoURL = task.GetResultURL()
-	case constant.ChannelTypeZy:
-		// zy 上游图片 URL 默认 5 小时有效；仅在渠道配置了 TTL 时才做过期拦截
-		if expireAt := task.PrivateData.ExpireAt; expireAt > 0 && time.Now().Unix() > expireAt {
-			videoProxyError(c, http.StatusGone, "url_expired",
-				"Image URL has expired. Please regenerate the image.")
-			return
-		}
-		videoURL = task.GetResultURL()
-	default:
-		// Video URL is stored in PrivateData.ResultURL (fallback to FailReason for old data)
-		videoURL = task.GetResultURL()
 	}
 
 	videoURL = strings.TrimSpace(videoURL)

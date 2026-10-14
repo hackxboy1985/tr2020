@@ -81,6 +81,22 @@ type ChannelOtherSettings struct {
 	ZyUrlTTLHours      int               `json:"zy_url_ttl_hours,omitempty"`
 	ZyUrlProxyBaseURL  string            `json:"zy_url_proxy_base_url,omitempty"`
 	ZyUrlProxyMappings map[string]string `json:"zy_url_proxy_mappings,omitempty"`
+	// Td 结果转存对象存储开关（S3 协议，兼容 MinIO / 阿里云 OSS）
+	//
+	// 开启后，任务成功时将该类型结果转存到对象存储，用户获得不依赖上游 TTL 的
+	// 稳定地址；转存失败则降级返回上游原始 URL（仍经 TdUrlProxyBaseURL 改写），
+	// 不阻断主流程与计费结算。
+	//
+	// 图片与视频拆分为两个独立开关：两者体积差异达 2~3 个数量级，
+	// 占用磁盘空间与清理策略完全不同，运营上需要独立控制。
+	//
+	// 默认 false：未显式开启时行为与未引入该功能时完全一致。
+	//
+	// 注意：本开关开启且转存成功后，TdUrlProxyBaseURL / TdUrlProxyMappings
+	// 不再参与该结果的 URL 改写（它们只能作用于上游原始 URL）。
+	// 这三个旧字段保留不删，以便存量配置不丢失、必要时可回退到旧映射方案。
+	TdOssImageEnabled bool `json:"td_oss_image_enabled,omitempty"` // Td 图片结果是否转存对象存储
+	TdOssVideoEnabled bool `json:"td_oss_video_enabled,omitempty"` // Td 视频结果是否转存对象存储
 	// SaveResponseBody 为 true 时，将上游响应体（脱敏后）保存到消费日志的 Other 字段，用于调试
 	SaveResponseBody bool `json:"save_response_body,omitempty"`
 }

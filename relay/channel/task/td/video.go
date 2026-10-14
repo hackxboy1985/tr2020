@@ -11,6 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
+	taskcommon "github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
@@ -310,6 +311,12 @@ func parseVideoTaskResult(respBody []byte) (*relaycommon.TaskInfo, error) {
 		Status: convertTudouStatus(queryResp.Data.Status),
 	}
 
+	// 实际出片时长：供完成时的按秒计费重算使用。
+	// 解析不出时为 0，调用方据此放弃重算（拿不到实际值就不动钱）。
+	if seconds, ok := coerceSeconds(queryResp.Data.Seconds); ok {
+		taskInfo.Seconds = seconds
+	}
+
 	if queryResp.Data.Status == StatusCompleted {
 		taskInfo.Url = queryResp.Data.Result.FirstVideoURL()
 	}
@@ -332,30 +339,14 @@ func unmarshalVideoRequest(c *gin.Context, req *VideoGenerateRequest) error {
 
 // isVideoTaskResponse 按查询响应体结构判定是否为视频结果。
 //
-// 为什么按结构而非 adaptor 状态判定：轮询会新建适配器实例并重新 Init，
-// 提交阶段的 videoTask 标记在查询阶段不可用（详见 ParseTaskResult 注释）。
+// 实现已下沉到 taskcommon.IsVideoTaskResponse，此处仅做转发。
 //
-// 判定依据：result 中出现 video_url 或 videos 字段。
-// 图片结果的 result 只有 images，两者不会同时出现，故判定无歧义。
+// 为什么下沉：service 包的 OSS 转存判定也需要同一份判据（决定走图片还是视频
+// 转存开关），但 td 包已导入 service 包，service 无法反向导入 td（循环依赖）。
+// 把判据放在两者都可依赖的 taskcommon，保证**单一数据源**——判据变更时
+// 不会出现两处实现不同步的问题。
 func isVideoTaskResponse(respBody []byte) bool {
-	var probe struct {
-		Data struct {
-			Result map[string]any `json:"result"`
-		} `json:"data"`
-	}
-	if err := common.Unmarshal(respBody, &probe); err != nil {
-		return false
-	}
-	if probe.Data.Result == nil {
-		return false
-	}
-	if _, ok := probe.Data.Result["video_url"]; ok {
-		return true
-	}
-	if _, ok := probe.Data.Result["videos"]; ok {
-		return true
-	}
-	return false
+	return taskcommon.IsVideoTaskResponse(respBody)
 }
 
 // buildVideoRequestBody 构建视频上游请求体。

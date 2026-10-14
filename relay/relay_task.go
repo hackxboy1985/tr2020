@@ -497,7 +497,7 @@ func tryRealtimeFetch(task *model.Task, isOpenAIVideoAPI bool) []byte {
 		"metadata": nil,
 		"status":   mapTaskStatusToSimple(task.Status),
 		"task_id":  task.TaskID,
-		"url":      task.GetResultURL(),
+		"url":      task.GetPreferredResultURL(),
 	}
 	respBody, _ := common.Marshal(dto.TaskResponse[any]{
 		Code: "success",
@@ -559,7 +559,9 @@ func TaskModel2Dto(task *model.Task) *dto.TaskDto {
 		Action:     task.Action,
 		Status:     string(task.Status),
 		FailReason: task.FailReason,
-		ResultURL:  task.GetResultURL(),
+		// 优先返回对象存储地址：该 DTO 用于管理端任务列表展示，
+		// 转存成功后应展示稳定地址而非会过期的上游地址。
+		ResultURL:  task.GetPreferredResultURL(),
 		SubmitTime: task.SubmitTime,
 		StartTime:  task.StartTime,
 		FinishTime: task.FinishTime,
@@ -599,8 +601,13 @@ func imageTaskFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskRes
 
 	switch originTask.Status {
 	case model.TaskStatusSuccess:
-		resultURL := originTask.GetResultURL()
-		if originTask.ChannelId > 0 {
+		resultURL := originTask.GetPreferredResultURL()
+		// ⚠️ 关键隔离：仅当结果仍是**上游原始地址**时才执行代理改写。
+		//
+		// rewriteResultURLWithMappings 的语义是「把上游域名替换为配置的代理域名」。
+		// 若对已转存到对象存储的地址再执行改写，会把本系统对象存储的域名
+		// 错误替换成上游代理域名，导致用户拿到无效地址。
+		if !originTask.HasOssResult() && originTask.ChannelId > 0 {
 			if ch, err := model.CacheGetChannel(originTask.ChannelId); err == nil {
 				settings := ch.GetOtherSettings()
 				switch ch.Type {
@@ -668,8 +675,11 @@ func videoTaskFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskRes
 
 	switch originTask.Status {
 	case model.TaskStatusSuccess:
-		resultURL := originTask.GetResultURL()
-		if originTask.ChannelId > 0 {
+		resultURL := originTask.GetPreferredResultURL()
+		// ⚠️ 关键隔离：仅当结果仍是**上游原始地址**时才执行代理改写。
+		// 已转存到对象存储的地址不得进入改写，否则域名会被错误替换。
+		// 详细说明见 imageTaskFetchByIDRespBodyBuilder 中的同名注释。
+		if !originTask.HasOssResult() && originTask.ChannelId > 0 {
 			if ch, err := model.CacheGetChannel(originTask.ChannelId); err == nil {
 				settings := ch.GetOtherSettings()
 				switch ch.Type {

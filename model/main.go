@@ -291,6 +291,7 @@ func migrateDB() error {
 		&SeedanceAsset{},
 		&SeedanceFaceVerification{},
 		&ChannelTestHistory{},
+		&OssTransferFailure{},
 	)
 	if err != nil {
 		return err
