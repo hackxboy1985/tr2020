@@ -127,6 +127,34 @@ type TaskBillingContext struct {
 	OtherRatios     map[string]float64 `json:"other_ratios,omitempty"`      // 附加倍率（时长、分辨率等）
 	OriginModelName string             `json:"origin_model_name,omitempty"` // 模型名称，必须为OriginModelName
 	PerCallBilling  bool               `json:"per_call_billing,omitempty"`  // 按次计费：跳过轮询阶段的差额结算
+
+	// 表达式计费（tiered_expr）快照：任务提交时冻结，供轮询阶段按上游实际参数重算。
+	//
+	// 为什么必须在此持久化：BillingSnapshot 原先只存在于 RelayInfo（进程内），
+	// 轮询是**另一个时间点、另一次请求上下文**（service/task_polling.go），
+	// 拿不到 RelayInfo，因此无法重跑表达式。不落库就只能永远按预扣额结算。
+	//
+	// ExprString 是唯一真相源：重算 = 注入新参数后重跑同一个表达式，
+	// 而不是在旧额度上乘倍率（表达式已把参数算进价格，乘倍率会重复计算）。
+	TieredExprString   string  `json:"tiered_expr_string,omitempty"`    // 冻结的计费表达式（含 v2: 前缀）
+	TieredExprVersion  int     `json:"tiered_expr_version,omitempty"`   // 表达式版本，决定额度换算公式
+	TieredQuotaPerUnit float64 `json:"tiered_quota_per_unit,omitempty"` // 冻结的 QuotaPerUnit，避免结算期配置变更导致口径漂移
+
+	// TieredInputBody 是预扣时实际用于求值的计费输入体（adaptor 注入后的结果）。
+	//
+	// 为什么不能复用 PrivateData.RequestBody：那是日志字段，按
+	// SavePromptBodyMaxBytes(500B) 截断，长提示词下会成为残缺 JSON，
+	// 导致重算时解析失败而丢失 resolution 等维度 → 结算口径漂移。
+	// 该字段完整保存、不截断，保证「重算输入 = 预扣输入 + 新的 duration」。
+	TieredInputBody string `json:"tiered_input_body,omitempty"`
+}
+
+// HasTieredExpr 判断任务是否使用表达式计费（tiered_expr）且快照完整可用。
+//
+// 轮询阶段的差额结算以此为放行依据：只有确实冻结了表达式快照的任务
+// （Td 视频按参数计费）才进入重算，固定价按次模型行为完全不变。
+func (bc *TaskBillingContext) HasTieredExpr() bool {
+	return bc != nil && bc.TieredExprString != "" && bc.TieredQuotaPerUnit > 0
 }
 
 // GetUpstreamTaskID 获取上游真实 task ID（用于与 provider 通信）
@@ -547,6 +575,7 @@ func (t *Task) RefreshPrivateData() error {
 	}
 	return nil
 }
+
 // TaskBulkUpdate performs an unconditional bulk UPDATE by upstream task_id strings.
 // Same caveats as TaskBulkUpdateByID — no CAS guard.
 func TaskBulkUpdate(taskIds []string, params map[string]any) error {

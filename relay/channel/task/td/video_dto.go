@@ -115,6 +115,16 @@ type VideoTaskResultData struct {
 	ActualTime int               `json:"actual_time,omitempty"`
 	Result     *VideoTaskResult  `json:"result,omitempty"`
 	Error      *TaskError        `json:"error,omitempty"`
+
+	// Seconds 上游返回的**实际**出片时长（秒）。
+	//
+	// 为什么用 any 而不是 int：上游对数值类型不稳定，实测出现过数字（2 / 2.0）、
+	// 字符串（"2"）等形态。用 int 会在字符串形态下解析失败（JSON 反序列化报错，
+	// 导致整个查询响应解析失败），进而丢失状态与结果地址 —— 影响远大于计费。
+	// 此处宽松接收，由 coerceSeconds 统一收敛为整数秒。
+	//
+	// 缺省（字段不存在）为 nil，表示上游未提供实际时长。
+	Seconds any `json:"seconds,omitempty"`
 }
 
 // VideoTaskResult 视频任务结果。

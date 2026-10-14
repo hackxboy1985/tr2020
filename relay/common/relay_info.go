@@ -780,6 +780,16 @@ type TaskInfo struct {
 	Progress         string `json:"progress,omitempty"`
 	CompletionTokens int    `json:"completion_tokens,omitempty"` // 用于按倍率计费
 	TotalTokens      int    `json:"total_tokens,omitempty"`      // 用于按倍率计费
+	// Seconds 是上游返回的**实际**出片时长（秒），0 表示上游未提供。
+	//
+	// 用途：按参数计费的任务（如 Td 视频的 0.06 $/秒）需要在完成时用
+	// 实际时长重算额度。提交阶段只能拿到用户请求的时长，而上游可能收敛它，
+	// 不重算就会按请求时长多收。
+	//
+	// 为什么放在共用结构里：轮询阶段的 AdjustBillingOnComplete 只接收
+	// (*model.Task, *TaskInfo)，拿不到原始响应体；实际时长必须随 TaskInfo 传递。
+	// 各渠道按需填充，未填充时为 0，不影响既有渠道行为。
+	Seconds int `json:"seconds,omitempty"`
 }
 
 func FailTaskInfo(reason string) *TaskInfo {

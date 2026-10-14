@@ -643,6 +643,26 @@ func RelayTask(c *gin.Context) {
 			OriginModelName: relayInfo.OriginModelName,
 			PerCallBilling:  common.StringsContains(constant.TaskPricePatches, relayInfo.OriginModelName) || relayInfo.PriceData.UsePrice,
 		}
+		// Td 视频：冻结计费输入快照，供轮询阶段按上游实际秒数重跑表达式。
+		//
+		// 为什么只对 Td 生效：按上游实际参数重算是 Td 视频专属需求
+		// （其上游会收敛时长）。其他渠道无此诉求，不应承担额外存储与行为变化。
+		//
+		// 为什么单独存一份而不复用 RequestBody：RequestBody 用于日志展示，
+		// 会经 TruncateBody 按 SavePromptBodyMaxBytes(500B) 截断；而重算需要
+		// 完整可解析的 JSON（含 resolution / aspect_ratio 等）。
+		// 复用截断后的体在长提示词下会退化为残缺 JSON，造成结算口径漂移。
+		if relayInfo.ChannelType == constant.ChannelTypeTudou {
+			if snap := relayInfo.TieredBillingSnapshot; snap != nil && snap.BillingMode == "tiered_expr" {
+				task.PrivateData.BillingContext.TieredExprString = snap.ExprString
+				task.PrivateData.BillingContext.TieredExprVersion = snap.ExprVersion
+				task.PrivateData.BillingContext.TieredQuotaPerUnit = snap.QuotaPerUnit
+				// 计费输入体（adaptor 注入后的结果），完整保存不截断
+				if input := relayInfo.BillingRequestInput; input != nil && len(input.Body) > 0 {
+					task.PrivateData.BillingContext.TieredInputBody = string(input.Body)
+				}
+			}
+		}
 		task.Quota = result.Quota
 		task.Data = result.TaskData
 		task.Action = relayInfo.Action

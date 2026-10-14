@@ -662,8 +662,14 @@ func recordTaskCompletionLog(task *model.Task, responseBody []byte) {
 //  2. taskResult.TotalTokens > 0 → 按 token 重算
 //  3. 都不满足 → 保持预扣额度不变
 func settleTaskBillingOnComplete(ctx context.Context, adaptor TaskPollingAdaptor, task *model.Task, taskResult *relaycommon.TaskInfo, responseBody []byte) {
-	// 0. 按次计费的任务不做差额结算，仍记录最终查询结果
-	if bc := task.PrivateData.BillingContext; bc != nil && bc.PerCallBilling {
+	// 0. 按次计费的任务不做差额结算，仍记录最终查询结果。
+	//
+	// 例外：表达式计费（tiered_expr）的「每次价格」随请求参数变化
+	// （例如 Td 视频 0.06 $/秒），提交时只能按用户请求的参数预扣，
+	// 必须用上游实际参数重算才能多退少补。
+	// 判据收敛在 BillingContext.HasTieredExpr()：只有任务确实冻结了表达式快照才放行，
+	// 因此固定价按次模型（无表达式快照）行为完全不变。
+	if bc := task.PrivateData.BillingContext; bc != nil && bc.PerCallBilling && !bc.HasTieredExpr() {
 		logger.LogInfo(ctx, fmt.Sprintf("任务 %s 按次计费，跳过差额结算", task.TaskID))
 		recordTaskCompletionLog(task, responseBody)
 		return
