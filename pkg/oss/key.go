@@ -29,23 +29,23 @@ const (
 // 常见内容类型到扩展名的映射。
 // 仅覆盖视频/图片场景，避免引入庞大的 mime 表。
 var contentTypeExtMap = map[string]string{
-	"video/mp4":       ".mp4",
-	"video/quicktime": ".mov",
-	"video/x-msvideo": ".avi",
-	"video/webm":      ".webm",
+	"video/mp4":        ".mp4",
+	"video/quicktime":  ".mov",
+	"video/x-msvideo":  ".avi",
+	"video/webm":       ".webm",
 	"video/x-matroska": ".mkv",
-	"image/png":       ".png",
-	"image/jpeg":      ".jpg",
-	"image/jpg":       ".jpg",
-	"image/webp":      ".webp",
-	"image/gif":       ".gif",
-	"image/bmp":       ".bmp",
+	"image/png":        ".png",
+	"image/jpeg":       ".jpg",
+	"image/jpg":        ".jpg",
+	"image/webp":       ".webp",
+	"image/gif":        ".gif",
+	"image/bmp":        ".bmp",
 }
 
 // extFromURL 从源 URL 的路径部分提取扩展名。
 //
 // 使用 url.Parse 后取 Path，可自动忽略 query 与 fragment
-//（例如 .../a.mp4?auth=xxx 应得到 .mp4）。
+// （例如 .../a.mp4?auth=xxx 应得到 .mp4）。
 func extFromURL(rawURL string) string {
 	u, err := url.Parse(rawURL)
 	if err != nil {

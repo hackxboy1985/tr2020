@@ -16,14 +16,14 @@ type OssTransferFailure struct {
 	CreatedAt int64 `json:"created_at" gorm:"bigint;index:idx_oss_fail_created_id,priority:1"` // 本次失败时间（Unix 秒）
 
 	TaskId      string `json:"task_id" gorm:"type:varchar(191);index;index:idx_oss_fail_task_attempt,priority:1"` // 任务 ID
-	ChannelId   int    `json:"channel_id" gorm:"index"`                                                            // 渠道 ID
-	ChannelType int    `json:"channel_type" gorm:"index"`                                                          // 渠道类型（预留，当前恒为 Td）
+	ChannelId   int    `json:"channel_id" gorm:"index"`                                                           // 渠道 ID
+	ChannelType int    `json:"channel_type" gorm:"index"`                                                         // 渠道类型（预留，当前恒为 Td）
 
-	SourceUrl string `json:"source_url" gorm:"type:text"`             // 上游原始 URL
-	ObjectKey string `json:"object_key" gorm:"type:varchar(255)"`     // 计划写入的对象键
+	SourceUrl string `json:"source_url" gorm:"type:text"`         // 上游原始 URL
+	ObjectKey string `json:"object_key" gorm:"type:varchar(255)"` // 计划写入的对象键
 
-	FailReason string `json:"fail_reason" gorm:"type:text"`                    // 失败原因（完整错误信息）
-	FailStage  string `json:"fail_stage" gorm:"type:varchar(30);index"`        // 失败阶段：precheck / download / upload
+	FailReason string `json:"fail_reason" gorm:"type:text"`             // 失败原因（完整错误信息）
+	FailStage  string `json:"fail_stage" gorm:"type:varchar(30);index"` // 失败阶段：precheck / download / upload
 
 	AttemptNo int `json:"attempt_no" gorm:"index;index:idx_oss_fail_task_attempt,priority:2"` // 第几次尝试（1/2/3）
 	IsFinal   int `json:"is_final" gorm:"type:tinyint;default:0;index"`                       // 是否已达重试上限（1=不再重试）

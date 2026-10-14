@@ -88,8 +88,8 @@ func TestShouldTransferToOss(t *testing.T) {
 			settings: dto.ChannelOtherSettings{
 				TdOssImageEnabled: true, TdOssVideoEnabled: true,
 			},
-			task:        &model.Task{TaskID: "task_1"},
-			url:         srcURL, isVideo: true,
+			task: &model.Task{TaskID: "task_1"},
+			url:  srcURL, isVideo: true,
 			wantTransfer: true,
 		},
 		{
