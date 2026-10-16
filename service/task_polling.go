@@ -478,39 +478,6 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		}
 		shouldSettle = true
 
-		// 对象存储转存：判定并异步执行。
-		//
-		// 关键约束：
-		//  1. 位置必须在 shouldSettle 之后 —— 转存与计费完全解耦，转存失败绝不影响结算；
-		//  2. 必须异步（goroutine）—— 视频可达数百 MB，同步上传会阻塞轮询循环，
-		//     导致其他任务状态更新延迟；
-		//  3. 媒体类型按响应体结构判定（与结果解析同一判据），不能用适配器状态 ——
-		//     轮询会重建适配器实例，提交阶段的标记不会带过来。
-		//
-		// 未开启开关或未配置对象存储时，ShouldTransferToOss 直接返回 false，
-		// 不产生任何行为变化。
-		if ShouldTransferToOss(ch, task, taskResult.Url, MediaTypeIsVideo(responseBody)) {
-			// 传入 task 的副本，避免后台 goroutine 与主流程共享可变状态
-			taskForTransfer := *task
-			chForTransfer := ch
-			srcURL := taskResult.Url
-			isVideo := MediaTypeIsVideo(responseBody)
-			gopool.Go(func() {
-				// 使用独立 context：轮询的 ctx 可能在请求结束后被取消，
-				// 而转存需要在后台继续完成。
-				defer func() {
-					if r := recover(); r != nil {
-						logger.LogError(ctx, fmt.Sprintf(
-							"oss transfer panic task=%s: %v", taskForTransfer.TaskID, r))
-					}
-				}()
-				if err := TransferTaskResultToOss(context.Background(), &taskForTransfer, chForTransfer, srcURL, isVideo); err != nil {
-					// 失败已在函数内记录日志与失败表，此处无需重复处理。
-					// 明确吞掉错误：转存失败绝不影响主流程。
-					_ = err
-				}
-			})
-		}
 	case model.TaskStatusFailure:
 		logger.LogJson(ctx, fmt.Sprintf("Task %s failed", taskId), task)
 		task.Status = model.TaskStatusFailure
@@ -554,6 +521,22 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 
 	if shouldSettle {
 		settleTaskBillingOnComplete(ctx, adaptor, task, taskResult, responseBody)
+		// 仅在成功状态 CAS 落库且结算完成后启动，避免轮询的整行写入覆盖转存字段。
+		if ShouldTransferToOss(ch, task, taskResult.Url, MediaTypeIsVideo(responseBody)) {
+			taskForTransfer := *task
+			srcURL := taskResult.Url
+			isVideo := MediaTypeIsVideo(responseBody)
+			gopool.Go(func() {
+				defer func() {
+					if r := recover(); r != nil {
+						logger.LogError(context.Background(), fmt.Sprintf("oss transfer panic task=%s: %v", taskForTransfer.TaskID, r))
+					}
+				}()
+				if err := TransferTaskResultToOss(context.Background(), &taskForTransfer, ch, srcURL, isVideo); err != nil {
+					logger.LogWarn(context.Background(), fmt.Sprintf("oss transfer task=%s: %v", taskForTransfer.TaskID, err))
+				}
+			})
+		}
 	}
 	if shouldRefund {
 		RefundTaskQuota(ctx, task, task.FailReason, responseBody)

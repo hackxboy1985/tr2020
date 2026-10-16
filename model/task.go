@@ -111,12 +111,12 @@ type TaskPrivateData struct {
 	OssUploadedAt       int64  `json:"oss_uploaded_at,omitempty"`       // 转存完成时间（Unix 秒）
 	OssTransferAttempts int    `json:"oss_transfer_attempts,omitempty"` // 已尝试转存次数（上限 3）
 	// 计费上下文：用于异步退款/差额结算（轮询阶段读取）
-	BillingSource   string              `json:"billing_source,omitempty"`   // "wallet" 或 "subscription"
-	SubscriptionId  int                 `json:"subscription_id,omitempty"`  // 订阅 ID，用于订阅退款
-	TokenId         int                 `json:"token_id,omitempty"`         // 令牌 ID，用于令牌额度退款
-	BillingContext  *TaskBillingContext `json:"billing_context,omitempty"`  // 计费参数快照（用于轮询阶段重新计算）
-	RequestBody     string              `json:"request_body,omitempty"`     // 任务提交时的原始请求体（用于日志对账）
-	SubmitRespBody  string              `json:"submit_resp_body,omitempty"` // 任务提交时的上游响应体（用于日志对账）
+	BillingSource  string              `json:"billing_source,omitempty"`   // "wallet" 或 "subscription"
+	SubscriptionId int                 `json:"subscription_id,omitempty"`  // 订阅 ID，用于订阅退款
+	TokenId        int                 `json:"token_id,omitempty"`         // 令牌 ID，用于令牌额度退款
+	BillingContext *TaskBillingContext `json:"billing_context,omitempty"`  // 计费参数快照（用于轮询阶段重新计算）
+	RequestBody    string              `json:"request_body,omitempty"`     // 任务提交时的原始请求体（用于日志对账）
+	SubmitRespBody string              `json:"submit_resp_body,omitempty"` // 任务提交时的上游响应体（用于日志对账）
 }
 
 // TaskBillingContext 记录任务提交时的计费参数，以便轮询阶段可以重新计算额度。
@@ -537,12 +537,9 @@ func (t *Task) UpdateWithStatus(fromStatus TaskStatus) (bool, error) {
 // 转存是异步 goroutine，与轮询主流程并发。若整行覆盖，可能把轮询刚写入的
 // status/progress 等字段用旧值覆盖回去（lost update）。
 //
-// 本方法只写入 4 个转存字段，且采用「先整行 save private_data」的方式：
-// private_data 是整列 JSON，必须整体写入，故在写入前重新读取当前值、
-// 仅替换转存字段后落库，以最大程度降低覆盖风险。
-//
-// 由于同一任务的转存是串行的（CanRetryOssTransfer 的幂等检查 + 单任务单次
-// 处理），且转存与状态轮询操作的是不同字段，实际竞态窗口极小。
+// private_data 为整列 JSON：调用方须先 RefreshPrivateData，再修改转存字段。
+// 实时转存在任务状态落库、结算完成后启动；同进程内由转存执行门禁避免
+// 实时转存与补扫同时操作同一任务。此门禁不提供跨进程互斥。
 func (t *Task) UpdateOssTransferFields() error {
 	return DB.Model(&Task{}).Where("task_id = ?", t.TaskID).
 		UpdateColumn("private_data", t.PrivateData).Error
@@ -554,25 +551,8 @@ func (t *Task) RefreshPrivateData() error {
 	if err := DB.Where("task_id = ?", t.TaskID).First(&fresh).Error; err != nil {
 		return err
 	}
-	// 仅刷新转存相关字段，其余字段以调用方持有的为准，避免影响计费上下文
-	if t.PrivateData.OssURL == "" {
-		t.PrivateData.OssURL = fresh.PrivateData.OssURL
-	}
-	if t.PrivateData.OssObjectKey == "" {
-		t.PrivateData.OssObjectKey = fresh.PrivateData.OssObjectKey
-	}
-	if t.PrivateData.OssUploadedAt == 0 {
-		t.PrivateData.OssUploadedAt = fresh.PrivateData.OssUploadedAt
-	}
-	if t.PrivateData.OssTransferAttempts == 0 {
-		t.PrivateData.OssTransferAttempts = fresh.PrivateData.OssTransferAttempts
-	}
-	if t.PrivateData.ResultURL == "" {
-		t.PrivateData.ResultURL = fresh.PrivateData.ResultURL
-	}
-	if t.PrivateData.ExpireAt == 0 {
-		t.PrivateData.ExpireAt = fresh.PrivateData.ExpireAt
-	}
+	// 转存只处理已落库的成功任务，以数据库为准，不能保留副本中的旧尝试次数。
+	t.PrivateData = fresh.PrivateData
 	return nil
 }
 

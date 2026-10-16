@@ -3,7 +3,9 @@ package oss
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -30,7 +32,7 @@ type UploadResult struct {
 //
 // 行为约定：
 //   - 幂等：相同 objectKey 重复调用会覆盖同一对象，不会产生垃圾文件。
-//   - 流式：全程使用 io.Reader 管道，不将文件读入内存（视频可达数百 MB）。
+//   - 有界内存：流式落临时文件后上传，不把整文件读入内存；需要足够的临时磁盘空间。
 //   - SSRF 防护：下载源地址前校验，复用系统既有的 fetch_setting 配置。
 //
 // 调用方应在失败时降级返回上游原始 URL，不得因转存失败而中断主流程。
@@ -50,7 +52,7 @@ func UploadFromURL(ctx context.Context, srcURL string, objectKey string) (*Uploa
 		return nil, err
 	}
 
-	// 下载源文件（流式，不落盘、不入内存）
+	// 下载源文件，先流式写入临时文件，为签名计算和 SDK 重试提供可 Seek 的 Body。
 	resp, err := openSourceStream(ctx, srcURL)
 	if err != nil {
 		return nil, err
@@ -71,26 +73,26 @@ func UploadFromURL(ctx context.Context, srcURL string, objectKey string) (*Uploa
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedContentType, contentType)
 	}
 
-	putInput := &s3.PutObjectInput{
-		Bucket:      aws.String(system_setting.ObjectStorageBucket),
-		Key:         aws.String(objectKey),
-		Body:        resp.Body,
-		ContentType: aws.String(contentTypeOrDefault(contentType, objectKey)),
+	file, size, err := spoolSource(resp.Body, maxSize)
+	if err != nil {
+		return nil, fmt.Errorf("download source failed: %w", err)
 	}
+	// spoolSource 返回已校验的 CreateTemp 文件；仅清理本次创建的文件。
+	defer func() {
+		file.Close()
+		os.Remove(file.Name())
+	}()
 
-	// ContentLength 必须是确定值才能设置；未知时交由 SDK 流式处理。
-	// 注意：不能为了获取长度而缓冲整个文件。
-	if contentLength > 0 {
-		putInput.ContentLength = aws.Int64(contentLength)
+	putInput := &s3.PutObjectInput{
+		Bucket:        aws.String(system_setting.ObjectStorageBucket),
+		Key:           aws.String(objectKey),
+		Body:          file,
+		ContentType:   aws.String(contentTypeOrDefault(contentType, objectKey)),
+		ContentLength: aws.Int64(size),
 	}
 
 	if _, err := client.PutObject(ctx, putInput); err != nil {
 		return nil, fmt.Errorf("put object failed: %w", err)
-	}
-
-	size := contentLength
-	if size < 0 {
-		size = 0
 	}
 
 	return &UploadResult{
@@ -99,6 +101,45 @@ func UploadFromURL(ctx context.Context, srcURL string, objectKey string) (*Uploa
 		Size:        size,
 		ContentType: contentType,
 	}, nil
+}
+
+// spoolSource 使用固定内存流式落盘；即使源响应没有 Content-Length 也强制限制体积。
+// 成功时文件游标位于开头，调用方负责关闭和删除该临时文件。
+func spoolSource(src io.Reader, maxSize int64) (*os.File, int64, error) {
+	file, err := os.CreateTemp("", "new-api-oss-*")
+	if err != nil {
+		return nil, 0, err
+	}
+	ok := false
+	defer func() {
+		if !ok {
+			file.Close()
+			os.Remove(file.Name())
+		}
+	}()
+	reader := src
+	if maxSize > 0 {
+		reader = io.LimitReader(src, maxSize)
+	}
+	size, err := io.Copy(file, reader)
+	if err != nil {
+		return nil, 0, err
+	}
+	if maxSize > 0 && size == maxSize {
+		var extra [1]byte
+		n, err := io.ReadFull(src, extra[:])
+		if n > 0 {
+			return nil, 0, ErrFileTooLarge
+		}
+		if err != nil && err != io.EOF {
+			return nil, 0, err
+		}
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return nil, 0, err
+	}
+	ok = true
+	return file, size, nil
 }
 
 // openSourceStream 打开源文件的下载流，并执行 SSRF 校验。

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -25,6 +26,16 @@ const ossTransferMaxAttempts = 3
 // ossTransferScanLimit 单次补扫最多处理的任务数。
 // 限制的目的是避免大量积压任务同时上传拖垮带宽。
 const ossTransferScanLimit = 20
+
+// 同一进程内实时转存与补扫共用执行门禁；重复调用直接跳过，不排队重试。
+var ossTransfersInFlight sync.Map
+
+func acquireOssTransfer(taskID string) (func(), bool) {
+	if _, loaded := ossTransfersInFlight.LoadOrStore(taskID, struct{}{}); loaded {
+		return nil, false
+	}
+	return func() { ossTransfersInFlight.Delete(taskID) }, true
+}
 
 // ShouldTransferToOss 判断某任务结果是否需要转存到对象存储。
 //
@@ -112,6 +123,12 @@ func TransferTaskResultToOss(ctx context.Context, task *model.Task, ch *model.Ch
 		return errors.New("task or channel is nil")
 	}
 
+	release, acquired := acquireOssTransfer(task.TaskID)
+	if !acquired {
+		return nil
+	}
+	defer release()
+
 	mediaType := model.OssMediaTypeImage
 	if isVideo {
 		mediaType = model.OssMediaTypeVideo
@@ -119,7 +136,7 @@ func TransferTaskResultToOss(ctx context.Context, task *model.Task, ch *model.Ch
 
 	// 重新读取，避免用陈旧副本覆盖并发写入
 	if err := task.RefreshPrivateData(); err != nil {
-		common.SysLog(fmt.Sprintf("oss transfer: refresh task %s failed: %v", task.TaskID, err))
+		return fmt.Errorf("refresh oss transfer task %s failed: %w", task.TaskID, err)
 	}
 
 	// 二次幂等检查：RefreshPrivateData 后可能发现已被其他路径转存成功

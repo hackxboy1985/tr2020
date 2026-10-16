@@ -285,6 +285,37 @@ func TestMediaTypeIsVideo(t *testing.T) {
 	}
 }
 
+func TestAcquireOssTransfer(t *testing.T) {
+	release, ok := acquireOssTransfer("task_concurrent")
+	if !ok {
+		t.Fatal("first attempt should acquire")
+	}
+	defer release()
+	// 模拟补扫在实时上传尚未完成时调用，必须跳过而非启动相同尝试。
+	done := make(chan bool, 1)
+	go func() {
+		otherRelease, acquired := acquireOssTransfer("task_concurrent")
+		if acquired {
+			otherRelease()
+		}
+		done <- acquired
+	}()
+	if <-done {
+		t.Fatal("same task acquired concurrently")
+	}
+	otherRelease, ok := acquireOssTransfer("task_independent")
+	if !ok {
+		t.Fatal("different task should acquire independently")
+	}
+	otherRelease()
+	release()
+	retryRelease, ok := acquireOssTransfer("task_concurrent")
+	if !ok {
+		t.Fatal("next retry should acquire after previous attempt finishes")
+	}
+	retryRelease()
+}
+
 // errStr 构造一个简单错误，避免引入额外依赖。
 type errStr string
 
