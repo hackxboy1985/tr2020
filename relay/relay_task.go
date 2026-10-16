@@ -391,6 +391,8 @@ func videoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *d
 		return
 	}
 
+	originTask = service.TaskForResultResponse(originTask)
+
 	// OpenAI Video API 格式: 走各 adaptor 的 ConvertToOpenAIVideo
 	if isOpenAIVideoAPI {
 		adaptor := GetTaskAdaptor(originTask.Platform)
@@ -591,6 +593,7 @@ func imageTaskFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskRes
 		return
 	}
 
+	originTask = service.TaskForResultResponse(originTask)
 	resp := map[string]any{
 		"id":      originTask.TaskID,
 		"object":  "image.task",
@@ -665,6 +668,7 @@ func videoTaskFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskRes
 		return
 	}
 
+	originTask = service.TaskForResultResponse(originTask)
 	resp := map[string]any{
 		"id":      originTask.TaskID,
 		"object":  "video.task",

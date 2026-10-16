@@ -121,6 +121,42 @@ func taskResultIsVideo(channelType int, respBody []byte, resultURL string) bool 
 	return MediaTypeIsVideo(respBody) || looksLikeVideoURL(resultURL)
 }
 
+// TaskWaitingForOss 仅控制对外展示，不修改生成状态或计费。
+// 三次失败、源 URL 已过期、开关关闭或配置缺失时维持原来的回退行为。
+func TaskWaitingForOss(task *model.Task, ch *model.Channel) bool {
+	if task == nil || ch == nil || task.Status != model.TaskStatusSuccess {
+		return false
+	}
+	return ShouldTransferToOss(ch, task, task.GetResultURL(), taskResultIsVideo(ch.Type, task.Data, task.GetResultURL()))
+}
+
+// TaskForResultResponse 返回用于用户查询的副本；不得将此副本保存到数据库。
+func TaskForResultResponse(task *model.Task) *model.Task {
+	if task == nil || task.Status != model.TaskStatusSuccess || task.HasOssResult() {
+		return task
+	}
+	ch, err := model.CacheGetChannel(task.ChannelId)
+	if err != nil {
+		return task
+	}
+	return taskForResultResponse(task, ch)
+}
+
+func taskForResultResponse(task *model.Task, ch *model.Channel) *model.Task {
+	if !TaskWaitingForOss(task, ch) {
+		return task
+	}
+	view := *task
+	view.Status = model.TaskStatusInProgress
+	view.Progress = "99%"
+	view.FinishTime = 0
+	view.PrivateData.ResultURL = ""
+	view.FailReason = ""
+	// 原始上游报文也可能包含 URL，处理中不能通过 Data 暴露结果。
+	view.Data = nil
+	return &view
+}
+
 // TransferTaskResultToOss 将任务结果转存到对象存储，并更新任务记录。
 //
 // 该函数设计为在后台 goroutine 中调用，**不得**阻塞轮询主流程，

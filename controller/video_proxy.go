@@ -61,6 +61,11 @@ func VideoProxy(c *gin.Context) {
 		videoProxyError(c, http.StatusInternalServerError, "server_error", "Failed to retrieve channel information")
 		return
 	}
+	if service.TaskWaitingForOss(task, channel) {
+		c.Header("Retry-After", "5")
+		videoProxyError(c, http.StatusConflict, "result_transferring", "Result is being transferred to object storage. Please retry later.")
+		return
+	}
 	baseURL := channel.GetBaseURL()
 	if baseURL == "" {
 		baseURL = "https://api.openai.com"

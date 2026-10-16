@@ -365,6 +365,40 @@ func TestZyOssMediaType(t *testing.T) {
 	}
 }
 
+func TestOssResultResponseWaitAndFallback(t *testing.T) {
+	setOssConfigured(t, true)
+	for _, channelType := range []int{constant.ChannelTypeTudou, constant.ChannelTypeZy} {
+		ch := mkChannel(channelType, dto.ChannelOtherSettings{TdOssImageEnabled: true, ZyOssImageEnabled: true})
+		task := &model.Task{Status: model.TaskStatusSuccess, Progress: "100%", FinishTime: 123,
+			PrivateData: model.TaskPrivateData{ResultURL: "https://upstream/result.png"},
+			Data:        []byte(`{"url":"https://upstream/result.png"}`)}
+		for attempts := 0; attempts < 3; attempts++ {
+			task.PrivateData.OssTransferAttempts = attempts
+			view := taskForResultResponse(task, ch)
+			if view.Status != model.TaskStatusInProgress || view.GetPreferredResultURL() != "" || view.Data != nil || view.FinishTime != 0 {
+				t.Fatalf("pending attempt %d exposed result: %+v", attempts, view)
+			}
+			if task.Status != model.TaskStatusSuccess || task.GetResultURL() == "" || task.Data == nil {
+				t.Fatal("response view mutated persisted task")
+			}
+		}
+		task.PrivateData.OssTransferAttempts = 3
+		if view := taskForResultResponse(task, ch); view.Status != model.TaskStatusSuccess || view.GetPreferredResultURL() != "https://upstream/result.png" {
+			t.Fatal("third failure must fall back to upstream")
+		}
+		task.PrivateData.OssTransferAttempts = 1
+		task.PrivateData.OssURL = "https://storage/bucket/result.png"
+		if view := taskForResultResponse(task, ch); view.Status != model.TaskStatusSuccess || view.GetPreferredResultURL() != task.PrivateData.OssURL {
+			t.Fatal("successful upload should return OSS URL")
+		}
+		task.PrivateData.OssURL = ""
+		ch.SetOtherSettings(dto.ChannelOtherSettings{})
+		if view := taskForResultResponse(task, ch); view != task {
+			t.Fatal("disabled channel must keep current behavior")
+		}
+	}
+}
+
 // errStr 构造一个简单错误，避免引入额外依赖。
 type errStr string
 
