@@ -172,7 +172,7 @@ func TestPublicURL(t *testing.T) {
 		system_setting.ObjectStorageBucket = "td-results"
 
 		got := PublicURL("td/2026/10/14/a.mp4")
-		want := "https://oss.example.com/td/2026/10/14/a.mp4"
+		want := "https://oss.example.com/td-results/td/2026/10/14/a.mp4"
 		if got != want {
 			t.Errorf("PublicURL() = %q, want %q", got, want)
 		}
@@ -181,9 +181,25 @@ func TestPublicURL(t *testing.T) {
 	t.Run("PublicBaseURL带尾斜杠", func(t *testing.T) {
 		system_setting.ObjectStoragePublicBaseURL = "https://oss.example.com/"
 		got := PublicURL("td/a.mp4")
-		want := "https://oss.example.com/td/a.mp4"
+		want := "https://oss.example.com/td-results/td/a.mp4"
 		if got != want {
 			t.Errorf("PublicURL() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("用户配置自动补桶名", func(t *testing.T) {
+		system_setting.ObjectStoragePublicBaseURL = "http://oss.luluai.cc"
+		system_setting.ObjectStorageBucket = "hk-a"
+		if got, want := PublicURL("td/2026/10/16/task_x.png"), "http://oss.luluai.cc/hk-a/td/2026/10/16/task_x.png"; got != want {
+			t.Fatalf("url = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("已配置桶路径不重复", func(t *testing.T) {
+		system_setting.ObjectStoragePublicBaseURL = "http://oss.luluai.cc/hk-a/"
+		system_setting.ObjectStorageBucket = "hk-a"
+		if got, want := PublicURL("td/task.png"), "http://oss.luluai.cc/hk-a/td/task.png"; got != want {
+			t.Fatalf("url = %q, want %q", got, want)
 		}
 	})
 

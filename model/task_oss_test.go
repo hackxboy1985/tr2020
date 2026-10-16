@@ -1,6 +1,44 @@
 package model
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/dto"
+)
+
+func TestOssEnabledChannelsFilter(t *testing.T) {
+	truncateTables(t)
+	for i, tc := range []struct {
+		channelType int
+		settings    dto.ChannelOtherSettings
+		want        bool
+	}{
+		{constant.ChannelTypeTudou, dto.ChannelOtherSettings{TdOssImageEnabled: true}, true},
+		{constant.ChannelTypeZy, dto.ChannelOtherSettings{ZyOssVideoEnabled: true}, true},
+		{constant.ChannelTypeZy, dto.ChannelOtherSettings{}, false},
+		{constant.ChannelTypeZy, dto.ChannelOtherSettings{TdOssImageEnabled: true}, false},
+		{constant.ChannelTypeRR, dto.ChannelOtherSettings{ZyOssImageEnabled: true}, false},
+	} {
+		ch := &Channel{Id: 8800 + i, Type: tc.channelType}
+		ch.SetOtherSettings(tc.settings)
+		if err := DB.Create(ch).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	channels, err := GetChannelsWithOssTransferEnabled()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(channels) != 2 {
+		t.Fatalf("enabled channels = %d, want 2", len(channels))
+	}
+	for _, ch := range channels {
+		if ch.Id != 8800 && ch.Id != 8801 {
+			t.Fatalf("unexpected channel: %d", ch.Id)
+		}
+	}
+}
 
 func TestRefreshOssTransferUsesPersistedPrivateData(t *testing.T) {
 	truncateTables(t)

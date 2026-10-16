@@ -1102,7 +1102,7 @@ func CountChannelsByType(channelType int) (int64, error) {
 	return count, err
 }
 
-// GetTdChannelsWithOssTransferEnabled 返回开启了对象存储转存的 Td 渠道。
+// GetChannelsWithOssTransferEnabled 返回开启了对象存储转存的 Td / Zy 渠道。
 //
 // 用途：对象存储转存补扫时，需先定位「哪些渠道开启了开关」，再据此筛选候选任务。
 //
@@ -1110,18 +1110,16 @@ func CountChannelsByType(channelType int) (int64, error) {
 // 直接在其中过滤会引入方言差异（PostgreSQL ->>、MySQL JSON_EXTRACT、
 // SQLite json_extract），违反 AGENTS.md Rule 2。
 // 因此这里只按 type 做 SQL 过滤（走索引），再在 Go 侧解析 JSON 判断开关。
-//
-// 由于 Td 渠道数量通常很少（个位数），全量取出后在内存过滤的代价可忽略。
-func GetTdChannelsWithOssTransferEnabled(channelType int) ([]*Channel, error) {
+func GetChannelsWithOssTransferEnabled() ([]*Channel, error) {
 	var channels []*Channel
-	if err := DB.Where("type = ?", channelType).Omit("key").Find(&channels).Error; err != nil {
+	if err := DB.Where("type IN ?", []int{constant.ChannelTypeTudou, constant.ChannelTypeZy}).Omit("key").Find(&channels).Error; err != nil {
 		return nil, err
 	}
 
 	result := make([]*Channel, 0, len(channels))
 	for _, ch := range channels {
 		settings := ch.GetOtherSettings()
-		if settings.TdOssImageEnabled || settings.TdOssVideoEnabled {
+		if settings.OssTransferEnabled(ch.Type, false) || settings.OssTransferEnabled(ch.Type, true) {
 			result = append(result, ch)
 		}
 	}

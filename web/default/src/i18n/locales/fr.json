@@ -1,5 +1,11 @@
 {
   "translation": {
+    "Object Storage Transfer": "Transfert vers le stockage objet",
+    "Transfer image results to object storage": "Transférer les images vers le stockage objet",
+    "Transfer video results to object storage": "Transférer les vidéos vers le stockage objet",
+    "Only affects image results from this channel. Disabled by default.": "Concerne uniquement les images de ce canal. Désactivé par défaut.",
+    "Only affects video results from this channel. Disabled by default.": "Concerne uniquement les vidéos de ce canal. Désactivé par défaut.",
+    "Uses the shared S3 configuration. Successful transfers return the storage URL; failed transfers fall back to the upstream URL.": "Utilise la configuration S3 partagée. Un transfert réussi renvoie l’URL du stockage ; en cas d’échec, l’URL du fournisseur est utilisée.",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

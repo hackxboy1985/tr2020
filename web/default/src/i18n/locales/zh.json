@@ -1,5 +1,11 @@
 {
   "translation": {
+    "Object Storage Transfer": "对象存储转存",
+    "Transfer image results to object storage": "将图片结果转存到对象存储",
+    "Transfer video results to object storage": "将视频结果转存到对象存储",
+    "Only affects image results from this channel. Disabled by default.": "仅影响当前渠道的图片结果，默认关闭。",
+    "Only affects video results from this channel. Disabled by default.": "仅影响当前渠道的视频结果，默认关闭。",
+    "Uses the shared S3 configuration. Successful transfers return the storage URL; failed transfers fall back to the upstream URL.": "使用共用的 S3 配置。转存成功后返回存储地址；转存失败时回退到上游地址。",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

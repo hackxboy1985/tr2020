@@ -522,10 +522,10 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 	if shouldSettle {
 		settleTaskBillingOnComplete(ctx, adaptor, task, taskResult, responseBody)
 		// 仅在成功状态 CAS 落库且结算完成后启动，避免轮询的整行写入覆盖转存字段。
-		if ShouldTransferToOss(ch, task, taskResult.Url, MediaTypeIsVideo(responseBody)) {
+		isVideo := taskResultIsVideo(ch.Type, responseBody, taskResult.Url)
+		if ShouldTransferToOss(ch, task, taskResult.Url, isVideo) {
 			taskForTransfer := *task
 			srcURL := taskResult.Url
-			isVideo := MediaTypeIsVideo(responseBody)
 			gopool.Go(func() {
 				defer func() {
 					if r := recover(); r != nil {

@@ -16,12 +16,22 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { Code, Table } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 
@@ -33,6 +43,8 @@ import { Textarea } from '@/components/ui/textarea'
 type ZyConfig = Record<string, unknown> & {
   zy_url_ttl_hours?: number
   zy_url_proxy_base_url?: string
+  zy_oss_image_enabled?: boolean
+  zy_oss_video_enabled?: boolean
 }
 
 type ParsedConfig = {
@@ -80,6 +92,7 @@ function parseConfig(value: string): ParsedConfig {
 
 export function ZyConfigEditor(props: ZyConfigEditorProps) {
   const { t } = useTranslation()
+  const id = useId()
   const [mode, setMode] = useState<'visual' | 'json'>('visual')
 
   // Derived from props: the parent form owns the value, so no mirrored state
@@ -118,6 +131,15 @@ export function ZyConfigEditor(props: ZyConfigEditorProps) {
 
   const handleProxyBaseUrlChange = (value: string) => {
     props.onChange(buildJson(ttlHours, value))
+  }
+
+  const handleOssChange = (
+    key: 'zy_oss_image_enabled' | 'zy_oss_video_enabled',
+    checked: boolean
+  ) => {
+    // JSON 无效时不覆盖原值，避免切换开关丢失现有配置。
+    if (!parsed.ok) return
+    props.onChange(JSON.stringify({ ...parsed.raw, [key]: checked }, null, 2))
   }
 
   const handleModeChange = (nextMode: string) => {
@@ -183,6 +205,62 @@ export function ZyConfigEditor(props: ZyConfigEditorProps) {
               )}
             </p>
           </div>
+
+          <FieldSet
+            disabled={props.disabled || !parsed.ok}
+            className='rounded-md border p-3'
+          >
+            <FieldLegend variant='label'>
+              {t('Object Storage Transfer')}
+            </FieldLegend>
+            <FieldGroup>
+              <Field orientation='horizontal'>
+                <FieldContent>
+                  <FieldLabel htmlFor={`${id}-oss-image`}>
+                    {t('Transfer image results to object storage')}
+                  </FieldLabel>
+                  <FieldDescription>
+                    {t(
+                      'Only affects image results from this channel. Disabled by default.'
+                    )}
+                  </FieldDescription>
+                </FieldContent>
+                <Switch
+                  id={`${id}-oss-image`}
+                  checked={parsed.raw.zy_oss_image_enabled === true}
+                  onCheckedChange={(checked) =>
+                    handleOssChange('zy_oss_image_enabled', checked)
+                  }
+                  disabled={props.disabled || !parsed.ok}
+                />
+              </Field>
+              <Field orientation='horizontal'>
+                <FieldContent>
+                  <FieldLabel htmlFor={`${id}-oss-video`}>
+                    {t('Transfer video results to object storage')}
+                  </FieldLabel>
+                  <FieldDescription>
+                    {t(
+                      'Only affects video results from this channel. Disabled by default.'
+                    )}
+                  </FieldDescription>
+                </FieldContent>
+                <Switch
+                  id={`${id}-oss-video`}
+                  checked={parsed.raw.zy_oss_video_enabled === true}
+                  onCheckedChange={(checked) =>
+                    handleOssChange('zy_oss_video_enabled', checked)
+                  }
+                  disabled={props.disabled || !parsed.ok}
+                />
+              </Field>
+            </FieldGroup>
+            <FieldDescription>
+              {t(
+                'Uses the shared S3 configuration. Successful transfers return the storage URL; failed transfers fall back to the upstream URL.'
+              )}
+            </FieldDescription>
+          </FieldSet>
         </TabsContent>
 
         <TabsContent value='json'>
@@ -190,7 +268,7 @@ export function ZyConfigEditor(props: ZyConfigEditorProps) {
             value={props.value}
             onChange={(e) => props.onChange(e.target.value)}
             placeholder={
-              '{\n  "zy_url_ttl_hours": 5,\n  "zy_url_proxy_base_url": "https://img.example.com/oss"\n}'
+              '{\n  "zy_url_ttl_hours": 5,\n  "zy_url_proxy_base_url": "https://img.example.com/oss",\n  "zy_oss_image_enabled": false,\n  "zy_oss_video_enabled": false\n}'
             }
             disabled={props.disabled}
             rows={6}

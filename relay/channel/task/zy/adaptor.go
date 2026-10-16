@@ -266,7 +266,7 @@ func (a *TaskAdaptor) FetchTask(baseUrl, key string, body map[string]any, proxy 
 }
 
 // ParseTaskResult 解析查询结果。
-// 完成态的图片地址在顶层 url，metadata.image_url / metadata.image 同值。
+// 图片优先 image_url 再 url；视频优先 video_url 再 url，旧 metadata 图片字段仅作兜底。
 func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, error) {
 	var qResp taskResponse
 	if err := common.Unmarshal(respBody, &qResp); err != nil {

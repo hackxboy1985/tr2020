@@ -1,5 +1,7 @@
 package zy
 
+import "github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
+
 // ============================
 // Request structures
 // ============================
@@ -22,33 +24,21 @@ type submitRequest struct {
 
 // taskResponse 上游提交（POST）与查询（GET）接口的响应体，二者字段一致。
 type taskResponse struct {
-	ID          string `json:"id"` // 任务 ID，格式 task_xxxx
-	Object      string `json:"object"`
-	Model       string `json:"model"`
+	ID string `json:"id"` // 任务 ID，格式 task_xxxx
+	taskcommon.ZyTaskResult
 	Status      string `json:"status"` // queued / in_progress / completed / failed
 	Progress    int    `json:"progress"`
 	CreatedAt   int64  `json:"created_at"`
 	CompletedAt int64  `json:"completed_at,omitempty"`
-	URL         string `json:"url,omitempty"` // 仅 completed 返回
-	Metadata    struct {
-		Image    string `json:"image,omitempty"`
-		ImageURL string `json:"image_url,omitempty"`
-	} `json:"metadata,omitempty"`
-	Error *struct {
+	Error       *struct {
 		Message string `json:"message"`
 		Code    string `json:"code"`
 	} `json:"error,omitempty"`
 }
 
-// resultURL 依次读取顶层 url、metadata.image_url、metadata.image（三者同值）。
+// resultURL 按媒体类型选择地址，和 OSS 实时转存、补扫共用同一判据。
 func (r *taskResponse) resultURL() string {
-	if r.URL != "" {
-		return r.URL
-	}
-	if r.Metadata.ImageURL != "" {
-		return r.Metadata.ImageURL
-	}
-	return r.Metadata.Image
+	return r.ZyTaskResult.ResultURL()
 }
 
 // errorMessage 返回失败原因；上游未给出时回退到错误码。

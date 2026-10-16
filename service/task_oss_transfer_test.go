@@ -316,6 +316,55 @@ func TestAcquireOssTransfer(t *testing.T) {
 	retryRelease()
 }
 
+func TestZyOssChannelIsolation(t *testing.T) {
+	setOssConfigured(t, true)
+	for _, tt := range []struct {
+		name        string
+		settings    dto.ChannelOtherSettings
+		video, want bool
+	}{
+		{"default_off", dto.ChannelOtherSettings{}, false, false},
+		{"image_on", dto.ChannelOtherSettings{ZyOssImageEnabled: true}, false, true},
+		{"image_does_not_enable_video", dto.ChannelOtherSettings{ZyOssImageEnabled: true}, true, false},
+		{"video_on", dto.ChannelOtherSettings{ZyOssVideoEnabled: true}, true, true},
+		{"video_does_not_enable_image", dto.ChannelOtherSettings{ZyOssVideoEnabled: true}, false, false},
+		{"td_switches_ignored", dto.ChannelOtherSettings{TdOssImageEnabled: true, TdOssVideoEnabled: true}, false, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ch := mkChannel(constant.ChannelTypeZy, tt.settings)
+			if got := ShouldTransferToOss(ch, &model.Task{}, "https://cdn/result", tt.video); got != tt.want {
+				t.Fatalf("transfer = %v, want %v", got, tt.want)
+			}
+		})
+	}
+	// 同类型的另一个渠道仍然关闭，不能因前一个渠道开启而受影响。
+	ch := mkChannel(constant.ChannelTypeZy, dto.ChannelOtherSettings{})
+	ch.Id = 2
+	if ShouldTransferToOss(ch, &model.Task{}, "https://cdn/result.png", false) {
+		t.Fatal("switch leaked across channel IDs")
+	}
+	td := mkChannel(constant.ChannelTypeTudou, dto.ChannelOtherSettings{ZyOssImageEnabled: true})
+	if ShouldTransferToOss(td, &model.Task{}, "https://cdn/result.png", false) {
+		t.Fatal("Zy switch enabled Td")
+	}
+}
+
+func TestZyOssMediaType(t *testing.T) {
+	for _, tt := range []struct {
+		body, url string
+		video     bool
+	}{
+		{`{"object":"video","image_url":"https://cdn/result.png","video_url":"https://cdn/result.png"}`, "https://cdn/result.png", false},
+		{`{"object":"video","model":"gpt-image-2-4K","url":"https://cdn/result","video_url":"https://cdn/result"}`, "https://cdn/result", false},
+		{`{"url":"https://cdn/result.mp4","video_url":"https://cdn/result.mp4"}`, "https://cdn/result.mp4", true},
+		{"", "https://cdn/result.mp4", true},
+	} {
+		if got := taskResultIsVideo(constant.ChannelTypeZy, []byte(tt.body), tt.url); got != tt.video {
+			t.Fatalf("body=%s: video=%v, want=%v", tt.body, got, tt.video)
+		}
+	}
+}
+
 // errStr 构造一个简单错误，避免引入额外依赖。
 type errStr string
 

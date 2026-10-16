@@ -1,5 +1,11 @@
 {
   "translation": {
+    "Object Storage Transfer": "Chuyển sang kho lưu trữ đối tượng",
+    "Transfer image results to object storage": "Chuyển kết quả hình ảnh sang kho lưu trữ đối tượng",
+    "Transfer video results to object storage": "Chuyển kết quả video sang kho lưu trữ đối tượng",
+    "Only affects image results from this channel. Disabled by default.": "Chỉ áp dụng cho kết quả hình ảnh của kênh này. Mặc định tắt.",
+    "Only affects video results from this channel. Disabled by default.": "Chỉ áp dụng cho kết quả video của kênh này. Mặc định tắt.",
+    "Uses the shared S3 configuration. Successful transfers return the storage URL; failed transfers fall back to the upstream URL.": "Sử dụng cấu hình S3 dùng chung. Chuyển thành công sẽ trả về URL lưu trữ; nếu thất bại sẽ dùng URL của nhà cung cấp.",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

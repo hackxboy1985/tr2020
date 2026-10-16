@@ -1,5 +1,11 @@
 {
   "translation": {
+    "Object Storage Transfer": "オブジェクトストレージへの転送",
+    "Transfer image results to object storage": "画像の生成結果をオブジェクトストレージに転送",
+    "Transfer video results to object storage": "動画の生成結果をオブジェクトストレージに転送",
+    "Only affects image results from this channel. Disabled by default.": "このチャネルの画像結果にのみ適用されます。初期設定はオフです。",
+    "Only affects video results from this channel. Disabled by default.": "このチャネルの動画結果にのみ適用されます。初期設定はオフです。",
+    "Uses the shared S3 configuration. Successful transfers return the storage URL; failed transfers fall back to the upstream URL.": "共通の S3 設定を使用します。転送成功時はストレージの URL を返し、失敗時は上流の URL にフォールバックします。",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

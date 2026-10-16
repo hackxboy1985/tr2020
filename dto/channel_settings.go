@@ -1,5 +1,7 @@
 package dto
 
+import "github.com/QuantumNous/new-api/constant"
+
 type ChannelSettings struct {
 	ForceFormat            bool   `json:"force_format,omitempty"`
 	ThinkingToContent      bool   `json:"thinking_to_content,omitempty"`
@@ -81,6 +83,9 @@ type ChannelOtherSettings struct {
 	ZyUrlTTLHours      int               `json:"zy_url_ttl_hours,omitempty"`
 	ZyUrlProxyBaseURL  string            `json:"zy_url_proxy_base_url,omitempty"`
 	ZyUrlProxyMappings map[string]string `json:"zy_url_proxy_mappings,omitempty"`
+	// Zy 独立开关，默认关闭；与 Td 共用全局 S3 配置，但不共用开关。
+	ZyOssImageEnabled bool `json:"zy_oss_image_enabled,omitempty"`
+	ZyOssVideoEnabled bool `json:"zy_oss_video_enabled,omitempty"`
 	// Td 结果转存对象存储开关（S3 协议，兼容 MinIO / 阿里云 OSS）
 	//
 	// 开启后，任务成功时将该类型结果转存到对象存储，用户获得不依赖上游 TTL 的
@@ -99,6 +104,27 @@ type ChannelOtherSettings struct {
 	TdOssVideoEnabled bool `json:"td_oss_video_enabled,omitempty"` // Td 视频结果是否转存对象存储
 	// SaveResponseBody 为 true 时，将上游响应体（脱敏后）保存到消费日志的 Other 字段，用于调试
 	SaveResponseBody bool `json:"save_response_body,omitempty"`
+}
+
+// OssTransferEnabled 按渠道类型及媒体类型读取各自的转存开关。
+func (s *ChannelOtherSettings) OssTransferEnabled(channelType int, isVideo bool) bool {
+	if s == nil {
+		return false
+	}
+	switch channelType {
+	case constant.ChannelTypeTudou:
+		if isVideo {
+			return s.TdOssVideoEnabled
+		}
+		return s.TdOssImageEnabled
+	case constant.ChannelTypeZy:
+		if isVideo {
+			return s.ZyOssVideoEnabled
+		}
+		return s.ZyOssImageEnabled
+	default:
+		return false
+	}
 }
 
 func (s *ChannelOtherSettings) IsOpenRouterEnterprise() bool {

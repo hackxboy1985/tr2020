@@ -40,7 +40,7 @@ func acquireOssTransfer(taskID string) (func(), bool) {
 // ShouldTransferToOss 判断某任务结果是否需要转存到对象存储。
 //
 // 全部前置条件（须同时满足）：
-//  1. 渠道类型为 Td —— 本功能仅对 Td 渠道生效；
+//  1. 渠道类型为 Td 或 Zy；
 //  2. 对象存储配置完整 —— 未配置时全部短路，行为与未引入该功能时一致；
 //  3. 对应媒体类型的渠道开关已开启（图片/视频各一个开关）；
 //  4. 尚未成功转存 —— 保证幂等，避免轮询重复上传；
@@ -53,8 +53,8 @@ func ShouldTransferToOss(ch *model.Channel, task *model.Task, srcURL string, isV
 	if ch == nil || task == nil {
 		return false
 	}
-	// 1. 仅 Td 渠道
-	if ch.Type != constant.ChannelTypeTudou {
+	// 1. 仅显式接入的渠道类型
+	if ch.Type != constant.ChannelTypeTudou && ch.Type != constant.ChannelTypeZy {
 		return false
 	}
 	// 2. 对象存储配置完整
@@ -63,14 +63,8 @@ func ShouldTransferToOss(ch *model.Channel, task *model.Task, srcURL string, isV
 	}
 	// 3. 对应开关已开启
 	settings := ch.GetOtherSettings()
-	if isVideo {
-		if !settings.TdOssVideoEnabled {
-			return false
-		}
-	} else {
-		if !settings.TdOssImageEnabled {
-			return false
-		}
+	if !settings.OssTransferEnabled(ch.Type, isVideo) {
+		return false
 	}
 	// 4/5. 幂等、重试上限、过期检查
 	if !task.CanRetryOssTransfer(ossTransferMaxAttempts) {
@@ -110,6 +104,21 @@ func isTransferableURL(srcURL string) bool {
 // 使用完全一致的逻辑，避免两处判定不一致。
 func MediaTypeIsVideo(respBody []byte) bool {
 	return taskcommon.IsVideoTaskResponse(respBody)
+}
+
+// taskResultIsVideo 实时转存与补扫按同一渠道判据识别媒体。
+func taskResultIsVideo(channelType int, respBody []byte, resultURL string) bool {
+	if channelType == constant.ChannelTypeZy {
+		var result taskcommon.ZyTaskResult
+		if len(respBody) > 0 {
+			_ = common.Unmarshal(respBody, &result)
+		}
+		if result.URL == "" {
+			result.URL = resultURL
+		}
+		return result.IsVideo()
+	}
+	return MediaTypeIsVideo(respBody) || looksLikeVideoURL(resultURL)
 }
 
 // TransferTaskResultToOss 将任务结果转存到对象存储，并更新任务记录。
@@ -298,8 +307,8 @@ func RunOssTransferCompensation(ctx context.Context) {
 		return
 	}
 
-	// 收集开启了转存开关的 Td 渠道
-	channels := getOssEnabledTdChannels()
+	// 收集开启了转存开关的 Td / Zy 渠道
+	channels := getOssEnabledChannels()
 	if len(channels) == 0 {
 		return
 	}
@@ -338,13 +347,8 @@ func RunOssTransferCompensation(ctx context.Context) {
 
 		// 按响应体结构判定媒体类型（与结果解析使用同一判据）。
 		// task.Data 保存的是脱敏后的查询响应体。
-		isVideo := mediaTypeFromStoredData(task)
-
-		settings := ch.GetOtherSettings()
-		if isVideo && !settings.TdOssVideoEnabled {
-			continue
-		}
-		if !isVideo && !settings.TdOssImageEnabled {
+		isVideo := taskResultIsVideo(ch.Type, task.Data, srcURL)
+		if !ShouldTransferToOss(ch, task, srcURL, isVideo) {
 			continue
 		}
 
@@ -360,28 +364,12 @@ func RunOssTransferCompensation(ctx context.Context) {
 	}
 }
 
-// mediaTypeFromStoredData 从任务保存的响应体判定媒体类型。
-//
-// task.Data 在轮询时被写入脱敏后的查询响应体（见 task_polling.go 的
-// redactVideoResponseBody）。若该字段不可用，则退化为按 URL 扩展名判定。
-func mediaTypeFromStoredData(task *model.Task) bool {
-	if task.Data != nil {
-		if body, err := common.Marshal(task.Data); err == nil {
-			if taskcommon.IsVideoTaskResponse(body) {
-				return true
-			}
-		}
-	}
-	// 兜底：按 URL 扩展名判断是否为视频
-	return looksLikeVideoURL(task.GetResultURL())
-}
-
-// getOssEnabledTdChannels 返回开启了对象存储转存开关的 Td 渠道。
+// getOssEnabledChannels 返回开启了对象存储转存开关的 Td / Zy 渠道。
 // 查询失败时返回空列表（补扫直接跳过），不影响其他逻辑。
-func getOssEnabledTdChannels() []*model.Channel {
-	channels, err := model.GetTdChannelsWithOssTransferEnabled(constant.ChannelTypeTudou)
+func getOssEnabledChannels() []*model.Channel {
+	channels, err := model.GetChannelsWithOssTransferEnabled()
 	if err != nil {
-		common.SysLog(fmt.Sprintf("oss transfer: query td channels failed: %v", err))
+		common.SysLog(fmt.Sprintf("oss transfer: query channels failed: %v", err))
 		return nil
 	}
 	return channels

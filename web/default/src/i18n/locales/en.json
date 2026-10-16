@@ -1,5 +1,11 @@
 {
   "translation": {
+    "Object Storage Transfer": "Object Storage Transfer",
+    "Transfer image results to object storage": "Transfer image results to object storage",
+    "Transfer video results to object storage": "Transfer video results to object storage",
+    "Only affects image results from this channel. Disabled by default.": "Only affects image results from this channel. Disabled by default.",
+    "Only affects video results from this channel. Disabled by default.": "Only affects video results from this channel. Disabled by default.",
+    "Uses the shared S3 configuration. Successful transfers return the storage URL; failed transfers fall back to the upstream URL.": "Uses the shared S3 configuration. Successful transfers return the storage URL; failed transfers fall back to the upstream URL.",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

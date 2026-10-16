@@ -1,5 +1,11 @@
 {
   "translation": {
+    "Object Storage Transfer": "Перенос в объектное хранилище",
+    "Transfer image results to object storage": "Переносить изображения в объектное хранилище",
+    "Transfer video results to object storage": "Переносить видео в объектное хранилище",
+    "Only affects image results from this channel. Disabled by default.": "Применяется только к изображениям этого канала. По умолчанию отключено.",
+    "Only affects video results from this channel. Disabled by default.": "Применяется только к видео этого канала. По умолчанию отключено.",
+    "Uses the shared S3 configuration. Successful transfers return the storage URL; failed transfers fall back to the upstream URL.": "Используется общая конфигурация S3. При успешном переносе возвращается URL хранилища, при ошибке — URL провайдера.",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

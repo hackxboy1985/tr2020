@@ -115,7 +115,7 @@ func TestUploadFromURLSeekableBody(t *testing.T) {
 			})
 			system_setting.ObjectStorageEndpoint, system_setting.ObjectStorageBucket = store.URL, "results"
 			system_setting.ObjectStorageAccessKeyId, system_setting.ObjectStorageAccessKeySecret = "test-ak", "test-sk"
-			system_setting.ObjectStoragePublicBaseURL, system_setting.ObjectStorageForcePathStyle = "https://storage.example/results", true
+			system_setting.ObjectStoragePublicBaseURL, system_setting.ObjectStorageForcePathStyle = "https://storage.example", true
 			system_setting.ObjectStorageMaxFileSize = 1024
 			fetch.EnableSSRFProtection = false
 			dir := t.TempDir()
