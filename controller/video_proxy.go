@@ -62,8 +62,8 @@ func VideoProxy(c *gin.Context) {
 		return
 	}
 	if service.TaskWaitingForOss(task, channel) {
-		c.Header("Retry-After", "5")
-		videoProxyError(c, http.StatusConflict, "result_transferring", "Result is being transferred to object storage. Please retry later.")
+		videoProxyError(c, http.StatusBadRequest, "invalid_request_error",
+			fmt.Sprintf("Task is not completed yet, current status: %s", model.TaskStatusInProgress))
 		return
 	}
 	baseURL := channel.GetBaseURL()
