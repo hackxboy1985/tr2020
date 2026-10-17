@@ -1,5 +1,10 @@
 {
   "translation": {
+    "Object Storage Transfer": "Transfert vers le stockage objet",
+    "Transfer image results to object storage": "Transférer les images vers le stockage objet",
+    "Transfer video results to object storage": "Transférer les vidéos vers le stockage objet",
+    "Uses the shared S3 configuration. Successful transfers return the storage URL; failed transfers fall back to the upstream URL.": "Utilise la configuration S3 partagée. Un transfert réussi renvoie l’URL du stockage ; en cas d’échec, l’URL du fournisseur est utilisée.",
+    "Invalid JSON format": "Format JSON invalide",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_one": " + Recherche Web {{count}} fois / 1K fois * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_many": " + Recherche Web {{count}} fois / 1K fois * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_other": " + Recherche Web {{count}} fois / 1K fois * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",

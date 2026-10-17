@@ -57,6 +57,7 @@ import {
   getModelCategories,
   selectFilter,
 } from '../../../../helpers';
+import ZyOssConfig from './ZyOssConfig';
 import ModelSelectModal from './ModelSelectModal';
 import SingleModelSelectModal from './SingleModelSelectModal';
 import OllamaModelModal from './OllamaModelModal';
@@ -3155,6 +3156,22 @@ const EditChannelModal = (props) => {
                             className='!rounded-lg mt-2'
                           />
                         )}
+                      </>
+                    )}
+
+                    {inputs.type === 61 && (
+                      <>
+                        <JSONEditor
+                          field='other'
+                          label={t('JSON')}
+                          value={inputs.other || ''}
+                          onChange={(value) => handleInputChange('other', value)}
+                          formApi={formApiRef.current}
+                        />
+                        <ZyOssConfig
+                          value={inputs.other || ''}
+                          onChange={(value) => handleInputChange('other', value)}
+                        />
                       </>
                     )}
 

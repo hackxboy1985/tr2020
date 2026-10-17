@@ -1,5 +1,10 @@
 {
   "translation": {
+    "Object Storage Transfer": "オブジェクトストレージへの転送",
+    "Transfer image results to object storage": "画像の生成結果をオブジェクトストレージに転送",
+    "Transfer video results to object storage": "動画の生成結果をオブジェクトストレージに転送",
+    "Uses the shared S3 configuration. Successful transfers return the storage URL; failed transfers fall back to the upstream URL.": "共通の S3 設定を使用します。転送成功時はストレージの URL を返し、失敗時は上流の URL にフォールバックします。",
+    "Invalid JSON format": "無効な JSON 形式",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_one": " + Web検索 {{count}}回 / 1K回 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_one",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_other": " + Web検索 {{count}}回 / 1K回 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_other",
     " + 图片生成调用 {{symbol}}{{price}} / 1次 * {{ratioType}} {{ratio}}": " + 画像生成APIコール {{symbol}}{{price}} / 1回 * {{ratioType}} {{ratio}}",

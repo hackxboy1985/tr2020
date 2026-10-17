@@ -1,5 +1,10 @@
 {
   "translation": {
+    "Object Storage Transfer": "Chuyển sang kho lưu trữ đối tượng",
+    "Transfer image results to object storage": "Chuyển kết quả hình ảnh sang kho lưu trữ đối tượng",
+    "Transfer video results to object storage": "Chuyển kết quả video sang kho lưu trữ đối tượng",
+    "Uses the shared S3 configuration. Successful transfers return the storage URL; failed transfers fall back to the upstream URL.": "Sử dụng cấu hình S3 dùng chung. Chuyển thành công sẽ trả về URL lưu trữ; nếu thất bại sẽ dùng URL của nhà cung cấp.",
+    "Invalid JSON format": "Định dạng JSON không hợp lệ",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_one": " + Tìm kiếm Web {{count}} lần / 1K lần * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_other": " + Tìm kiếm Web {{count}} lần / 1K lần * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
     " + 图片生成调用 {{symbol}}{{price}} / 1次 * {{ratioType}} {{ratio}}": " + Gọi tạo hình ảnh {{symbol}}{{price}} / 1 lần * {{ratioType}} {{ratio}}",

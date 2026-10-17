@@ -1,5 +1,10 @@
 {
   "translation": {
+    "Object Storage Transfer": "Перенос в объектное хранилище",
+    "Transfer image results to object storage": "Переносить изображения в объектное хранилище",
+    "Transfer video results to object storage": "Переносить видео в объектное хранилище",
+    "Uses the shared S3 configuration. Successful transfers return the storage URL; failed transfers fall back to the upstream URL.": "Используется общая конфигурация S3. При успешном переносе возвращается URL хранилища, при ошибке — URL провайдера.",
+    "Invalid JSON format": "Неверный формат JSON",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_one": " + Web-поиск {{count}} раз / 1K раз * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_few": " + Web-поиск {{count}} раза / 1K раз * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_many": " + Web-поиск {{count}} раз / 1K раз * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",

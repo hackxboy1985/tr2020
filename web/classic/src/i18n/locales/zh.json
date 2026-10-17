@@ -1,5 +1,10 @@
 {
   "translation": {
+    "Object Storage Transfer": "对象存储转存",
+    "Transfer image results to object storage": "将图片结果转存到对象存储",
+    "Transfer video results to object storage": "将视频结果转存到对象存储",
+    "Uses the shared S3 configuration. Successful transfers return the storage URL; failed transfers fall back to the upstream URL.": "使用共用的 S3 配置。转存成功后返回存储地址；转存失败时回退到上游地址。",
+    "Invalid JSON format": "无效的 JSON 格式",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_other": " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
     " + 图片生成调用 {{symbol}}{{price}} / 1次 * {{ratioType}} {{ratio}}": " + 图片生成调用 {{symbol}}{{price}} / 1次 * {{ratioType}} {{ratio}}",
     " + 文件搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_other": " + 文件搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
