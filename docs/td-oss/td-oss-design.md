@@ -7,6 +7,56 @@
 
 ---
 
+## 修改记录补充：直接下载内容接口（2026-10-17）
+
+### 接口用途与路径
+
+```http
+GET /v1/videos/{task_id}/content
+```
+
+该接口由 `router/video-router.go` 注册到 `controller.VideoProxy`，用于代理读取并返回任务结果的**文件内容流**，不是返回结果 URL 的 JSON 查询接口，也不是 HTTP 重定向。
+
+- `{task_id}` 使用 new-api 对外公开的任务 ID。
+- 支持 API Token 鉴权（`Authorization: Bearer <API_KEY>`）或后台用户会话鉴权。
+- 按当前用户查询任务，不能通过任务 ID 下载其他用户的结果。
+
+调用示例：
+
+```bash
+curl 'https://你的域名/v1/videos/task_xxx/content' \
+  -H 'Authorization: Bearer <API_KEY>' \
+  -o result.mp4
+```
+
+文件扩展名应按实际媒体类型选择；示例中的 `.mp4` 仅表示视频文件。
+
+### 与任务查询接口的区别
+
+| 接口 | 用途 | 正常响应 |
+|---|---|---|
+| `GET /v1/videos/{task_id}` | 查询任务信息（支持情况取决于渠道适配器） | JSON |
+| `GET /v1/videos/tasks/{task_id}` | 查询视频任务状态与结果地址 | JSON |
+| `GET /v1/images/tasks/{task_id}` | 查询图片任务状态与结果地址 | JSON |
+| `GET /v1/videos/{task_id}/content` | 由 new-api 代理读取结果文件 | 文件内容流 |
+
+### OSS 转存期间的行为
+
+以下规则适用于已开启对应媒体转存开关、S3 配置完整且源地址仍可转存的 Td / Zy 渠道：
+
+| 场景 | 任务查询接口 | 直接下载内容接口 |
+|---|---|---|
+| 正在上传，或失败后仍可重试 | 复用已有处理中状态，不返回结果 URL | 复用原有任务未完成响应：HTTP 400，错误类型 `invalid_request_error` |
+| 上传成功，但 OSS 地址尚未落库 | 同上 | 同上 |
+| OSS 地址已成功落库 | 完成，返回 OSS URL | 从 OSS 读取并返回文件流 |
+| 三次转存均失败 | 完成，回退上游 URL（可能受原有代理映射配置影响） | 回退原有上游读取逻辑，仍受上游有效期和访问权限限制 |
+
+不新增任务状态或 HTTP 状态码：图片/视频任务查询沿用 HTTP 200 和已有 `processing`；内容接口沿用原来的 HTTP 400 / `invalid_request_error`。此前增加的 HTTP 409 / `result_transferring` 已撤销。
+
+数据库中的生成成功状态、计费与退款规则不变；处理中只是用户查询响应的展示副本。未开启转存、S3 配置不完整或源地址已过期时，保持原有返回路径。
+
+相关提交：`d18fb2fe7`（转存期间等待）、`6c43c3183`（复用既有未完成响应）。Zy 配置、取址优先级及桶路径规则见 [Td / Zy 配置补充](zy-oss-configuration.md)。
+
 ## 实现完成说明（2026-10-14）
 
 Phase 1 已全部实现，验证结果：
