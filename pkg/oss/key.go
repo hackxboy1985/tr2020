@@ -90,6 +90,28 @@ func normalizeExt(ext string) string {
 	return ext
 }
 
+// BuildChannelObjectKey 生成带渠道目录的对象键。
+//
+// 规则：{PathPrefix}/{channelDir}/{yyyy}/{MM}/{dd}/{taskID}{ext}
+// 例：  td/zy/2026/10/14/task_abc123.png
+//
+// channelDir 用于区分来源渠道（如 td、zy），便于按渠道统计与生命周期管理；
+// 为空时退化为 BuildObjectKey 的结构，不产生空目录层级。
+func BuildChannelObjectKey(taskID string, srcURL string, isVideo bool, channelDir string, now time.Time) string {
+	key := BuildObjectKey(taskID, srcURL, "", isVideo, now)
+	dir := sanitizeKeySegment(channelDir)
+	if strings.TrimSpace(channelDir) == "" || dir == "unknown" {
+		return key
+	}
+	prefix := strings.Trim(system_setting.ObjectStoragePathPrefix, "/")
+	if prefix != "" {
+		// BuildObjectKey 已带上 PathPrefix，去掉后再插入渠道目录，避免重复
+		key = strings.TrimPrefix(key, prefix+"/")
+		dir = prefix + "/" + dir
+	}
+	return dir + "/" + key
+}
+
 // BuildObjectKey 生成对象键。
 //
 // 规则：{PathPrefix}{yyyy}/{MM}/{dd}/{taskID}{ext}

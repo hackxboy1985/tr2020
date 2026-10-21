@@ -68,8 +68,9 @@ func UploadFromURL(ctx context.Context, srcURL string, objectKey string) (*Uploa
 		return nil, fmt.Errorf("%w: content-length=%d max=%d", ErrFileTooLarge, contentLength, maxSize)
 	}
 
-	// 内容类型预检：防止把 HTML 错误页当作结果上传
-	if contentType != "" && !isMediaContentType(contentType) {
+	// 内容类型预检：只拦截源站明确声明的非媒体类型（如 text/html 错误页）。
+	// 源站以 application/octet-stream 返回真实图片很常见，不拦截，改为按文件后缀判定。
+	if contentType != "" && contentType != "application/octet-stream" && !isMediaContentType(contentType) {
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedContentType, contentType)
 	}
 
@@ -82,6 +83,21 @@ func UploadFromURL(ctx context.Context, srcURL string, objectKey string) (*Uploa
 		file.Close()
 		os.Remove(file.Name())
 	}()
+
+	// 响应头未声明媒体类型时，以源 URL 的文件后缀为准（如 .../xxx.png），
+	// 使对象 Content-Type 与实际文件后缀一致。
+	if !isMediaContentType(contentType) {
+		ext := extFromURL(srcURL)
+		if ext == "" {
+			// URL 无后缀时退回对象键扩展名（由 BuildObjectKey 按媒体类型补齐）
+			ext = extFromURL(objectKey)
+		}
+		if mime, ok := mimeByExt(ext); ok {
+			contentType = mime
+		} else if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+	}
 
 	putInput := &s3.PutObjectInput{
 		Bucket:        aws.String(system_setting.ObjectStorageBucket),
@@ -208,18 +224,38 @@ func isMediaContentType(ct string) bool {
 	return strings.HasPrefix(ct, "video/") || strings.HasPrefix(ct, "image/")
 }
 
+// mimeByExt 按扩展名返回对应媒体类型，未知扩展名返回 false。
+func mimeByExt(ext string) (string, bool) {
+	// 同一扩展名可能对应多个别名（如 .jpg → image/jpeg、image/jpg），
+	// map 遍历顺序随机，必须固定取值，否则对象 Content-Type 会在重试间漂移。
+	if mime, ok := extMIME[ext]; ok {
+		return mime, true
+	}
+	return "", false
+}
+
+// extMIME 是扩展名 → 标准 MIME 的固定映射，避免 map 遍历顺序影响结果。
+var extMIME = map[string]string{
+	".mp4":  "video/mp4",
+	".mov":  "video/quicktime",
+	".avi":  "video/x-msvideo",
+	".webm": "video/webm",
+	".mkv":  "video/x-matroska",
+	".png":  "image/png",
+	".jpg":  "image/jpeg",
+	".webp": "image/webp",
+	".gif":  "image/gif",
+	".bmp":  "image/bmp",
+}
+
 // contentTypeOrDefault 返回用于对象存储的 Content-Type。
 // 源未提供或非媒体类型时，按对象键扩展名兜底，保证浏览器能正确识别。
 func contentTypeOrDefault(ct string, objectKey string) string {
 	if ct != "" && isMediaContentType(ct) {
 		return ct
 	}
-	if ext := extFromURL(objectKey); ext != "" {
-		for mime, known := range contentTypeExtMap {
-			if known == ext {
-				return mime
-			}
-		}
+	if mime, ok := mimeByExt(extFromURL(objectKey)); ok {
+		return mime
 	}
 	return "application/octet-stream"
 }

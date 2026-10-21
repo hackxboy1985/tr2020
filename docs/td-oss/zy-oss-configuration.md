@@ -25,10 +25,10 @@ Zy 图片结果优先读取顶层 `image_url`，其次 `url`；视频结果优�
 S3_PUBLIC_BASE_URL=http://oss.luluai.cc
 S3_BUCKET=hk-a
 
-结果：http://oss.luluai.cc/hk-a/td/2026/10/16/task_x.png
+结果：http://oss.luluai.cc/hk-a/zy/2026/10/16/task_x.png
 ```
 
-兼容基础地址已经以桶名结束的旧配置，不重复追加桶名。Zy 共用 `S3_PATH_PREFIX`（默认 `td/`），目录前缀不代表渠道类型。
+兼容基础地址已经以桶名结束的旧配置，不重复追加桶名。对象键按渠道目录区分：Td 为 `td/…`，Zy 为 `zy/…`；`S3_PATH_PREFIX` 默认留空，仅在需要额外目录层级（如生命周期规则）时才配置。
 
 修改配置不会自动修复之前已持久化的错误 URL；本次没有批量改写历史任务或日志。
 

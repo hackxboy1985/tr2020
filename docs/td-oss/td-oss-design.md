@@ -257,7 +257,7 @@ case constant.ChannelTypeTudou:
 | `Region` | `S3_REGION` | ❌ | `us-east-1` | MinIO 忽略此值，但 S3 SDK 要求非空 |
 | `ForcePathStyle` | `S3_FORCE_PATH_STYLE` | ❌ | `true` | **MinIO 必须 `true`**；阿里云可 `false` |
 | `PublicBaseURL` | `S3_PUBLIC_BASE_URL` | ❌ | 空 | 对外访问域名（CDN / 反代域名） |
-| `PathPrefix` | `S3_PATH_PREFIX` | ❌ | `td/` | 对象键前缀 |
+| `PathPrefix` | `S3_PATH_PREFIX` | ❌ | 空 | 对象键前缀（渠道目录单独拼接） |
 | `UploadTimeout` | `S3_UPLOAD_TIMEOUT` | ❌ | `300` | 秒 |
 
 **配置完整性判定**：`Endpoint`、`Bucket`、`AccessKeyId`、`AccessKeySecret` 四者**全部非空**才视为「已配置」。未配置时所有转存逻辑短路，行为与现状完全一致。
@@ -371,7 +371,7 @@ pkg/oss/
 
 ```
 {PathPrefix}{yyyy}/{MM}/{dd}/{task_id}.{ext}
-例：td/2026/10/13/task_abc123....mp4
+例：td/2026/10/13/task_abc123....mp4；Zy 为 zy/2026/10/13/task_abc123.png
 ```
 
 - 用 `task_id` 而非随机串：保证**幂等**，重复上传覆盖同一对象

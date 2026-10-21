@@ -54,7 +54,8 @@ var (
 	ObjectStoragePublicBaseURL = common.GetEnvOrDefaultString("S3_PUBLIC_BASE_URL", "")
 
 	// ObjectStoragePathPrefix 对象键前缀，便于按目录配置生命周期规则。
-	ObjectStoragePathPrefix = common.GetEnvOrDefaultString("S3_PATH_PREFIX", "td/")
+	// 默认留空：渠道目录（如 zy/task_x.png）已由调用方拼接，不应再硬编码渠道名。
+	ObjectStoragePathPrefix = common.GetEnvOrDefaultString("S3_PATH_PREFIX", "")
 
 	// ObjectStorageUploadTimeout 单次转存超时时间（秒）。
 	// 视频文件较大，默认给 300 秒；不得使用无限期 context。

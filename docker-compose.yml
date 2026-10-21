@@ -50,7 +50,7 @@ services:
       - S3_PUBLIC_BASE_URL=http://oss.xxx
 #      - S3_FORCE_PATH_STYLE=true   # MinIO 必须 true，默认已为 true
 #      - S3_REGION=us-east-1
-#      - S3_PATH_PREFIX=td/
+#      - S3_PATH_PREFIX=   # 对象键前缀，默认留空
 #      - S3_UPLOAD_TIMEOUT=300
 #      - S3_MAX_FILE_SIZE=2147483648
 

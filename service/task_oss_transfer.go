@@ -106,6 +106,18 @@ func MediaTypeIsVideo(respBody []byte) bool {
 	return taskcommon.IsVideoTaskResponse(respBody)
 }
 
+// channelDirName 返回对象键中的渠道目录名，用于区分 Td / Zy 等来源。
+func channelDirName(channelType int) string {
+	switch channelType {
+	case constant.ChannelTypeTudou:
+		return "td"
+	case constant.ChannelTypeZy:
+		return "zy"
+	default:
+		return ""
+	}
+}
+
 // taskResultIsVideo 实时转存与补扫按同一渠道判据识别媒体。
 func taskResultIsVideo(channelType int, respBody []byte, resultURL string) bool {
 	if channelType == constant.ChannelTypeZy {
@@ -193,7 +205,7 @@ func TransferTaskResultToOss(ctx context.Context, task *model.Task, ch *model.Ch
 	}
 
 	attemptNo := task.PrivateData.OssTransferAttempts + 1
-	objectKey := oss.BuildObjectKey(task.TaskID, srcURL, "", isVideo, time.Now())
+	objectKey := oss.BuildChannelObjectKey(task.TaskID, srcURL, isVideo, channelDirName(ch.Type), time.Now())
 
 	// 记录尝试次数（无论成败都递增，保证重试上限生效）
 	task.PrivateData.OssTransferAttempts = attemptNo
