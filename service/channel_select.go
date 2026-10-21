@@ -135,16 +135,25 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			// Prepare state for next retry
 			// 为下一次重试准备状态
 			if crossGroupRetry && priorityRetry >= common.RetryTimes {
-				// Current group has exhausted all retries, prepare to switch to next group
-				// This request still uses current group, but next retry will use next group
-				// 当前分组已用完所有重试次数，准备切换到下一个分组
-				// 本次请求仍使用当前分组，但下次重试将使用下一个分组
-				logger.LogDebug(param.Ctx, "Current group %s retries exhausted (priorityRetry=%d >= RetryTimes=%d), preparing switch to next group for next retry", autoGroup, priorityRetry, common.RetryTimes)
-				common.SetContextKey(param.Ctx, constant.ContextKeyAutoGroupIndex, i+1)
-				// Reset retry counter so outer loop can continue for next group
-				// 重置重试计数器，以便外层循环可以为下一个分组继续
-				param.SetRetry(0)
-				param.ResetRetryNextTry()
+				// Current group has exhausted all retries, check if there's a next group
+				// 当前分组已用完所有重试次数，检查是否还有下一个分组
+				if i+1 < len(autoGroups) {
+					// Prepare to switch to next group
+					// This request still uses current group, but next retry will use next group
+					// 准备切换到下一个分组
+					// 本次请求仍使用当前分组，但下次重试将使用下一个分组
+					logger.LogDebug(param.Ctx, "Current group %s retries exhausted (priorityRetry=%d >= RetryTimes=%d), preparing switch to next group for next retry", autoGroup, priorityRetry, common.RetryTimes)
+					common.SetContextKey(param.Ctx, constant.ContextKeyAutoGroupIndex, i+1)
+					// Reset retry counter so outer loop can continue for next group
+					// 重置重试计数器，以便外层循环可以为下一个分组继续
+					param.SetRetry(0)
+					param.ResetRetryNextTry()
+				} else {
+					// No more groups, stay in current group and let retry counter continue
+					// 没有更多分组，保持在当前分组，让重试计数器继续递增
+					logger.LogDebug(param.Ctx, "Current group %s retries exhausted but no more groups available, will stop retrying", autoGroup)
+					common.SetContextKey(param.Ctx, constant.ContextKeyAutoGroupIndex, i)
+				}
 			} else {
 				// Stay in current group, save current state
 				// 保持在当前分组，保存当前状态
