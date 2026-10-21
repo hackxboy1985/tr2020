@@ -248,6 +248,16 @@ print(json.dumps(p,ensure_ascii=False))
   else
     FAIL=$((FAIL+1)); FAILED_CASES+=("提交视频任务")
     printf '  %s 提交失败\n' "$(c_red '✗')"
+    # 必须打印响应体：否则只剩 HTTP 400 一个数字，无法区分是参数越界、
+    # 渠道/模型未配置、还是价格未配，排查只能靠猜。
+    printf '      响应体: %s\n' "$(c_dim "$BODY")"
+    printf '      排查提示:\n'
+    printf '        - 含 "model_price_error"  → 该模型未配价格，去「系统设置 → 模型定价」配置\n'
+    printf '        - 含 "model_not_found"    → 渠道未配置该模型，或令牌分组不可用\n'
+    printf '        - 含 "invalid duration"   → 时长不在该模型允许范围内（seedance-2.5 为 4-30）\n'
+    printf '        - 含 "invalid resolution" → 该模型不支持该分辨率（seedance-2.5 仅 720p）\n'
+    printf '        - 含 "channel" / "setting"→ 渠道配置异常，检查渠道 Other/setting 字段\n'
+    printf '        - 其它                    → 加 VERBOSE=1 重新运行查看完整上下文\n'
   fi
 
   if [[ "$SUBMIT_OK" == "1" ]]; then

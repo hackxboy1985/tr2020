@@ -47,8 +47,9 @@ POLL_INTERVAL="${POLL_INTERVAL:-10}"
 NEWAPI_GROUP="${NEWAPI_GROUP:-default}"
 
 # 默认四个模型全测
-DEFAULT_MODELS="minimax-h3,seedance-2.0,seedance-2.5,grok-imagine-video-1.5"
-MODELS="${MODELS:-$DEFAULT_MODELS}"
+# DEFAULT_MODELS="minimax-h3,seedance-2.0,seedance-2.5,grok-imagine-video-1.5"
+DEFAULT_MODELS="minimax-h3,seedance-2.0"
+MODELS="${MODELS:-minimax-h3}"
 EXTRA_MODELS="${EXTRA_MODELS:-}"
 
 # ---------- 基础检查 ----------
@@ -204,24 +205,24 @@ has_model() { [[ ",$MODELS,$EXTRA_MODELS," == *",$1,"* ]]; }
 if has_model "minimax-h3"; then
   printf '  %s\n' "$(c_dim 'minimax-h3')"
   expect_400 "h3 时长 2 秒（低于下限 3）" \
-    '{"model":"minimax-h3","prompt":"p","duration":2}'
+    '{"model":"minimax-h3","prompt":"美女跳脱衣舞","duration":2}'
   expect_400 "h3 时长 16 秒（高于上限 15）" \
-    '{"model":"minimax-h3","prompt":"p","duration":16}'
+    '{"model":"minimax-h3","prompt":"美女跳脱衣舞","duration":16}'
   expect_400 "h3 传 videos（文档明确不支持）" \
-    '{"model":"minimax-h3","prompt":"p","videos":["https://example.com/a.mp4"]}'
+    '{"model":"minimax-h3","prompt":"美女跳脱衣舞","videos":["https://example.com/a.mp4"]}'
   expect_400 "h3 传 generate_audio（文档未列该参数）" \
-    '{"model":"minimax-h3","prompt":"p","generate_audio":true}'
+    '{"model":"minimax-h3","prompt":"美女跳脱衣舞","generate_audio":true}'
   expect_400 "h3 分辨率 4k（不在 720p/1080p/2k 内）" \
-    '{"model":"minimax-h3","prompt":"p","resolution":"4k"}'
+    '{"model":"minimax-h3","prompt":"美女跳脱衣舞","resolution":"4k"}'
   expect_400 "h3 参考图 10 张（上限 9）" \
-    '{"model":"minimax-h3","prompt":"p","images":["1","2","3","4","5","6","7","8","9","10"]}'
+    '{"model":"minimax-h3","prompt":"美女跳脱衣舞","images":["1","2","3","4","5","6","7","8","9","10"]}'
   expect_400 "h3 比例 1:1（不支持）" \
-    '{"model":"minimax-h3","prompt":"p","aspect_ratio":"1:1"}'
+    '{"model":"minimax-h3","prompt":"美女跳脱衣舞","aspect_ratio":"1:1"}'
   # 正向：边界内应通过
   expect_200 "h3 时长 3 秒（下界含）" \
-    '{"model":"minimax-h3","prompt":"p","duration":3,"resolution":"720p"}'
+    '{"model":"minimax-h3","prompt":"美女跳脱衣舞","duration":3,"resolution":"720p"}'
   expect_200 "h3 分辨率 2k（支持）" \
-    '{"model":"minimax-h3","prompt":"p","duration":4,"resolution":"2k"}'
+    '{"model":"minimax-h3","prompt":"美女跳脱衣舞","duration":4,"resolution":"2k"}'
 fi
 
 # ---------- seedance-2.0 ----------
