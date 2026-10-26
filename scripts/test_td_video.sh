@@ -34,7 +34,7 @@
 #
 set -uo pipefail
 
-BASE_URL="${1:-${NEWAPI_BASE_URL:-}}"
+BASE_URL="${1:-${NEWAPI_BASE_URL:-http://test.luluai.cc}}"
 TOKEN="${2:-${NEWAPI_TOKEN:-}}"
 MODEL="${MODEL:-seedance-2.5}"
 DURATION="${DURATION:-4}"
