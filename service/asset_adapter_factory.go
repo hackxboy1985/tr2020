@@ -7,7 +7,50 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 )
+
+// UpstreamVersionSdos2 sdos2 上游版本标识（第 2 个海外渠道，seedance-gateway）
+const UpstreamVersionSdos2 = "sdos2"
+
+// IsSdos2Upstream 判断渠道是否使用 sdos2 上游契约。
+//
+// sdos2 上游的成片地址是受 Bearer 保护的接口路径（/v1/videos/{id}/content），
+// 与直接返回可访问 URL 的上游不同，下载时必须由服务端携带渠道 Key 代理拉流。
+func IsSdos2Upstream(ch *model.Channel) bool {
+	if ch == nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(ch.GetOtherSettings().AssetUpstreamVersion), UpstreamVersionSdos2)
+}
+
+// ResolveSdos2RelayBaseURL 返回返回给下游的成片下载地址所用的本服务基址。
+//
+// 优先使用渠道 other 配置 sdos2_relay_base_url（支持每个渠道指向不同入口），
+// 未配置时回退到系统设置 ServerAddress。两者都为空时返回空串，由调用方兜底。
+func ResolveSdos2RelayBaseURL(ch *model.Channel) string {
+	if ch != nil {
+		if v := strings.TrimSpace(ch.GetOtherSettings().Sdos2RelayBaseUrl); v != "" {
+			return strings.TrimRight(v, "/")
+		}
+	}
+	if v := strings.TrimSpace(system_setting.ServerAddress); v != "" {
+		return strings.TrimRight(v, "/")
+	}
+	return ""
+}
+
+// IsSdos2UpstreamByID 按渠道 ID 判断是否为 sdos2 上游。
+//
+// 供无法直接拿到渠道对象的调用方使用（如任务适配器的响应转换）。
+// 查询失败时按非 sdos2 处理，保持其他上游行为不变。
+func IsSdos2UpstreamByID(channelID int) bool {
+	ch, err := model.CacheGetChannel(channelID)
+	if err != nil || ch == nil {
+		return false
+	}
+	return IsSdos2Upstream(ch)
+}
 
 // GetAssetAdapter 根据用户分组获取素材管理适配器
 func GetAssetAdapter(userGroup string) (AssetAdapter, *model.Channel, error) {
@@ -99,6 +142,20 @@ func GetAssetAdapter(userGroup string) (AssetAdapter, *model.Channel, error) {
 				key,
 				relayMode,
 			)
+
+		case "sdos2":
+			// seedance-gateway 原生契约适配器
+			baseURL := settings.SeedanceAssetBaseUrl
+			if baseURL == "" {
+				baseURL = fullCh.GetBaseURL()
+			}
+
+			common.SysLog(fmt.Sprintf(
+				"[AssetAdapter] selected Sdos2 adapter for group '%s': channel=%d, url=%s",
+				userGroup, fullCh.Id, baseURL,
+			))
+
+			adapter = NewSdos2AssetAdapter(baseURL, key)
 
 		default:
 			common.SysLog(fmt.Sprintf(
@@ -212,6 +269,21 @@ func createAdapter(fullCh *model.Channel, key string) (AssetAdapter, error) {
 			key,
 			relayMode,
 		), nil
+
+	case "sdos2":
+		// seedance-gateway 原生契约：/seedance/media、/seedance/media/groups、/seedance/media/upload
+		// 与咪咕 gateway（/api/seedance/proxy/assets）完全不同，字段为小写蛇形
+		baseURL := settings.SeedanceAssetBaseUrl
+		if baseURL == "" {
+			baseURL = fullCh.GetBaseURL()
+		}
+
+		common.SysLog(fmt.Sprintf(
+			"[AssetAdapter] creating Sdos2 adapter: channel=%d, url=%s",
+			fullCh.Id, baseURL,
+		))
+
+		return NewSdos2AssetAdapter(baseURL, key), nil
 
 	default:
 		common.SysLog(fmt.Sprintf(

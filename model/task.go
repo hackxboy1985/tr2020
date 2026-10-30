@@ -87,8 +87,8 @@ type Task struct {
 	TaskID     string                `json:"task_id" gorm:"type:varchar(191);index"` // 第三方id，不一定有/ song id\ Task id
 	Platform   constant.TaskPlatform `json:"platform" gorm:"type:varchar(30);index"` // 平台
 	UserId     int                   `json:"user_id" gorm:"index"`
-	TokenId    int                   `json:"token_id" gorm:"index"`                  // Token ID，用于按token隔离查询
-	Group      string                `json:"group" gorm:"type:varchar(50)"`          // 修正计费用
+	TokenId    int                   `json:"token_id" gorm:"index"`         // Token ID，用于按token隔离查询
+	Group      string                `json:"group" gorm:"type:varchar(50)"` // 修正计费用
 	ChannelId  int                   `json:"channel_id" gorm:"index"`
 	ModelName  string                `json:"model_name" gorm:"type:varchar(100);index"` // 模型名称，用于筛选
 	Quota      int                   `json:"quota"`
@@ -143,12 +143,12 @@ type TaskPrivateData struct {
 	OriTaskID      string `json:"ori_task_id,omitempty"`      // 上游源头任务 ID（如豆包 cgt-... 格式）
 	ResultURL      string `json:"result_url,omitempty"`       // 任务成功后的结果 URL（视频地址等）
 	// 计费上下文：用于异步退款/差额结算（轮询阶段读取）
-	BillingSource   string              `json:"billing_source,omitempty"`   // "wallet" 或 "subscription"
-	SubscriptionId  int                 `json:"subscription_id,omitempty"`  // 订阅 ID，用于订阅退款
-	TokenId         int                 `json:"token_id,omitempty"`         // 令牌 ID，用于令牌额度退款
-	BillingContext  *TaskBillingContext `json:"billing_context,omitempty"`  // 计费参数快照（用于轮询阶段重新计算）
-	RequestBody     string              `json:"request_body,omitempty"`     // 任务提交时的原始请求体（用于日志对账）
-	SubmitRespBody  string              `json:"submit_resp_body,omitempty"` // 任务提交时的上游响应体（用于日志对账）
+	BillingSource  string              `json:"billing_source,omitempty"`   // "wallet" 或 "subscription"
+	SubscriptionId int                 `json:"subscription_id,omitempty"`  // 订阅 ID，用于订阅退款
+	TokenId        int                 `json:"token_id,omitempty"`         // 令牌 ID，用于令牌额度退款
+	BillingContext *TaskBillingContext `json:"billing_context,omitempty"`  // 计费参数快照（用于轮询阶段重新计算）
+	RequestBody    string              `json:"request_body,omitempty"`     // 任务提交时的原始请求体（用于日志对账）
+	SubmitRespBody string              `json:"submit_resp_body,omitempty"` // 任务提交时的上游响应体（用于日志对账）
 }
 
 // TaskBillingContext 记录任务提交时的计费参数，以便轮询阶段可以重新计算额度。
@@ -403,6 +403,22 @@ func GetByTaskId(userId int, taskId string) (*Task, bool, error) {
 	var err error
 	err = DB.Where("user_id = ? and task_id = ?", userId, taskId).
 		First(&task).Error
+	exist, err := RecordExist(err)
+	if err != nil {
+		return nil, false, err
+	}
+	return task, exist, err
+}
+
+// GetByTaskIdPublic 按 task_id 查询任务，不限定用户。
+// 仅供已显式开启「免鉴权访问成片」的渠道下载接口使用，
+// 调用方必须先校验渠道配置，避免越权读取其他用户的任务。
+func GetByTaskIdPublic(taskId string) (*Task, bool, error) {
+	if taskId == "" {
+		return nil, false, nil
+	}
+	var task *Task
+	err := DB.Where("task_id = ?", taskId).First(&task).Error
 	exist, err := RecordExist(err)
 	if err != nil {
 		return nil, false, err

@@ -209,6 +209,28 @@ func TokenOrUserAuth() func(c *gin.Context) {
 	}
 }
 
+// OptionalTokenOrUserAuth 可选的令牌/会话认证中间件。
+//
+// 语义：
+//   - 请求携带凭据（session 或 Authorization）时，按 TokenOrUserAuth 完整校验，失败即拒绝；
+//   - 请求未携带凭据时直接放行，由后续 handler 根据业务配置决定是否允许匿名访问。
+//
+// 需要区分「凭据错误」与「无凭据」的场景（如成片下载允许渠道级开关控制匿名访问）使用。
+func OptionalTokenOrUserAuth() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		hasCredential := c.Request.Header.Get("Authorization") != ""
+		if !hasCredential {
+			session := sessions.Default(c)
+			hasCredential = session.Get("id") != nil
+		}
+		if !hasCredential {
+			c.Next()
+			return
+		}
+		TokenOrUserAuth()(c)
+	}
+}
+
 // TokenAuthReadOnly 宽松版本的令牌认证中间件，用于只读查询接口。
 // 只验证令牌 key 是否存在，不检查令牌状态、过期时间和额度。
 // 即使令牌已过期、已耗尽或已禁用，也允许访问。

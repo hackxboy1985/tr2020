@@ -109,6 +109,16 @@ func VideoProxy(c *gin.Context) {
 	case constant.ChannelTypeOpenAI, constant.ChannelTypeSora:
 		videoURL = fmt.Sprintf("%s/v1/videos/%s/content", baseURL, task.GetUpstreamTaskID())
 		req.Header.Set("Authorization", "Bearer "+channel.Key)
+	case constant.ChannelTypeDoubaoVideo, constant.ChannelTypeVolcEngine:
+		// sdos2（seedance-gateway）等海外上游：成片地址是受 Bearer 保护的接口路径，
+		// 这里拼出上游真实地址并带上渠道 Key 去拉流，对下游完全透明。
+		if service.IsSdos2Upstream(channel) {
+			videoURL = buildSdos2ContentURL(baseURL, task)
+			req.Header.Set("Authorization", "Bearer "+channel.Key)
+			break
+		}
+		// 其他上游（如火山 Ark）沿用已存储的可直接访问地址
+		videoURL = task.GetResultURL()
 	default:
 		// Video URL is stored in PrivateData.ResultURL (fallback to FailReason for old data)
 		videoURL = task.GetResultURL()
@@ -169,6 +179,18 @@ func VideoProxy(c *gin.Context) {
 	if _, err = io.Copy(c.Writer, resp.Body); err != nil {
 		logger.LogError(c.Request.Context(), fmt.Sprintf("Failed to stream video content: %s", err.Error()))
 	}
+}
+
+// buildSdos2ContentURL 构造 sdos2 上游的成片下载地址。
+//
+// 优先使用任务里已存储的 ResultURL（形如 baseURL + /v1/videos/task_xxx/content）；
+// 若为空则按上游契约自行拼接。始终返回可直接请求的绝对地址。
+func buildSdos2ContentURL(baseURL string, task *model.Task) string {
+	if stored := strings.TrimSpace(task.GetResultURL()); stored != "" {
+		return stored
+	}
+	base := strings.TrimRight(baseURL, "/")
+	return fmt.Sprintf("%s/v1/videos/%s/content", base, task.GetUpstreamTaskID())
 }
 
 func writeVideoDataURL(c *gin.Context, dataURL string) error {

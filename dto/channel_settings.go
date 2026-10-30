@@ -56,10 +56,20 @@ type ChannelOtherSettings struct {
 	// "official": 火山官方 Action 格式 - /?Action=CreateAssetGroup&Version=2024-01-01
 	SeedanceAssetAPIFormat string `json:"seedance_asset_api_format,omitempty"`
 	// KWJM 素材库配置（新增）
-	KwjmAssetBaseUrl string `json:"kwjm_asset_base_url,omitempty"`     // KWJM 基础URL，例如 https://kwjm.com
-	KwjmAssetModel   string `json:"kwjm_asset_model,omitempty"`       // KWJM 默认模型，例如 sd-video-v2
-	// AssetUpstreamVersion 上游版本选择："gateway"（默认）或 "kwjm"
+	KwjmAssetBaseUrl string `json:"kwjm_asset_base_url,omitempty"` // KWJM 基础URL，例如 https://kwjm.com
+	KwjmAssetModel   string `json:"kwjm_asset_model,omitempty"`    // KWJM 默认模型，例如 sd-video-v2
+	// AssetUpstreamVersion 上游版本选择
+	//   "gateway"（默认）：咪咕 Gateway RESTful 契约 /api/seedance/proxy/assets*
+	//   "kwjm"：KWJM Action 契约
+	//   "sdos2"：seedance-gateway 原生契约 /seedance/media*（小写蛇形字段）
 	AssetUpstreamVersion string `json:"asset_upstream_version,omitempty"`
+	// Sdos2VideoContentPublic 控制 sdos2 成片下载接口是否免鉴权
+	// false（默认）：GET /v1/videos/{task_id}/content 需要 API Key 授权
+	// true：该地址可直接访问，无需 Authorization 头
+	Sdos2VideoContentPublic bool `json:"sdos2_video_content_public,omitempty"`
+	// Sdos2RelayBaseUrl 本服务对外基址，用于拼接返回给下游的成片下载地址
+	// 例如 https://api.example.com；留空时回退到系统设置里的 ServerAddress
+	Sdos2RelayBaseUrl string `json:"sdos2_relay_base_url,omitempty"`
 	// DoubaoVideoAlwaysFetchUpstream 是否强制实时查询上游（ARK 格式）
 	// true: 每次查询都调用上游（实时获取最新状态）
 	// false（默认）: 仅当 task.Data 不完整时才调用上游

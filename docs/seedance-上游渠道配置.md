@@ -1,5 +1,7 @@
 # Seedance 上游配置速查表
 
+> **第 2 个海外渠道（sdos2 / seedance-gateway）请见独立文档：[seedance-sdos2渠道配置.md](./seedance-sdos2渠道配置.md)**
+
 ## 配置位置
 
 渠道管理 → 编辑渠道 → 其他配置（JSON 格式）
@@ -351,6 +353,10 @@ EOF
 ---
 
 ## 更新日志
+
+### 2026-10-30
+- ✅ 新增第 2 个海外渠道 sdos2（seedance-gateway），详见 [seedance-sdos2渠道配置.md](./seedance-sdos2渠道配置.md)
+- ✅ sdos2 支持素材 URL 导入、视频相对路径归一化、成片代理下载与可选鉴权
 
 ### 2026-09-05
 - ✅ 增加自动推断视频接口路径功能

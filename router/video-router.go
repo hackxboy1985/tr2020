@@ -8,12 +8,13 @@ import (
 )
 
 func SetVideoRouter(router *gin.Engine) {
-	// Video proxy: accepts either session auth (dashboard) or token auth (API clients)
+	// Video proxy: 先尝试 session/token 鉴权，未通过时交由 controller 判定
+	// 渠道是否开启 sdos2_video_content_public，开启后允许匿名访问成片。
 	videoProxyRouter := router.Group("/v1")
 	videoProxyRouter.Use(middleware.RouteTag("relay"))
-	videoProxyRouter.Use(middleware.TokenOrUserAuth())
+	videoProxyRouter.Use(middleware.OptionalTokenOrUserAuth())
 	{
-		videoProxyRouter.GET("/videos/:task_id/content", controller.VideoProxy)
+		videoProxyRouter.GET("/videos/:task_id/content", controller.VideoProxyPublic)
 	}
 
 	videoV1Router := router.Group("/v1")

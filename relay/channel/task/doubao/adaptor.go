@@ -163,6 +163,20 @@ func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
 			a.videoFetchPath = "/v1/videos/generations"
 			common.SysLog("[Init] 推断 videoFetchPath=/v1/videos/generations")
 		}
+	case "sdos2":
+		// sdos2（第 2 个海外渠道，seedance-gateway）使用 OpenAI Video 兼容路径：
+		//   生成 POST /v1/videos
+		//   查询 GET  /v1/videos/{id}
+		//   下载 GET  /v1/videos/{id}/content
+		// 素材走 /seedance/media*，由 Sdos2AssetAdapter 负责。
+		if a.videoGeneratePath == "" {
+			a.videoGeneratePath = "/v1/videos"
+			common.SysLog("[Init] 推断 videoGeneratePath=/v1/videos")
+		}
+		if a.videoFetchPath == "" {
+			a.videoFetchPath = "/v1/videos"
+			common.SysLog("[Init] 推断 videoFetchPath=/v1/videos")
+		}
 	case "gateway":
 		fallthrough
 	default:
@@ -598,6 +612,25 @@ func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq) (*
 	return &r, nil
 }
 
+// resolveResultURL 归一化上游返回的成片地址。
+//
+// sdos2（seedance-gateway）返回的是相对路径，例如 /v1/videos/task_xxx/content，
+// 需要拼上渠道 baseURL 才是可下载的绝对地址；火山 Ark 等上游返回完整 URL 时原样返回。
+func (a *TaskAdaptor) resolveResultURL(raw string) string {
+	u := strings.TrimSpace(raw)
+	if u == "" {
+		return ""
+	}
+	if !strings.HasPrefix(u, "/") {
+		return u
+	}
+	base := strings.TrimRight(a.baseURL, "/")
+	if base == "" {
+		return u
+	}
+	return base + u
+}
+
 func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, error) {
 	resTask := responseTask{}
 	if err := common.Unmarshal(respBody, &resTask); err != nil {
@@ -620,7 +653,7 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 	case "succeeded":
 		taskResult.Status = model.TaskStatusSuccess
 		taskResult.Progress = "100%"
-		taskResult.Url = resTask.Content.VideoURL
+		taskResult.Url = a.resolveResultURL(resTask.Content.VideoURL)
 		// 解析 usage 信息用于按倍率计费
 		taskResult.CompletionTokens = resTask.Usage.CompletionTokens
 		taskResult.TotalTokens = resTask.Usage.TotalTokens
@@ -628,10 +661,10 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 	case "completed":
 		taskResult.Status = model.TaskStatusSuccess
 		taskResult.Progress = "100%"
-		taskResult.Url = resTask.Content.VideoURL
+		taskResult.Url = a.resolveResultURL(resTask.Content.VideoURL)
 		if taskResult.Url == "" {
 			if u, ok := resTask.Metadata["url"].(string); ok {
-				taskResult.Url = u
+				taskResult.Url = a.resolveResultURL(u)
 			}
 		}
 	case "in_progress":
@@ -772,10 +805,28 @@ func (a *TaskAdaptor) ConvertToOpenAIVideo(originTask *model.Task) ([]byte, erro
 	openAIVideo.Model = originTask.Properties.OriginModelName
 
 	// Set metadata with all doubao-specific fields
-	openAIVideo.SetMetadata("url", dResp.Content.VideoURL)
-	if dResp.Content.VideoURL == "" {
+	//
+	// sdos2（seedance-gateway）的上游成片地址是受 Bearer 保护的接口路径，
+	// 直接返回给下游无法访问；这里替换为本服务的代理地址，
+	// 由 VideoProxy 携带渠道 Key 到上游拉流。其他上游保持原样。
+	videoURL := dResp.Content.VideoURL
+	if videoURL == "" {
 		if u, ok := dResp.Metadata["url"].(string); ok {
-			openAIVideo.SetMetadata("url", u)
+			videoURL = u
+		}
+	}
+	if videoURL != "" {
+		if ch, err := model.CacheGetChannel(originTask.ChannelId); err == nil && service.IsSdos2Upstream(ch) {
+			// 本服务下载入口基址：渠道 other.sdos2_relay_base_url 优先，其次系统 ServerAddress
+			if base := service.ResolveSdos2RelayBaseURL(ch); base != "" {
+				openAIVideo.SetMetadata("url", base+"/v1/videos/"+originTask.TaskID+"/content")
+			} else {
+				openAIVideo.SetMetadata("url", taskcommon.BuildProxyURL(originTask.TaskID))
+			}
+			// 保留上游原始地址，便于排查
+			openAIVideo.SetMetadata("upstream_url", videoURL)
+		} else {
+			openAIVideo.SetMetadata("url", videoURL)
 		}
 	}
 
