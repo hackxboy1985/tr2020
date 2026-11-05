@@ -41,13 +41,14 @@
 #   POLL_INTERVAL      轮询间隔秒，默认 3
 #   POLL_TIMEOUT       轮询超时秒，默认 600
 #
+# 测试： API_KEY=sk-2AHuSo4nl1XzEvP05csNwHZe48NDpIc3BTOxaYV5urdSQkwnh  ./test-face-verification-newapi.sh 
 set -uo pipefail
 
-BASE_URL="${BASE_URL:-http://book2:3000}"
+BASE_URL="${BASE_URL:-http://book2:300}"
 API_KEY="${API_KEY:-}"
 FACE_IMAGE_URL="${FACE_IMAGE_URL:-https://static.horse-world.mints-id.com/gy/general/1/image/2026-07-08/1783497394035_4147.png}"
 AIGC_IMAGE_URL="${AIGC_IMAGE_URL:-$FACE_IMAGE_URL}"
-RETURN_URL="${RETURN_URL:-}"
+RETURN_URL="${RETURN_URL:-https://your-app.com/face-result}"
 MODEL="${MODEL:-}"
 POLL_INTERVAL="${POLL_INTERVAL:-3}"
 POLL_TIMEOUT="${POLL_TIMEOUT:-600}"
@@ -84,6 +85,18 @@ section() {
 
 pj() { jq '.' 2>/dev/null <<<"$1" || printf '%s\n' "$1"; }
 
+# 打印请求头（与 curl args 里的 -H 保持一致，改一处即可）
+# 默认完整打印 Authorization，便于排查；设置 MASK_KEY=1 可脱敏
+print_req_headers() {
+  local auth="Bearer ${API_KEY}"
+  if [ -n "${MASK_KEY:-}" ] && [ -n "${API_KEY}" ]; then
+    auth="Bearer ${API_KEY:0:6}******${API_KEY: -4}"
+  fi
+  printf '  Authorization: %s\n' "$auth" >&2
+  printf '  Content-Type: application/json\n' >&2
+  printf '  Accept: application/json\n' >&2
+}
+
 # 用法: http_call <method> <path> [json_body]
 # 输出: HTTP_CODE / HTTP_BODY
 http_call() {
@@ -97,7 +110,14 @@ http_call() {
   [ -n "$body" ] && args+=(-d "$body")
 
   echo -e "${CYAN}--> ${method} ${url}${NC}" >&2
-  [ -n "$body" ] && echo "请求体: $body" >&2
+  echo -e "${CYAN}请求头:${NC}" >&2
+  print_req_headers
+  if [ -n "$body" ]; then
+    echo -e "${CYAN}请求体:${NC}" >&2
+    pj "$body" >&2
+  else
+    echo -e "${CYAN}请求体:${NC} (无)" >&2
+  fi
 
   local raw
   raw="$(curl "${args[@]}" 2>&1)"
