@@ -87,6 +87,9 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 	if err := applyDeepSeekV4OpenAIThinkingSuffix(info, request); err != nil {
 		return nil, err
 	}
+	// DeepSeek requires historical reasoning_content to be replayed on every
+	// tools-bearing thinking-mode request; clients frequently drop it.
+	ensureThinkingReasoningReplay(request)
 
 	return request, nil
 }
