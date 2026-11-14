@@ -555,10 +555,10 @@ func SeedanceListAssets(c *gin.Context) {
 	common.ApiSuccess(c, pageInfo)
 }
 
-// resolveAsset 支持本地数字 ID 或上游 asset-xxxxxxxx 格式查询素材
+// resolveAsset 支持本地数字 ID 或上游素材 ID（asset- 或 n-axis 的 ast_ 前缀）查询素材
 func resolveAsset(c *gin.Context, userID int, channelID int) (*model.SeedanceAsset, error) {
 	rawID := c.Param("id")
-	if strings.HasPrefix(rawID, "asset-") {
+	if strings.HasPrefix(rawID, "asset-") || strings.HasPrefix(rawID, "ast_") {
 		return model.GetSeedanceAssetByUpstreamID(rawID, userID, channelID)
 	}
 	localID, _ := strconv.ParseInt(rawID, 10, 64)
@@ -575,14 +575,37 @@ func resolveAssetGroup(c *gin.Context, userID int, channelID int) (*model.Seedan
 	return model.GetSeedanceAssetGroupByID(localID, userID)
 }
 
-// resolveFaceVerification 支持本地数字 ID 或上游 fv_xxxxxxxxx 格式查询人脸认证任务
+// resolveFaceVerification 支持本地数字 ID 或上游会话凭证查询人脸认证任务。
+// 上游凭证形态：老咪咕 gateway 为 fv_xxxxxxxxx；n-axis 为纯十六进制 BytedToken（无前缀）。
 func resolveFaceVerification(c *gin.Context, userID int) (*model.SeedanceFaceVerification, error) {
 	rawID := c.Param("id")
 	if strings.HasPrefix(rawID, "fv_") {
 		return model.GetSeedanceFaceVerificationByVerificationID(rawID, userID)
 	}
-	localID, _ := strconv.ParseInt(rawID, 10, 64)
-	return model.GetSeedanceFaceVerificationByID(localID, userID)
+	localID, err := strconv.ParseInt(rawID, 10, 64)
+	if err == nil && localID > 0 {
+		return model.GetSeedanceFaceVerificationByID(localID, userID)
+	}
+	// 非数字 ID 按会话凭证兜底（n-axis 的 byted_token 没有固定前缀）
+	return model.GetSeedanceFaceVerificationByVerificationID(rawID, userID)
+}
+
+// extractFaceVerificationCallbackURL 从创建核验会话的请求体中提取回调地址。
+// 兼容下游既有写法（return_url）与 n-axis / 火山官方写法（callback_url、CallbackURL）。
+func extractFaceVerificationCallbackURL(body []byte) string {
+	if len(body) == 0 {
+		return ""
+	}
+	var payload map[string]interface{}
+	if err := common.Unmarshal(body, &payload); err != nil {
+		return ""
+	}
+	for _, key := range []string{"callback_url", "CallbackURL", "CallbackUrl", "return_url"} {
+		if value, ok := payload[key].(string); ok && strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 // GET /api/seedance/assets/:id
@@ -729,12 +752,48 @@ func SeedanceDeleteAsset(c *gin.Context) {
 
 // POST /api/seedance/face-verifications
 func SeedanceCreateFaceVerification(c *gin.Context) {
+	userID := c.GetInt("id")
+	userGroup := c.GetString("group")
+	body := readBody(c)
+
+	// n-axis 等实现了 FaceVerificationAdapter 的上游：走适配器。
+	// 下游字段（verification_id / h5_url / expires_at，或官方 Action 结构）保持不变。
+	if adapter, channel, err := service.GetAssetAdapter(userGroup); err == nil {
+		if faceAdapter, ok := adapter.(service.FaceVerificationAdapter); ok {
+			callbackURL := extractFaceVerificationCallbackURL(body)
+			session, err := faceAdapter.CreateFaceVerification(callbackURL)
+			if err != nil {
+				c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": err.Error()})
+				return
+			}
+
+			_ = model.CreateSeedanceFaceVerification(&model.SeedanceFaceVerification{
+				UserID:         userID,
+				ChannelID:      channel.Id,
+				VerificationID: session.Token,
+				Status:         "waiting_user",
+				H5URL:          session.H5URL,
+				ExpiresAt:      session.ExpiresAt,
+				RawData:        session.RawData,
+			})
+
+			// 下游契约保持不变：REST 入口与 Action 入口历史上都返回同一组扁平字段
+			// （见 docs/咪咕/seedance-asset-api.md §3.1），这里不引入官方 Result 外壳。
+			c.JSON(http.StatusOK, gin.H{
+				"verification_id": session.Token,
+				"status":          "waiting_user",
+				"h5_url":          session.H5URL,
+				"expires_at":      session.ExpiresAt,
+			})
+			return
+		}
+	}
+
+	// 老咪咕 Gateway 等未实现该能力的上游：保持原有透传逻辑不变
 	gw, ok := seedanceGetGW(c)
 	if !ok {
 		return
 	}
-	userID := c.GetInt("id")
-	body := readBody(c)
 
 	proxyAndPassthrough(c, gw, http.MethodPost, "/api/seedance/face-verifications", nil, body, func(_ int, respBody []byte) {
 		var resp struct {
@@ -760,11 +819,42 @@ func SeedanceCreateFaceVerification(c *gin.Context) {
 
 // GET /api/seedance/face-verifications/:id
 func SeedanceGetFaceVerification(c *gin.Context) {
+	userID := c.GetInt("id")
+	userGroup := c.GetString("group")
+
+	// n-axis 等实现了 FaceVerificationAdapter 的上游：走适配器（下游字段保持不变）
+	if adapter, _, err := service.GetAssetAdapter(userGroup); err == nil {
+		if faceAdapter, ok := adapter.(service.FaceVerificationAdapter); ok {
+			v, err := resolveFaceVerification(c, userID)
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "face verification not found"})
+				return
+			}
+
+			result, err := faceAdapter.GetFaceVerification(v.VerificationID)
+			if err != nil {
+				c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": err.Error()})
+				return
+			}
+			_ = model.UpdateSeedanceFaceVerificationStatus(v.ID, result.Status, result.GroupID, result.RawData)
+
+			// 下游契约保持不变：与 §3.2 一致（verification_id / status / group_id / expires_at）
+			c.JSON(http.StatusOK, gin.H{
+				"verification_id": v.VerificationID,
+				"status":          result.Status,
+				"group_id":        result.GroupID,
+				"expires_at":      v.ExpiresAt,
+			})
+			return
+		}
+	}
+
+	// 老咪咕 Gateway 等未实现该能力的上游：保持原有透传逻辑不变
 	gw, ok := seedanceGetGW(c)
 	if !ok {
 		return
 	}
-	userID := c.GetInt("id")
+
 	v, err := resolveFaceVerification(c, userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "face verification not found"})

@@ -102,6 +102,14 @@ func GetAssetAdapter(userGroup string) (AssetAdapter, *model.Channel, error) {
 		if version == "" {
 			version = "gateway" // 默认使用 gateway
 		}
+		// n-axis 契约（老咪咕 gateway 重构版）：仅对 naxis 系列做大小写归一，
+		// 避免大小写手误落到 default 分支静默降级为老 gateway；其他版本判定保持原样。
+		switch {
+		case strings.EqualFold(strings.TrimSpace(version), UpstreamVersionNaxis):
+			version = UpstreamVersionNaxis
+		case strings.EqualFold(strings.TrimSpace(version), UpstreamVersionNaxisRest):
+			version = UpstreamVersionNaxisRest
+		}
 
 		common.SysLog(fmt.Sprintf("[GetAssetAdapter] 渠道 #%d 上游版本: %s", ch.Id, version))
 
@@ -156,6 +164,34 @@ func GetAssetAdapter(userGroup string) (AssetAdapter, *model.Channel, error) {
 			))
 
 			adapter = NewSdos2AssetAdapter(baseURL, key)
+
+		case UpstreamVersionNaxis:
+			// n-axis 火山方舟原生 Action 入口：POST /?Action=…&Version=2024-01-01
+			baseURL := settings.SeedanceAssetBaseUrl
+			if baseURL == "" {
+				baseURL = fullCh.GetBaseURL()
+			}
+
+			common.SysLog(fmt.Sprintf(
+				"[AssetAdapter] selected Naxis Action adapter for group '%s': channel=%d, url=%s",
+				userGroup, fullCh.Id, baseURL,
+			))
+
+			adapter = NewNaxisActionAssetAdapter(baseURL, key)
+
+		case UpstreamVersionNaxisRest:
+			// n-axis 平台 REST 入口：/v1/asset-groups、/v1/assets
+			baseURL := settings.SeedanceAssetBaseUrl
+			if baseURL == "" {
+				baseURL = fullCh.GetBaseURL()
+			}
+
+			common.SysLog(fmt.Sprintf(
+				"[AssetAdapter] selected Naxis REST adapter for group '%s': channel=%d, url=%s",
+				userGroup, fullCh.Id, baseURL,
+			))
+
+			adapter = NewNaxisAssetAdapter(baseURL, key)
 
 		default:
 			common.SysLog(fmt.Sprintf(
@@ -284,6 +320,34 @@ func createAdapter(fullCh *model.Channel, key string) (AssetAdapter, error) {
 		))
 
 		return NewSdos2AssetAdapter(baseURL, key), nil
+
+	case UpstreamVersionNaxis:
+		// n-axis 火山方舟原生 Action 入口：POST /?Action=…&Version=2024-01-01
+		baseURL := settings.SeedanceAssetBaseUrl
+		if baseURL == "" {
+			baseURL = fullCh.GetBaseURL()
+		}
+
+		common.SysLog(fmt.Sprintf(
+			"[AssetAdapter] creating Naxis Action adapter: channel=%d, url=%s",
+			fullCh.Id, baseURL,
+		))
+
+		return NewNaxisActionAssetAdapter(baseURL, key), nil
+
+	case UpstreamVersionNaxisRest:
+		// n-axis 平台 REST 入口：/v1/asset-groups、/v1/assets
+		baseURL := settings.SeedanceAssetBaseUrl
+		if baseURL == "" {
+			baseURL = fullCh.GetBaseURL()
+		}
+
+		common.SysLog(fmt.Sprintf(
+			"[AssetAdapter] creating Naxis REST adapter: channel=%d, url=%s",
+			fullCh.Id, baseURL,
+		))
+
+		return NewNaxisAssetAdapter(baseURL, key), nil
 
 	default:
 		common.SysLog(fmt.Sprintf(

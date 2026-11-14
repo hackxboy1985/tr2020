@@ -92,3 +92,38 @@ type AssetResponse struct {
 	Moderation  interface{} `json:"Moderation,omitempty"`
 	RawData     string      `json:"-"` // 原始响应数据
 }
+
+// ===== 真人核验（可选能力）=====
+
+// FaceVerificationAdapter 是素材上游的「可选能力」接口。
+//
+// 支持真人核验会话的上游（当前为 n-axis）实现本接口；未实现的上游（老咪咕
+// Gateway / KWJM / sdos2）保持 controller 里原有的网关透传逻辑，行为完全不变。
+// controller 通过类型断言判断是否支持，避免改动老链路。
+type FaceVerificationAdapter interface {
+	// CreateFaceVerification 创建真人核验会话，callbackURL 可为空。
+	CreateFaceVerification(callbackURL string) (*FaceVerificationSession, error)
+
+	// GetFaceVerification 按会话凭证查询核验结果。
+	GetFaceVerification(token string) (*FaceVerificationResult, error)
+}
+
+// FaceVerificationSession 核验会话（统一格式）
+type FaceVerificationSession struct {
+	Token     string // 会话凭证（n-axis 的 byted_token / BytedToken）
+	H5URL     string // 火山官方 H5 活体认证链接
+	ExpiresAt int64  // 过期时间（unix 秒），上游未给或解析失败为 0
+	RawData   string // 原始响应，落库用于排查
+}
+
+// FaceVerificationResult 核验结果（统一格式）
+type FaceVerificationResult struct {
+	Status     string // waiting_user / callback_received / verified / failed / expired
+	GroupID    string // verified 后的真人人像组 ID
+	Passed     bool
+	AssetID    string
+	Reason     string
+	ExpireTime string // 上游原始 ISO 时间（官方 TOP 响应字段，透传给下游）
+	RawData    string
+}
+

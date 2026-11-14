@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -119,6 +120,10 @@ type TaskAdaptor struct {
 	baseURL           string
 	videoGeneratePath string
 	videoFetchPath    string
+	// resultURLRequireHTTPS 为 true 时，成片地址必须是 https 绝对地址。
+	// 仅 n-axis 上游开启（其成片地址恒为 https）；其他上游允许 http 绝对地址
+	// （如 sdos2 的 seedance-gateway 仍可能是 http）。
+	resultURLRequireHTTPS bool
 }
 
 func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
@@ -149,6 +154,13 @@ func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
 	if upstreamVersion == "" {
 		upstreamVersion = "gateway" // 默认
 	}
+
+	// n-axis 上游的成片地址恒为 https；其他上游（如 sdos2）可能仍为 http，
+	// 因此只有 n-axis 强制 https，其余只要求绝对 http(s) 地址。
+	trimmedVersion := strings.TrimSpace(upstreamVersion)
+	a.resultURLRequireHTTPS = strings.EqualFold(trimmedVersion, service.UpstreamVersionNaxis) ||
+		strings.EqualFold(trimmedVersion, service.UpstreamVersionNaxisRest)
+	common.SysLog(fmt.Sprintf("[Init] resultURLRequireHTTPS=%v (upstream_version=%s)", a.resultURLRequireHTTPS, upstreamVersion))
 
 	common.SysLog(fmt.Sprintf("[Init] 使用 upstream_version=%s 进行路径推断", upstreamVersion))
 
@@ -631,6 +643,54 @@ func (a *TaskAdaptor) resolveResultURL(raw string) string {
 	return base + u
 }
 
+// validateVideoResultURL 校验成片地址：必须是绝对 http(s) URL。
+//
+// n-axis 上游额外要求 https（其成片地址恒为 https）；其他上游允许 http，
+// 因为 sdos2（seedance-gateway）等部署仍可能是 http。
+// 空值、相对路径（如 "/v1/videos/xxx/content" 未能拼出 baseURL）、非 http(s)
+// 协议、缺少 host 一律视为错误。
+func (a *TaskAdaptor) validateVideoResultURL(raw string) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", fmt.Errorf("empty result url")
+	}
+
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return "", fmt.Errorf("parse result url failed: %w", err)
+	}
+
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return "", fmt.Errorf("unsupported scheme %q", parsed.Scheme)
+	}
+	if parsed.Host == "" {
+		return "", fmt.Errorf("missing host")
+	}
+	if a.resultURLRequireHTTPS && scheme != "https" {
+		return "", fmt.Errorf("upstream requires https, got %q", parsed.Scheme)
+	}
+
+	return trimmed, nil
+}
+
+// applyResultURLValidation 校验成功任务的成片地址；不合法时记 error 日志并把任务置失败。
+func (a *TaskAdaptor) applyResultURLValidation(taskResult *relaycommon.TaskInfo, resTask responseTask) {
+	validated, err := a.validateVideoResultURL(taskResult.Url)
+	if err != nil {
+		common.SysError(fmt.Sprintf(
+			"[Doubao Video] invalid result url rejected: task_id=%s model=%s status=%s upstream_video_url=%q err=%v",
+			resTask.ID, resTask.Model, resTask.Status, taskResult.Url, err,
+		))
+		taskResult.Status = model.TaskStatusFailure
+		taskResult.Progress = "100%"
+		taskResult.Url = ""
+		taskResult.Reason = "invalid video url from upstream: " + err.Error()
+		return
+	}
+	taskResult.Url = validated
+}
+
 func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, error) {
 	resTask := responseTask{}
 	if err := common.Unmarshal(respBody, &resTask); err != nil {
@@ -657,6 +717,8 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 		// 解析 usage 信息用于按倍率计费
 		taskResult.CompletionTokens = resTask.Usage.CompletionTokens
 		taskResult.TotalTokens = resTask.Usage.TotalTokens
+		// 成片地址必须是可用的绝对地址，否则把任务判失败，不把坏地址透传下游
+		a.applyResultURLValidation(&taskResult, resTask)
 	// 兼容下游为 new-api 时返回的 OpenAIVideo 状态值
 	case "completed":
 		taskResult.Status = model.TaskStatusSuccess
@@ -667,6 +729,7 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 				taskResult.Url = a.resolveResultURL(u)
 			}
 		}
+		a.applyResultURLValidation(&taskResult, resTask)
 	case "in_progress":
 		taskResult.Status = model.TaskStatusInProgress
 		taskResult.Progress = "50%"

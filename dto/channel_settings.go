@@ -62,6 +62,11 @@ type ChannelOtherSettings struct {
 	//   "gateway"（默认）：咪咕 Gateway RESTful 契约 /api/seedance/proxy/assets*
 	//   "kwjm"：KWJM Action 契约
 	//   "sdos2"：seedance-gateway 原生契约 /seedance/media*（小写蛇形字段）
+	//   "naxis"：n-axis（咪咕 Gateway 重构版）火山方舟原生 Action 入口
+	//            POST /?Action=…&Version=2024-01-01，与官方 SDK 同构
+	//   "naxis_rest"：同一上游的平台 REST 入口 /v1/asset-groups、/v1/assets
+	//            需要素材原始 source_url 时使用（Action 入口返回的是平台签名代理地址）
+	//            两者地址均复用 seedance_asset_base_url（如 https://platform.n-axis.com）
 	AssetUpstreamVersion string `json:"asset_upstream_version,omitempty"`
 	// Sdos2VideoContentPublic 控制 sdos2 成片下载接口是否免鉴权
 	// false（默认）：GET /v1/videos/{task_id}/content 需要 API Key 授权
