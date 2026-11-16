@@ -439,3 +439,43 @@ func TestComposeTieredTextQuotaErrorFallbackUsesPreConsumedQuota(t *testing.T) {
 	require.Equal(t, int64(12500), summary.ToolCallSurchargeQuota.Round(0).IntPart())
 	require.Equal(t, 14500, quota)
 }
+
+func TestCalculateTextQuotaSummaryDoesNotDoubleChargeCachedTokensOnOpenAIStyleUsageWithClaudeFields(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+
+	relayInfo := &relaycommon.RelayInfo{
+		RelayFormat:     types.RelayFormatOpenAI,
+		OriginModelName: "deepseek-v4.1-flash",
+		PriceData: types.PriceData{
+			ModelRatio:           1,
+			CompletionRatio:      4,
+			CacheRatio:           0.02,
+			CacheCreationRatio:   1.25,
+			CacheCreation5mRatio: 1.25,
+			CacheCreation1hRatio: 2.5,
+			GroupRatioInfo:       types.GroupRatioInfo{GroupRatio: 0.9},
+		},
+		StartTime: time.Now(),
+	}
+	// 线上日志：prompt_tokens = 缓存命中 716,672 + 缓存未命中 967 = 717,639，
+	// 上游同时又带了 claude_cache_creation_5_m_tokens=967（usage_semantic 为空）。
+	// prompt_tokens 已经包含缓存，不能再按"纯文本输入"处理，否则缓存 token 会被
+	// 按输入价重复收一遍，线上实际扣成 $1.32229，正确值是 $0.03010。
+	usage := &dto.Usage{
+		PromptTokens:     717639,
+		CompletionTokens: 356,
+		TotalTokens:      717995,
+		PromptTokensDetails: dto.InputTokenDetails{
+			CachedTokens: 716672,
+		},
+		ClaudeCacheCreation5mTokens: 967,
+	}
+
+	summary := calculateTextQuotaSummary(ctx, relayInfo, usage)
+
+	require.False(t, summary.IsClaudeUsageSemantic)
+	// (717,639 - 716,672) + 716,672*0.02 + 356*4 = 16,724.44，*0.9 = 15,052
+	require.Equal(t, 15052, summary.Quota)
+}

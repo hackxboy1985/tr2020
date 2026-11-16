@@ -68,6 +68,20 @@ func cacheWriteTokensTotal(summary textQuotaSummary) int {
 	return summary.CacheCreationTokens
 }
 
+// claudeCacheCreationTokenTotal returns the cache-write token count of a usage,
+// taking the flat field and the 5m/1h split into account without counting the
+// same tokens twice.
+func claudeCacheCreationTokenTotal(usage *dto.Usage) int {
+	if usage == nil {
+		return 0
+	}
+	total := usage.PromptTokensDetails.CachedCreationTokens
+	if split := usage.ClaudeCacheCreation5mTokens + usage.ClaudeCacheCreation1hTokens; split > total {
+		total = split
+	}
+	return total
+}
+
 func isLegacyClaudeDerivedOpenAIUsage(relayInfo *relaycommon.RelayInfo, usage *dto.Usage) bool {
 	if relayInfo == nil || usage == nil {
 		return false
@@ -78,7 +92,14 @@ func isLegacyClaudeDerivedOpenAIUsage(relayInfo *relaycommon.RelayInfo, usage *d
 	if usage.UsageSource != "" || usage.UsageSemantic != "" {
 		return false
 	}
-	return usage.ClaudeCacheCreation5mTokens > 0 || usage.ClaudeCacheCreation1hTokens > 0
+	if usage.ClaudeCacheCreation5mTokens <= 0 && usage.ClaudeCacheCreation1hTokens <= 0 {
+		return false
+	}
+	// 旧版网关把 Claude usage 原样转成 OpenAI 格式时，prompt_tokens 只含普通输入，
+	// 缓存命中/写入是另算的。若缓存计数已经能装进 prompt_tokens，说明 prompt_tokens
+	// 是 OpenAI 风格的总输入（已包含缓存），再按"纯文本"处理会把缓存 token 按输入价
+	// 重复收一遍（线上出现过 44 倍的超额计费）。
+	return usage.PromptTokensDetails.CachedTokens+claudeCacheCreationTokenTotal(usage) > usage.PromptTokens
 }
 
 func calculateTextToolCallSurcharge(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, summary *textQuotaSummary) decimal.Decimal {
