@@ -4,8 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/model"
+)
+
+const (
+	// assetReadyPollAttempts / assetReadyPollInterval 注册后的短轮询参数：500ms × 5 次
+	assetReadyPollAttempts = 5
+	assetReadyPollInterval = 500 * time.Millisecond
 )
 
 // 素材跨渠道同步的哨兵错误：controller 用它映射成对下游的错误码/文案
@@ -67,6 +74,11 @@ func EnsureAssetForChannel(userID int, ch *model.Channel, adapter AssetAdapter, 
 			case "active":
 				return existing.UpstreamAssetID, nil
 			case "processing":
+				// 上次注册还在处理中：短轮询等它收敛，避免让下游直接失败
+				if polled, pollErr := pollAssetStatus(adapter, existing.UpstreamAssetID); pollErr == nil && polled == "active" {
+					_ = model.UpdateSeedanceAssetStatus(existing.ID, assetStatusForStorage(polled), "")
+					return existing.UpstreamAssetID, nil
+				}
 				return "", fmt.Errorf("%w (status=processing): %s", ErrAssetNotReady, existing.UpstreamAssetID)
 			case "failed":
 				return "", fmt.Errorf("%w (status=failed): %s", ErrAssetNotReady, existing.UpstreamAssetID)
@@ -122,15 +134,14 @@ func EnsureAssetForChannel(userID int, ch *model.Channel, adapter AssetAdapter, 
 
 	// 注册后必须确认状态，不能"注册完就直接替换 ID 提交"：
 	//   - Active：可用，落库并返回；
-	//   - Processing：上游还在处理（如异步审核/转码），落库后返回 ErrAssetNotReady，
-	//     让下游稍后重试（第二次请求会查到这条绑定，不再重复注册）；
+	//   - Processing / 空：短轮询 500ms × 5 次，收敛到 Active 才返回；
 	//   - Failed：落库失败状态并返回 ErrAssetNotReady；
-	//   - 状态为空：补查一次 GetAsset 再判断。
+	//   - 轮询后仍未终态：落库当前状态并返回 ErrAssetNotReady，让下游稍后重试
+	//     （第二次请求会查到这条绑定，不再重复注册）。
 	status := strings.ToLower(strings.TrimSpace(created.Status))
-	if status == "" {
-		if refreshed, getErr := adapter.GetAsset(created.ID, nil); getErr == nil && refreshed != nil {
-			created.Status = refreshed.Status
-			status = strings.ToLower(strings.TrimSpace(refreshed.Status))
+	if status != "active" && status != "failed" {
+		if polled, pollErr := pollAssetStatus(adapter, created.ID); pollErr == nil && polled != "" {
+			status = polled
 		}
 	}
 
@@ -143,7 +154,7 @@ func EnsureAssetForChannel(userID int, ch *model.Channel, adapter AssetAdapter, 
 		Name:            created.Name,
 		AssetType:       created.AssetType,
 		SourceURL:       sourceURL,
-		Status:          created.Status,
+		Status:          assetStatusForStorage(status),
 		RawData:         created.RawData,
 	})
 
@@ -155,7 +166,7 @@ func EnsureAssetForChannel(userID int, ch *model.Channel, adapter AssetAdapter, 
 	case "failed":
 		return "", fmt.Errorf("%w (status=failed): %s", ErrAssetNotReady, created.ID)
 	default:
-		return "", fmt.Errorf("%w (status=%s): %s", ErrAssetNotReady, status, created.ID)
+		return "", fmt.Errorf("%w (status=unknown): %s", ErrAssetNotReady, created.ID)
 	}
 }
 
@@ -180,6 +191,44 @@ func EnsureAssetGroupForChannel(userID int, ch *model.Channel, adapter AssetAdap
 		return "", fmt.Errorf("%w: %s (enable asset_auto_sync to re-register automatically)", ErrAssetNotSynced, upstreamGroupID)
 	}
 	return ensureAssetGroupForChannel(userID, ch, adapter, group.Name, group.GroupType)
+}
+
+// pollAssetStatus 注册后的短轮询：每 500ms 查一次 GetAsset，最多 5 次。
+//
+// 返回最后一次拿到的状态（小写）。上游查询报错时继续轮询，全部失败且没有状态时
+// 返回最后一个错误，由调用方按"未就绪"处理。
+func pollAssetStatus(adapter AssetAdapter, assetID string) (string, error) {
+	status := ""
+	var lastErr error
+	for attempt := 0; attempt < assetReadyPollAttempts; attempt++ {
+		time.Sleep(assetReadyPollInterval)
+		asset, err := adapter.GetAsset(assetID, nil)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		status = strings.ToLower(strings.TrimSpace(asset.Status))
+		if status == "active" || status == "failed" {
+			return status, nil
+		}
+	}
+	return status, lastErr
+}
+
+// assetStatusForStorage 统一库内状态大小写（Active / Processing / Failed / Archived）。
+func assetStatusForStorage(status string) string {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "active":
+		return "Active"
+	case "processing":
+		return "Processing"
+	case "failed":
+		return "Failed"
+	case "archived":
+		return "Archived"
+	default:
+		return strings.TrimSpace(status)
+	}
 }
 
 // ensureAssetGroupForChannel 在当前渠道按「组名 + 组类型」复用同名组，没有则创建。
