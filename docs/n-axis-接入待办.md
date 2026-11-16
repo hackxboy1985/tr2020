@@ -59,7 +59,7 @@
 
 | # | 任务 | 状态 | 要点 |
 |---|---|---|---|
-| T9 | 跨渠道资产库**自动同步** | ✅ 代码完成（未提交） | 渠道配置 `asset_auto_sync`（默认关）；跨渠道查询；`EnsureAssetForChannel` 惰性补登记（方案 B 组结构、LivenessFace 报错、幂等）；视频提交 `asset://` 改写 + 约定错误结构；controller GET/PATCH/DELETE 翻译（跨渠道删除只删本地）；列表按当前渠道去重。已知限制：并发无唯一约束兜底（依赖上游幂等）、列表 total 未按去重后重算 |
+| T9 | 跨渠道资产库**自动同步** | ✅ 代码完成（未提交） | 渠道配置 `asset_auto_sync`（默认关）；跨渠道查询；`EnsureAssetForChannel` 惰性补登记（方案 B 组结构、LivenessFace 报错、幂等；**注册后校验状态：仅 Active 才返回新 ID，Processing/Failed 返回 not ready 并落库绑定**）；视频提交 `asset://` 改写 + 约定错误结构；controller GET/PATCH/DELETE 翻译（跨渠道删除只删本地）；列表按当前渠道去重。已知限制：并发无唯一约束兜底（依赖上游幂等）、列表 total 未按去重后重算 |
 | T9-a | 资产失效/同步失败的错误契约 | 已确认格式 | 任务提交接口返回 HTTP 400 与扁平结构：`{"code":"InvalidParameter","message":"asset not ready (status=failed): <asset-id>","param":null,"type":"BadRequest"}`；上游细节只记日志不透传。注意：AIGC 平台不预检 source_url，URL 已死只能在上游提交视频时暴露，届时同样映射为该结构 |
 | T10 | 放宽同上游账号的 `channel_id` 过滤 | 并入 T9 | 同账号换渠道行时旧素材查询不再 404 |
 | T11 | 视频异常任务标记（方案 C） | ✅ 已实现（未提交，测试通过） | `Task.FailCode varchar(64) index` + `TaskDto.fail_code`；三个码：`INVALID_VIDEO_URL` / `CHANNEL_BASE_URL_MISSING` / `NON_OFFICIAL_VIDEO_URL`（**不需要新增字段**，只是列的新取值）；轮询落库，日志含 fail_code |

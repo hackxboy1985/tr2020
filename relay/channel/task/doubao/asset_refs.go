@@ -76,14 +76,18 @@ func assetRefTaskError(err error) *dto.TaskError {
 		ref = refErr.ref
 	}
 	assetID := service.NormalizeAssetRef(ref)
-	message := fmt.Sprintf("asset not ready (status=failed): %s", assetID)
+	status := "failed"
+	if strings.Contains(err.Error(), "status=processing") {
+		status = "processing"
+	}
+	message := fmt.Sprintf("asset not ready (status=%s): %s", status, assetID)
 	switch {
 	case errors.Is(err, service.ErrAssetNotFound):
 		message = fmt.Sprintf("asset not found: %s", assetID)
 	case errors.Is(err, service.ErrAssetRequiresReverification):
 		message = fmt.Sprintf("asset requires re-verification (status=failed): %s", assetID)
 	case errors.Is(err, service.ErrAssetNotSynced), errors.Is(err, service.ErrAssetNotReady):
-		message = fmt.Sprintf("asset not ready (status=failed): %s", assetID)
+		message = fmt.Sprintf("asset not ready (status=%s): %s", status, assetID)
 	}
 
 	common.SysError(fmt.Sprintf("[Doubao Video] asset ref resolution failed: asset=%s err=%v", assetID, err))

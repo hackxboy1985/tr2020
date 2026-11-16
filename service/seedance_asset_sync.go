@@ -120,7 +120,21 @@ func EnsureAssetForChannel(userID int, ch *model.Channel, adapter AssetAdapter, 
 		return "", fmt.Errorf("re-register asset returned empty id")
 	}
 
-	// 落库当前渠道的绑定（失败不阻塞本次请求，下次会再次尝试）
+	// 注册后必须确认状态，不能"注册完就直接替换 ID 提交"：
+	//   - Active：可用，落库并返回；
+	//   - Processing：上游还在处理（如异步审核/转码），落库后返回 ErrAssetNotReady，
+	//     让下游稍后重试（第二次请求会查到这条绑定，不再重复注册）；
+	//   - Failed：落库失败状态并返回 ErrAssetNotReady；
+	//   - 状态为空：补查一次 GetAsset 再判断。
+	status := strings.ToLower(strings.TrimSpace(created.Status))
+	if status == "" {
+		if refreshed, getErr := adapter.GetAsset(created.ID, nil); getErr == nil && refreshed != nil {
+			created.Status = refreshed.Status
+			status = strings.ToLower(strings.TrimSpace(refreshed.Status))
+		}
+	}
+
+	// 先落库（无论可用与否），保证后续请求能命中这条绑定而不是重复注册
 	_ = model.CreateSeedanceAsset(&model.SeedanceAsset{
 		UserID:          userID,
 		ChannelID:       ch.Id,
@@ -133,7 +147,16 @@ func EnsureAssetForChannel(userID int, ch *model.Channel, adapter AssetAdapter, 
 		RawData:         created.RawData,
 	})
 
-	return created.ID, nil
+	switch status {
+	case "active":
+		return created.ID, nil
+	case "processing":
+		return "", fmt.Errorf("%w (status=processing): %s", ErrAssetNotReady, created.ID)
+	case "failed":
+		return "", fmt.Errorf("%w (status=failed): %s", ErrAssetNotReady, created.ID)
+	default:
+		return "", fmt.Errorf("%w (status=%s): %s", ErrAssetNotReady, status, created.ID)
+	}
 }
 
 // EnsureAssetGroupForChannel 确保逻辑素材组在当前渠道有绑定，返回当前渠道的上游组 ID。
