@@ -559,10 +559,16 @@ func RelayTask(c *gin.Context) {
 		}
 
 		if !taskErr.LocalError {
+			// TaskError.Error 允许为空（例如自定义 ResponseBody 的本地错误），
+			// 这里兜底，避免 types.NewOpenAIError 内 err.Error() 解引用 nil 造成 panic
+			innerErr := taskErr.Error
+			if innerErr == nil {
+				innerErr = fmt.Errorf("%s", taskErr.Message)
+			}
 			processChannelError(c,
 				*types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey,
 					common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()),
-				types.NewOpenAIError(taskErr.Error, types.ErrorCodeBadResponseStatusCode, taskErr.StatusCode))
+				types.NewOpenAIError(innerErr, types.ErrorCodeBadResponseStatusCode, taskErr.StatusCode))
 		}
 
 		if !shouldRetryTaskRelay(c, channel.Id, taskErr, common.RetryTimes-retryParam.GetRetry()) {

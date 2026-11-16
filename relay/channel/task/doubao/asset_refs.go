@@ -95,6 +95,11 @@ func assetRefTaskError(err error) *dto.TaskError {
 		Code:       "InvalidParameter",
 		Message:    message,
 		StatusCode: http.StatusBadRequest,
+		// LocalError: 素材引用问题不是渠道故障，不应触发渠道错误处理/自动封禁
+		LocalError: true,
+		// Error 必须非空：controller/relay.go 会用 taskErr.Error 构造 OpenAI 错误，
+		// 为 nil 时 NewOpenAIError 内 err.Error() 会 panic
+		Error: err,
 		ResponseBody: map[string]interface{}{
 			"code":    "InvalidParameter",
 			"message": message,

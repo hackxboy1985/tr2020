@@ -2,10 +2,43 @@ package doubao
 
 import (
 	"errors"
+	"fmt"
+	"net/http"
 	"testing"
 
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/service"
 )
+
+// 回归测试：资产错误必须带非空 Error 且 LocalError=true。
+// 否则 controller/relay.go 的 types.NewOpenAIError(taskErr.Error, ...) 会 nil panic，
+// 且会被当成渠道故障处理。
+func TestAssetRefTaskErrorShape(t *testing.T) {
+	inner := fmt.Errorf("%w: ast_abc (enable asset_auto_sync to re-register automatically)", service.ErrAssetNotSynced)
+	taskErr := assetRefTaskError(&assetRefError{ref: "asset://ast_abc", err: inner})
+	if taskErr == nil {
+		t.Fatalf("expected task error")
+	}
+	if taskErr.Error == nil {
+		t.Fatalf("Error must be non-nil, otherwise relay path panics")
+	}
+	if !taskErr.LocalError {
+		t.Fatalf("asset error must be LocalError to avoid channel error processing")
+	}
+	if taskErr.StatusCode != http.StatusBadRequest {
+		t.Fatalf("unexpected status code: %d", taskErr.StatusCode)
+	}
+	body, ok := taskErr.ResponseBody.(map[string]interface{})
+	if !ok {
+		t.Fatalf("ResponseBody must be a map")
+	}
+	if body["code"] != "InvalidParameter" || body["type"] != "BadRequest" {
+		t.Fatalf("unexpected body: %+v", body)
+	}
+	if body["param"] != nil {
+		t.Fatalf("param must be nil")
+	}
+}
 
 func TestRewriteTaskRequestAssetRefs(t *testing.T) {
 	resolve := func(raw string) (string, error) {
