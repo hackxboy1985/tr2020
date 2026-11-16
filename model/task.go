@@ -80,6 +80,17 @@ const (
 	TaskStatusUnknown               = "UNKNOWN"
 )
 
+// 任务失败码：用于在任务列表筛选、统计异常任务（与 FailReason 文案解耦）
+const (
+	// FailCodeInvalidVideoURL 上游成片地址为空 / 非 http(s) / 缺 host
+	FailCodeInvalidVideoURL = "INVALID_VIDEO_URL"
+	// FailCodeUpstreamVideoUnavailable 上游成片地址不可用（相对路径且渠道不允许，或非火山官方域名）
+	// 对外只暴露中性码，不暴露"非官链"这类内部策略；细节写日志。
+	FailCodeUpstreamVideoUnavailable = "UPSTREAM_VIDEO_UNAVAILABLE"
+	// FailCodeChannelBaseURLMissing 渠道允许非官链，但渠道 Base URL 为空，无法构造上游拉流地址
+	FailCodeChannelBaseURLMissing = "CHANNEL_BASE_URL_MISSING"
+)
+
 type Task struct {
 	ID         int64                 `json:"id" gorm:"primary_key;AUTO_INCREMENT"`
 	CreatedAt  int64                 `json:"created_at" gorm:"index"`
@@ -95,6 +106,7 @@ type Task struct {
 	Action     string                `json:"action" gorm:"type:varchar(40);index"` // 任务类型, song, lyrics, description-mode
 	Status     TaskStatus            `json:"status" gorm:"type:varchar(20);index"` // 任务状态
 	FailReason string                `json:"fail_reason"`
+	FailCode   string                `json:"fail_code,omitempty" gorm:"type:varchar(64);index"` // 失败码，用于筛选/统计异常任务
 	SubmitTime int64                 `json:"submit_time" gorm:"index"`
 	StartTime  int64                 `json:"start_time" gorm:"index"`
 	FinishTime int64                 `json:"finish_time" gorm:"index"`
@@ -452,6 +464,7 @@ type taskSnapshot struct {
 	StartTime  int64
 	FinishTime int64
 	FailReason string
+	FailCode   string
 	ResultURL  string
 	Data       json.RawMessage
 }
@@ -462,6 +475,7 @@ func (s taskSnapshot) Equal(other taskSnapshot) bool {
 		s.StartTime == other.StartTime &&
 		s.FinishTime == other.FinishTime &&
 		s.FailReason == other.FailReason &&
+		s.FailCode == other.FailCode &&
 		s.ResultURL == other.ResultURL &&
 		bytes.Equal(s.Data, other.Data)
 }
@@ -473,6 +487,7 @@ func (t *Task) Snapshot() taskSnapshot {
 		StartTime:  t.StartTime,
 		FinishTime: t.FinishTime,
 		FailReason: t.FailReason,
+		FailCode:   t.FailCode,
 		ResultURL:  t.PrivateData.ResultURL,
 		Data:       t.Data,
 	}

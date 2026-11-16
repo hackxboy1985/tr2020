@@ -40,6 +40,51 @@ func ResolveSdos2RelayBaseURL(ch *model.Channel) string {
 	return ""
 }
 
+// NewAssetAdapterForChannel 按指定渠道构建素材适配器。
+//
+// 视频提交路径不能用 GetAssetAdapter（它按分组+优先级另选渠道），必须用当前请求
+// 实际命中的渠道，否则会走到别的上游账号上。供 asset:// 跨渠道解析使用。
+func NewAssetAdapterForChannel(ch *model.Channel) (AssetAdapter, error) {
+	if ch == nil {
+		return nil, fmt.Errorf("channel is nil")
+	}
+	fullCh, err := model.GetChannelById(ch.Id, true)
+	if err != nil {
+		return nil, fmt.Errorf("get channel %d failed: %w", ch.Id, err)
+	}
+	key, _, apiErr := fullCh.GetNextEnabledKey()
+	if apiErr != nil {
+		return nil, fmt.Errorf("channel %d has no available key: %s", ch.Id, apiErr.Error())
+	}
+	return createAdapter(fullCh, key)
+}
+
+// AllowNonOfficialVideoURL 渠道是否允许上游返回非官链成片地址（渠道 other 配置开关）。
+func AllowNonOfficialVideoURL(ch *model.Channel) bool {
+	if ch == nil {
+		return false
+	}
+	return ch.GetOtherSettings().AllowNonOfficialVideoURL
+}
+
+// NeedsVideoContentProxy 判断成片是否需要由本服务代理拉流后再交给下游。
+//
+// sdos2 上游的成片地址天然是受 Bearer 保护的接口路径；其他渠道可通过
+// allow_non_official_video_url 打开同样的代理行为（下游拿到本服务的
+// /v1/videos/{task_id}/content，由服务端带上游 Key 拉流）。
+func NeedsVideoContentProxy(ch *model.Channel) bool {
+	if ch == nil {
+		return false
+	}
+	return IsSdos2Upstream(ch) || AllowNonOfficialVideoURL(ch)
+}
+
+// ResolveVideoContentBaseURL 返回下游可访问的成片下载地址所用基址。
+// 与 ResolveSdos2RelayBaseURL 同一套逻辑（渠道 sdos2_relay_base_url 优先，其次 ServerAddress）。
+func ResolveVideoContentBaseURL(ch *model.Channel) string {
+	return ResolveSdos2RelayBaseURL(ch)
+}
+
 // IsSdos2UpstreamByID 按渠道 ID 判断是否为 sdos2 上游。
 //
 // 供无法直接拿到渠道对象的调用方使用（如任务适配器的响应转换）。

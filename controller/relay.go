@@ -982,6 +982,11 @@ func respondTaskError(c *gin.Context, taskErr *dto.TaskError) {
 	if taskErr.StatusCode == http.StatusTooManyRequests {
 		taskErr.Message = "当前分组上游负载已饱和，请稍后再试"
 	}
+	// 资产类错误使用专门的响应结构：{"code","message","param","type"}
+	if taskErr.ResponseBody != nil {
+		c.JSON(taskErr.StatusCode, taskErr.ResponseBody)
+		return
+	}
 	c.JSON(taskErr.StatusCode, taskErr)
 }
 

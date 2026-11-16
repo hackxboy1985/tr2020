@@ -142,6 +142,10 @@ func SeedanceListAssetGroups(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// 跨渠道同步后同一逻辑组会存在多条绑定：按当前渠道优先去重展示
+	if _, currentChannel, adErr := service.GetAssetAdapter(c.GetString("group")); adErr == nil && currentChannel != nil {
+		groups = dedupeSeedanceAssetGroups(groups, currentChannel.Id)
+	}
 
 	// 检查是否需要返回火山官方格式（通过 RelayAsset 调用）
 	if c.GetBool("doubao_official_format") {
@@ -205,8 +209,14 @@ func SeedanceGetAssetGroup(c *gin.Context) {
 		return
 	}
 
+	upstreamGroupID, err := ensureSeedanceAssetGroupUpstreamID(userID, adapter, channel, g)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+
 	// 使用适配器查询素材组
-	resp, err := adapter.GetAssetGroup(g.UpstreamGroupID)
+	resp, err := adapter.GetAssetGroup(upstreamGroupID)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": err.Error()})
 		return
@@ -270,8 +280,14 @@ func seedanceModifyAssetGroup(c *gin.Context) {
 		return
 	}
 
+	upstreamGroupID, err := ensureSeedanceAssetGroupUpstreamID(userID, adapter, channel, g)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+
 	// 使用适配器更新素材组
-	if err := adapter.UpdateAssetGroup(g.UpstreamGroupID, req); err != nil {
+	if err := adapter.UpdateAssetGroup(upstreamGroupID, req); err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": err.Error()})
 		return
 	}
@@ -302,10 +318,12 @@ func SeedanceDeleteAssetGroup(c *gin.Context) {
 		return
 	}
 
-	// 使用适配器删除素材组
-	if err := adapter.DeleteAssetGroup(g.UpstreamGroupID); err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": err.Error()})
-		return
+	// 素材组属于旧渠道时只做本地软删（当前渠道没有它的绑定）
+	if g.ChannelID == channel.Id {
+		if err := adapter.DeleteAssetGroup(g.UpstreamGroupID); err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": err.Error()})
+			return
+		}
 	}
 
 	// 软删除本地记录
@@ -510,6 +528,10 @@ func SeedanceListAssets(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// 跨渠道同步后同一素材会存在多条绑定：按当前渠道优先去重展示
+	if _, currentChannel, adErr := service.GetAssetAdapter(c.GetString("group")); adErr == nil && currentChannel != nil {
+		assets = dedupeSeedanceAssets(assets, currentChannel.Id)
+	}
 
 	// 检查是否需要返回火山官方格式（通过 RelayAsset 调用）
 	if c.GetBool("doubao_official_format") {
@@ -555,21 +577,99 @@ func SeedanceListAssets(c *gin.Context) {
 	common.ApiSuccess(c, pageInfo)
 }
 
-// resolveAsset 支持本地数字 ID 或上游素材 ID（asset- 或 n-axis 的 ast_ 前缀）查询素材
+// resolveAsset 支持本地数字 ID 或上游素材 ID（asset- 或 n-axis 的 ast_ 前缀）查询素材。
+// 上游 ID 按用户跨渠道查找：换渠道后旧 ID 仍能定位到逻辑素材，再由调用方翻译成当前渠道绑定。
 func resolveAsset(c *gin.Context, userID int, channelID int) (*model.SeedanceAsset, error) {
 	rawID := c.Param("id")
 	if strings.HasPrefix(rawID, "asset-") || strings.HasPrefix(rawID, "ast_") {
-		return model.GetSeedanceAssetByUpstreamID(rawID, userID, channelID)
+		return model.GetSeedanceAssetByUpstreamIDAnyChannel(rawID, userID)
 	}
 	localID, _ := strconv.ParseInt(rawID, 10, 64)
 	return model.GetSeedanceAssetByID(localID, userID)
+}
+
+// ensureSeedanceAssetUpstreamID 若素材不属于当前渠道，按 source_url 惰性补登记，返回当前渠道可用的上游 ID。
+func ensureSeedanceAssetUpstreamID(userID int, adapter service.AssetAdapter, channel *model.Channel, a *model.SeedanceAsset) (string, error) {
+	if a == nil {
+		return "", fmt.Errorf("asset not found")
+	}
+	if a.ChannelID == channel.Id {
+		return a.UpstreamAssetID, nil
+	}
+	return service.EnsureAssetForChannel(userID, channel, adapter, a.UpstreamAssetID)
+}
+
+// ensureSeedanceAssetGroupUpstreamID 同上，针对素材组（方案 B：保留组名/组类型）。
+func ensureSeedanceAssetGroupUpstreamID(userID int, adapter service.AssetAdapter, channel *model.Channel, g *model.SeedanceAssetGroup) (string, error) {
+	if g == nil {
+		return "", fmt.Errorf("asset group not found")
+	}
+	if g.ChannelID == channel.Id {
+		return g.UpstreamGroupID, nil
+	}
+	return service.EnsureAssetGroupForChannel(userID, channel, adapter, g.UpstreamGroupID)
+}
+
+// dedupeSeedanceAssets 同渠道优先去重：同 (source_url, asset_type) 只保留一条。
+func dedupeSeedanceAssets(assets []*model.SeedanceAsset, currentChannelID int) []*model.SeedanceAsset {
+	seen := make(map[string]*model.SeedanceAsset, len(assets))
+	order := make([]string, 0, len(assets))
+	for _, a := range assets {
+		if a == nil {
+			continue
+		}
+		key := a.SourceURL + "|" + a.AssetType
+		if strings.TrimSpace(a.SourceURL) == "" {
+			key = "id:" + strconv.FormatInt(a.ID, 10)
+		}
+		existing, ok := seen[key]
+		if !ok {
+			seen[key] = a
+			order = append(order, key)
+			continue
+		}
+		if a.ChannelID == currentChannelID && existing.ChannelID != currentChannelID {
+			seen[key] = a
+		}
+	}
+	out := make([]*model.SeedanceAsset, 0, len(order))
+	for _, key := range order {
+		out = append(out, seen[key])
+	}
+	return out
+}
+
+// dedupeSeedanceAssetGroups 同渠道优先去重：同 (name, group_type) 只保留一条。
+func dedupeSeedanceAssetGroups(groups []*model.SeedanceAssetGroup, currentChannelID int) []*model.SeedanceAssetGroup {
+	seen := make(map[string]*model.SeedanceAssetGroup, len(groups))
+	order := make([]string, 0, len(groups))
+	for _, g := range groups {
+		if g == nil {
+			continue
+		}
+		key := g.Name + "|" + g.GroupType
+		existing, ok := seen[key]
+		if !ok {
+			seen[key] = g
+			order = append(order, key)
+			continue
+		}
+		if g.ChannelID == currentChannelID && existing.ChannelID != currentChannelID {
+			seen[key] = g
+		}
+	}
+	out := make([]*model.SeedanceAssetGroup, 0, len(order))
+	for _, key := range order {
+		out = append(out, seen[key])
+	}
+	return out
 }
 
 // resolveAssetGroup 支持本地数字 ID 或上游 group-xxxxxxxx 格式查询素材组
 func resolveAssetGroup(c *gin.Context, userID int, channelID int) (*model.SeedanceAssetGroup, error) {
 	rawID := c.Param("id")
 	if strings.HasPrefix(rawID, "group-") {
-		return model.GetSeedanceAssetGroupByUpstreamID(rawID, userID, channelID)
+		return model.GetSeedanceAssetGroupByUpstreamIDAnyChannel(rawID, userID)
 	}
 	localID, _ := strconv.ParseInt(rawID, 10, 64)
 	return model.GetSeedanceAssetGroupByID(localID, userID)
@@ -628,8 +728,15 @@ func SeedanceGetAsset(c *gin.Context) {
 		return
 	}
 
+	// 换渠道后旧素材在当前渠道没有绑定时，按 source_url 惰性补登记
+	upstreamAssetID, err := ensureSeedanceAssetUpstreamID(userID, adapter, channel, a)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+
 	// 使用适配器查询素材
-	resp, err := adapter.GetAsset(a.UpstreamAssetID, forwardQuery(c))
+	resp, err := adapter.GetAsset(upstreamAssetID, forwardQuery(c))
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": err.Error()})
 		return
@@ -702,8 +809,14 @@ func seedanceModifyAsset(c *gin.Context) {
 		return
 	}
 
+	upstreamAssetID, err := ensureSeedanceAssetUpstreamID(userID, adapter, channel, a)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+
 	// 使用适配器更新素材
-	if err := adapter.UpdateAsset(a.UpstreamAssetID, req); err != nil {
+	if err := adapter.UpdateAsset(upstreamAssetID, req); err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": err.Error()})
 		return
 	}
@@ -734,10 +847,13 @@ func SeedanceDeleteAsset(c *gin.Context) {
 		return
 	}
 
-	// 使用适配器删除素材
-	if err := adapter.DeleteAsset(a.UpstreamAssetID); err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": err.Error()})
-		return
+	// 素材属于旧渠道时只做本地软删：当前渠道没有它的绑定，无需（也不应）
+	// 为了删除而先补登记一次。
+	if a.ChannelID == channel.Id {
+		if err := adapter.DeleteAsset(a.UpstreamAssetID); err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"success": false, "message": err.Error()})
+			return
+		}
 	}
 
 	// 软删除本地记录

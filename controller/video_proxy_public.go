@@ -51,7 +51,7 @@ func VideoProxyPublic(c *gin.Context) {
 		return
 	}
 	settings := channel.GetOtherSettings()
-	if !settings.Sdos2VideoContentPublic || !service.IsSdos2Upstream(channel) {
+	if !settings.Sdos2VideoContentPublic || !service.NeedsVideoContentProxy(channel) {
 		// 未开启公开访问：按未认证处理
 		videoProxyError(c, http.StatusUnauthorized, "invalid_request_error", "Authentication is required")
 		return

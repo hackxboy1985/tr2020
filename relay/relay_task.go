@@ -414,6 +414,12 @@ func videoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *d
 				taskData["status"] = originTask.Status.ToDoubaoStatus()
 			}
 
+			// 需要本服务代理拉流的渠道（sdos2 / allow_non_official_video_url）：
+			// 把上游地址换成本服务的成片下载入口
+			if ch, chErr := model.CacheGetChannel(originTask.ChannelId); chErr == nil {
+				rewriteDoubaoVideoContentURL(taskData, originTask.TaskID, ch)
+			}
+
 			// 不需要转换 status：task.Data 存储的是上游原始响应，status 已经是官方格式
 			respBody, _ = common.Marshal(taskData)
 		} else {
@@ -606,12 +612,43 @@ func tryDoubaoRealtimeFetch(task *model.Task, c *gin.Context) []byte {
 		// id 字段保持为上游任务ID（用户查询时使用的ID）
 		responseData["id"] = task.TaskID
 
+		// 需要本服务代理拉流的渠道：把上游地址换成本服务的成片下载入口
+		rewriteDoubaoVideoContentURL(responseData, task.TaskID, channelModel)
+
 		if respBody, err := common.Marshal(responseData); err == nil {
 			return respBody
 		}
 	}
 
 	return body
+}
+
+// rewriteDoubaoVideoContentURL 按「逐 URL 判定」决定是否把 doubao ark 响应里的
+// content.video_url 替换为本服务的成片下载入口（/v1/videos/{publicTaskID}/content）。
+//
+//   - 官链（.volces.com）：下游可直连，保持原地址，不代理；
+//   - 非官链且渠道允许（或 sdos2 这类受保护接口）：替换为代理入口。
+func rewriteDoubaoVideoContentURL(taskData map[string]interface{}, publicTaskID string, ch *model.Channel) {
+	if taskData == nil || strings.TrimSpace(publicTaskID) == "" || ch == nil {
+		return
+	}
+	content, ok := taskData["content"].(map[string]interface{})
+	if !ok || content == nil {
+		return
+	}
+	rawURL, ok := content["video_url"].(string)
+	if !ok || strings.TrimSpace(rawURL) == "" {
+		return
+	}
+	if !service.ShouldProxyVideoURL(ch, rawURL) {
+		return
+	}
+	trimmedBase := strings.TrimRight(strings.TrimSpace(service.ResolveVideoContentBaseURL(ch)), "/")
+	if trimmedBase != "" {
+		content["video_url"] = fmt.Sprintf("%s/v1/videos/%s/content", trimmedBase, publicTaskID)
+		return
+	}
+	content["video_url"] = taskcommon.BuildProxyURL(publicTaskID)
 }
 
 // tryOpenAIVideoRealtimeFetch 尝试从上游实时拉取任务状态（OpenAI Video API 格式）。
@@ -891,6 +928,7 @@ func TaskModel2Dto(task *model.Task) *dto.TaskDto {
 		Action:     task.Action,
 		Status:     string(task.Status),
 		FailReason: task.FailReason,
+		FailCode:   task.FailCode,
 		ResultURL:  task.GetResultURL(),
 		SubmitTime: task.SubmitTime,
 		StartTime:  task.StartTime,

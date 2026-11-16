@@ -103,7 +103,42 @@ func SoftDeleteSeedanceAssetGroup(id int64, userID int) error {
 		Update("deleted_at", time.Now().Unix()).Error
 }
 
+// GetSeedanceAssetGroupByUpstreamIDAnyChannel 跨渠道按上游组 ID 查组（用于保留组名/组类型）。
+func GetSeedanceAssetGroupByUpstreamIDAnyChannel(upstreamGroupID string, userID int) (*SeedanceAssetGroup, error) {
+	var g SeedanceAssetGroup
+	err := DB.Where("upstream_group_id = ? AND user_id = ? AND deleted_at = 0", upstreamGroupID, userID).
+		Order("id desc").First(&g).Error
+	return &g, err
+}
+
+// GetSeedanceAssetGroupByNameAndType 在指定渠道按「组名 + 组类型」查组（方案 B：复用同名组）。
+func GetSeedanceAssetGroupByNameAndType(userID int, channelID int, name, groupType string) (*SeedanceAssetGroup, error) {
+	var g SeedanceAssetGroup
+	err := DB.Where("user_id = ? AND channel_id = ? AND name = ? AND group_type = ? AND deleted_at = 0",
+		userID, channelID, name, groupType).Order("id asc").First(&g).Error
+	return &g, err
+}
+
 // ---- SeedanceAsset CRUD ----
+
+// GetSeedanceAssetByUpstreamIDAnyChannel 跨渠道按上游素材 ID 查询（换渠道后定位旧渠道素材用）。
+func GetSeedanceAssetByUpstreamIDAnyChannel(upstreamAssetID string, userID int) (*SeedanceAsset, error) {
+	var a SeedanceAsset
+	err := DB.Where("user_id = ? AND deleted_at = 0 AND upstream_asset_id = ?", userID, upstreamAssetID).
+		Order("id desc").First(&a).Error
+	return &a, err
+}
+
+// GetSeedanceAssetBySourceURLInChannel 在指定渠道内按 source_url（+ 类型）查已有绑定。
+func GetSeedanceAssetBySourceURLInChannel(sourceURL string, userID int, channelID int, assetType string) (*SeedanceAsset, error) {
+	var a SeedanceAsset
+	query := DB.Where("user_id = ? AND deleted_at = 0 AND channel_id = ? AND source_url = ?", userID, channelID, sourceURL)
+	if assetType != "" {
+		query = query.Where("asset_type = ?", assetType)
+	}
+	err := query.Order("id desc").First(&a).Error
+	return &a, err
+}
 
 func CreateSeedanceAsset(a *SeedanceAsset) error {
 	return DB.Create(a).Error

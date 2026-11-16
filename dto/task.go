@@ -11,6 +11,9 @@ type TaskError struct {
 	StatusCode int    `json:"-"`
 	LocalError bool   `json:"-"`
 	Error      error  `json:"-"`
+	// ResponseBody 非空时直接作为响应体输出（资产类错误需要
+	// {"code","message","param","type"} 结构，与通用 TaskError 不同）。
+	ResponseBody any `json:"-"`
 }
 
 type TaskData interface {
@@ -42,6 +45,7 @@ type TaskDto struct {
 	Action     string          `json:"action"`
 	Status     string          `json:"status"`
 	FailReason string          `json:"fail_reason"`
+	FailCode   string          `json:"fail_code,omitempty"`  // 失败码，用于筛选异常任务
 	ResultURL  string          `json:"result_url,omitempty"` // 任务结果 URL（视频地址等）
 	SubmitTime int64           `json:"submit_time"`
 	StartTime  int64           `json:"start_time"`

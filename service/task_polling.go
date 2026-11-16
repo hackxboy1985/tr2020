@@ -410,6 +410,11 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		task.PrivateData.OriTaskID = taskResult.OriTaskID
 	}
 
+	// 失败码：用于在任务列表筛选/统计异常任务（如成片地址非法）
+	if taskResult.FailCode != "" {
+		task.FailCode = taskResult.FailCode
+	}
+
 	logger.LogDebug(ctx, "updateVideoSingleTask taskResult: %+v", taskResult)
 
 	now := time.Now().Unix()

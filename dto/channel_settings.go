@@ -72,6 +72,15 @@ type ChannelOtherSettings struct {
 	// false（默认）：GET /v1/videos/{task_id}/content 需要 API Key 授权
 	// true：该地址可直接访问，无需 Authorization 头
 	Sdos2VideoContentPublic bool `json:"sdos2_video_content_public,omitempty"`
+	// AssetAutoSync 素材库跨渠道自动补登记（默认 false）
+	// 换渠道后旧素材在当前渠道没有绑定时，是否按 source_url 自动重新登记（保留组结构）
+	// 打开后：解析 asset:// 时自动补登记；关闭后：直接返回"需重新登记"错误
+	AssetAutoSync bool `json:"asset_auto_sync,omitempty"`
+	// AllowNonOfficialVideoURL 是否允许上游返回非官链成片地址（默认 false）
+	// false：空值 / 相对路径拼不出绝对地址 / 非 http(s) → 记 error 日志 + 任务置失败 + fail_code=INVALID_VIDEO_URL
+	// true ：接受该地址（相对路径用渠道 Base URL 拼），下游看到的 URL 换成本服务的
+	//        /v1/videos/{task_id}/content，由服务端带上游 Key 代理拉流
+	AllowNonOfficialVideoURL bool `json:"allow_non_official_video_url,omitempty"`
 	// Sdos2RelayBaseUrl 本服务对外基址，用于拼接返回给下游的成片下载地址
 	// 例如 https://api.example.com；留空时回退到系统设置里的 ServerAddress
 	Sdos2RelayBaseUrl string `json:"sdos2_relay_base_url,omitempty"`

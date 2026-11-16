@@ -120,10 +120,12 @@ type TaskAdaptor struct {
 	baseURL           string
 	videoGeneratePath string
 	videoFetchPath    string
-	// resultURLRequireHTTPS 为 true 时，成片地址必须是 https 绝对地址。
-	// 仅 n-axis 上游开启（其成片地址恒为 https）；其他上游允许 http 绝对地址
-	// （如 sdos2 的 seedance-gateway 仍可能是 http）。
-	resultURLRequireHTTPS bool
+	// allowNonOfficialVideoURL 渠道是否允许返回非官链成片地址。
+	// 允许时下游拿到的 URL 会换成本服务的代理下载地址，由服务端带上游 Key 拉流。
+	allowNonOfficialVideoURL bool
+	// enforceOfficialVideoURL 是否强制成片地址必须是火山官方域名（.volces.com）。
+	// 仅 n-axis 上游开启：老咪咕 gateway / sdos2 等保持原有行为，避免误伤。
+	enforceOfficialVideoURL bool
 }
 
 func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
@@ -148,19 +150,22 @@ func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
 	// 优先使用显式配置的路径
 	a.videoGeneratePath = settings.DoubaoVideoGeneratePath
 	a.videoFetchPath = settings.DoubaoVideoFetchPath
-
 	// 如果没有显式配置，根据 asset_upstream_version 自动推断
 	upstreamVersion := settings.AssetUpstreamVersion
 	if upstreamVersion == "" {
 		upstreamVersion = "gateway" // 默认
 	}
 
-	// n-axis 上游的成片地址恒为 https；其他上游（如 sdos2）可能仍为 http，
-	// 因此只有 n-axis 强制 https，其余只要求绝对 http(s) 地址。
+	// sdos2 上游的成片地址天然是受 Bearer 保护的接口路径（/v1/videos/{id}/content），
+	// 历史行为依赖"拼渠道 Base URL + 代理拉流"，因此自动视为允许非官链，避免回归。
+	a.allowNonOfficialVideoURL = settings.AllowNonOfficialVideoURL ||
+		strings.EqualFold(strings.TrimSpace(upstreamVersion), "sdos2")
+	// 官链域名强制只对 n-axis 生效；老咪咕 gateway / sdos2 等保持原行为
 	trimmedVersion := strings.TrimSpace(upstreamVersion)
-	a.resultURLRequireHTTPS = strings.EqualFold(trimmedVersion, service.UpstreamVersionNaxis) ||
+	a.enforceOfficialVideoURL = strings.EqualFold(trimmedVersion, service.UpstreamVersionNaxis) ||
 		strings.EqualFold(trimmedVersion, service.UpstreamVersionNaxisRest)
-	common.SysLog(fmt.Sprintf("[Init] resultURLRequireHTTPS=%v (upstream_version=%s)", a.resultURLRequireHTTPS, upstreamVersion))
+	common.SysLog(fmt.Sprintf("[Init] allow_non_official_video_url=%v enforce_official_video_url=%v (upstream_version=%s)",
+		a.allowNonOfficialVideoURL, a.enforceOfficialVideoURL, upstreamVersion))
 
 	common.SysLog(fmt.Sprintf("[Init] 使用 upstream_version=%s 进行路径推断", upstreamVersion))
 
@@ -228,6 +233,12 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 			"invalid_resolution", http.StatusBadRequest)
 	}
 	c.Set(contextKeyResolvedResolution, resolution)
+
+	// 素材跨渠道：把 asset://<旧渠道 id> 翻译成当前请求渠道的素材 id
+	// （渠道开启 asset_auto_sync 时按 source_url 自动补登记）
+	if taskErr = resolveAssetRefsForChannel(c, info, &req); taskErr != nil {
+		return taskErr
+	}
 	return nil
 }
 
@@ -624,6 +635,25 @@ func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq) (*
 	return &r, nil
 }
 
+// resolveResultURLForChannel 按渠道配置归一化成片地址。
+//
+//   - 绝对 http(s)：原样返回；
+//   - 相对路径：仅当渠道允许非官链且 Base URL 非空时，拼成绝对地址；
+//     否则保持原样，交给校验环节标记失败（并带上对应失败码）。
+//
+// 拼接出来的地址通常仍需要上游授权，因此这类渠道的下游 URL 会被替换成本服务的
+// /v1/videos/{task_id}/content，由服务端带上游 Key 代理拉流。
+func (a *TaskAdaptor) resolveResultURLForChannel(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" || isAbsoluteHTTPURL(trimmed) {
+		return trimmed
+	}
+	if !a.allowNonOfficialVideoURL || strings.TrimSpace(a.baseURL) == "" {
+		return trimmed
+	}
+	return a.resolveResultURL(trimmed)
+}
+
 // resolveResultURL 归一化上游返回的成片地址。
 //
 // sdos2（seedance-gateway）返回的是相对路径，例如 /v1/videos/task_xxx/content，
@@ -643,10 +673,9 @@ func (a *TaskAdaptor) resolveResultURL(raw string) string {
 	return base + u
 }
 
-// validateVideoResultURL 校验成片地址：必须是绝对 http(s) URL。
+// validateVideoResultURL 校验成片地址：必须是绝对 http(s) 链接。
 //
-// n-axis 上游额外要求 https（其成片地址恒为 https）；其他上游允许 http，
-// 因为 sdos2（seedance-gateway）等部署仍可能是 http。
+// 只要求"是个可用链接"，http 与 https 均可，不强制 https。
 // 空值、相对路径（如 "/v1/videos/xxx/content" 未能拼出 baseURL）、非 http(s)
 // 协议、缺少 host 一律视为错误。
 func (a *TaskAdaptor) validateVideoResultURL(raw string) (string, error) {
@@ -667,9 +696,6 @@ func (a *TaskAdaptor) validateVideoResultURL(raw string) (string, error) {
 	if parsed.Host == "" {
 		return "", fmt.Errorf("missing host")
 	}
-	if a.resultURLRequireHTTPS && scheme != "https" {
-		return "", fmt.Errorf("upstream requires https, got %q", parsed.Scheme)
-	}
 
 	return trimmed, nil
 }
@@ -678,17 +704,50 @@ func (a *TaskAdaptor) validateVideoResultURL(raw string) (string, error) {
 func (a *TaskAdaptor) applyResultURLValidation(taskResult *relaycommon.TaskInfo, resTask responseTask) {
 	validated, err := a.validateVideoResultURL(taskResult.Url)
 	if err != nil {
+		// 失败码细分（对外只给中性码，内部原因写日志）：
+		//   - 地址是相对路径：渠道不允许 → UPSTREAM_VIDEO_UNAVAILABLE；
+		//     渠道允许但 Base URL 为空无法拼 → CHANNEL_BASE_URL_MISSING
+		//   - 其他（空值 / 非 http(s) / 缺 host）→ INVALID_VIDEO_URL
+		failCode := model.FailCodeInvalidVideoURL
+		resolvedURL := strings.TrimSpace(taskResult.Url)
+		if resolvedURL != "" && !isAbsoluteHTTPURL(resolvedURL) {
+			if a.allowNonOfficialVideoURL {
+				failCode = model.FailCodeChannelBaseURLMissing
+			} else {
+				failCode = model.FailCodeUpstreamVideoUnavailable
+			}
+		}
 		common.SysError(fmt.Sprintf(
-			"[Doubao Video] invalid result url rejected: task_id=%s model=%s status=%s upstream_video_url=%q err=%v",
-			resTask.ID, resTask.Model, resTask.Status, taskResult.Url, err,
+			"[Doubao Video] invalid result url rejected: task_id=%s model=%s status=%s fail_code=%s allow_non_official=%v upstream_video_url=%q err=%v",
+			resTask.ID, resTask.Model, resTask.Status, failCode, a.allowNonOfficialVideoURL, taskResult.Url, err,
 		))
 		taskResult.Status = model.TaskStatusFailure
 		taskResult.Progress = "100%"
+		taskResult.FailCode = failCode
 		taskResult.Url = ""
 		taskResult.Reason = "invalid video url from upstream: " + err.Error()
 		return
 	}
 	taskResult.Url = validated
+
+	// 官方域名判定（仅 n-axis）：绝对地址但不是 .volces.com → 非官链
+	if a.enforceOfficialVideoURL && !a.allowNonOfficialVideoURL && !service.IsOfficialVideoURL(validated) {
+		common.SysError(fmt.Sprintf(
+			"[Doubao Video] non-official result url rejected: task_id=%s model=%s fail_code=%s upstream_video_url=%q",
+			resTask.ID, resTask.Model, model.FailCodeUpstreamVideoUnavailable, validated,
+		))
+		taskResult.Status = model.TaskStatusFailure
+		taskResult.Progress = "100%"
+		taskResult.FailCode = model.FailCodeUpstreamVideoUnavailable
+		taskResult.Url = ""
+		taskResult.Reason = "non-official video url from upstream (not ends with .volces.com)"
+	}
+}
+
+// isAbsoluteHTTPURL 判断是否是绝对 http(s) 地址（用于区分"上游返回相对路径"与"渠道 Base URL 缺失"）
+func isAbsoluteHTTPURL(raw string) bool {
+	lower := strings.ToLower(strings.TrimSpace(raw))
+	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://")
 }
 
 func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, error) {
@@ -713,7 +772,7 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 	case "succeeded":
 		taskResult.Status = model.TaskStatusSuccess
 		taskResult.Progress = "100%"
-		taskResult.Url = a.resolveResultURL(resTask.Content.VideoURL)
+		taskResult.Url = a.resolveResultURLForChannel(resTask.Content.VideoURL)
 		// 解析 usage 信息用于按倍率计费
 		taskResult.CompletionTokens = resTask.Usage.CompletionTokens
 		taskResult.TotalTokens = resTask.Usage.TotalTokens
@@ -723,10 +782,10 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 	case "completed":
 		taskResult.Status = model.TaskStatusSuccess
 		taskResult.Progress = "100%"
-		taskResult.Url = a.resolveResultURL(resTask.Content.VideoURL)
+		taskResult.Url = a.resolveResultURLForChannel(resTask.Content.VideoURL)
 		if taskResult.Url == "" {
 			if u, ok := resTask.Metadata["url"].(string); ok {
-				taskResult.Url = a.resolveResultURL(u)
+				taskResult.Url = a.resolveResultURLForChannel(u)
 			}
 		}
 		a.applyResultURLValidation(&taskResult, resTask)
@@ -879,9 +938,10 @@ func (a *TaskAdaptor) ConvertToOpenAIVideo(originTask *model.Task) ([]byte, erro
 		}
 	}
 	if videoURL != "" {
-		if ch, err := model.CacheGetChannel(originTask.ChannelId); err == nil && service.IsSdos2Upstream(ch) {
+		// 逐 URL 判定：官链直连不代理；非官链（且渠道允许）才替换为本服务代理地址
+		if ch, err := model.CacheGetChannel(originTask.ChannelId); err == nil && service.ShouldProxyVideoURL(ch, videoURL) {
 			// 本服务下载入口基址：渠道 other.sdos2_relay_base_url 优先，其次系统 ServerAddress
-			if base := service.ResolveSdos2RelayBaseURL(ch); base != "" {
+			if base := service.ResolveVideoContentBaseURL(ch); base != "" {
 				openAIVideo.SetMetadata("url", base+"/v1/videos/"+originTask.TaskID+"/content")
 			} else {
 				openAIVideo.SetMetadata("url", taskcommon.BuildProxyURL(originTask.TaskID))

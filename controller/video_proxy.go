@@ -84,6 +84,14 @@ func VideoProxy(c *gin.Context) {
 		return
 	}
 
+	// 透传 Range / If-Range：下游播放器拖动进度条、断点续传都依赖它
+	if rangeHeader := c.GetHeader("Range"); rangeHeader != "" {
+		req.Header.Set("Range", rangeHeader)
+	}
+	if ifRange := c.GetHeader("If-Range"); ifRange != "" {
+		req.Header.Set("If-Range", ifRange)
+	}
+
 	switch channel.Type {
 	case constant.ChannelTypeGemini:
 		apiKey := task.PrivateData.Key
@@ -110,9 +118,13 @@ func VideoProxy(c *gin.Context) {
 		videoURL = fmt.Sprintf("%s/v1/videos/%s/content", baseURL, task.GetUpstreamTaskID())
 		req.Header.Set("Authorization", "Bearer "+channel.Key)
 	case constant.ChannelTypeDoubaoVideo, constant.ChannelTypeVolcEngine:
-		// sdos2（seedance-gateway）等海外上游：成片地址是受 Bearer 保护的接口路径，
-		// 这里拼出上游真实地址并带上渠道 Key 去拉流，对下游完全透明。
-		if service.IsSdos2Upstream(channel) {
+		// sdos2（seedance-gateway）以及开启 allow_non_official_video_url 的渠道：
+		// 成片地址是受 Bearer 保护的接口路径或非公开地址，这里拼出上游真实地址
+		// 并带上渠道 Key 去拉流，对下游完全透明。
+		// 逐 URL 判定：官链直连不代理；非官链（且渠道允许）或 sdos2 受保护地址才代理
+		storedURL := strings.TrimSpace(task.GetResultURL())
+		if service.ShouldProxyVideoURL(channel, storedURL) ||
+			(service.NeedsVideoContentProxy(channel) && storedURL == "") {
 			videoURL = buildSdos2ContentURL(baseURL, task)
 			req.Header.Set("Authorization", "Bearer "+channel.Key)
 			break
@@ -161,7 +173,8 @@ func VideoProxy(c *gin.Context) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	// 200 全量、206 部分内容（Range 请求）都视为成功
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 		logger.LogError(c.Request.Context(), fmt.Sprintf("Upstream returned status %d for %s", resp.StatusCode, videoURL))
 		videoProxyError(c, http.StatusBadGateway, "server_error",
 			fmt.Sprintf("Upstream service returned status %d", resp.StatusCode))
