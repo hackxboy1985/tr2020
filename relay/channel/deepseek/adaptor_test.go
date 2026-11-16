@@ -98,3 +98,34 @@ func TestConvertOpenAIRequestSkipsReasoningReplayWhenThinkingDisabledBySuffix(t 
 	require.True(t, ok)
 	assert.Nil(t, convertedRequest.Messages[0].ReasoningContent)
 }
+
+// DeepSeek Chat Completions rejects the developer role with HTTP 422
+// (unknown variant "developer"); it carries the same instructions as a system
+// message and must be rewritten before the request leaves the channel.
+func TestConvertOpenAIRequestMapsDeveloperRoleToSystem(t *testing.T) {
+	request := &dto.GeneralOpenAIRequest{
+		Model: "deepseek-flash",
+		Messages: []dto.Message{
+			{Role: "developer", Content: "be concise"},
+			{Role: "user", Content: "hi"},
+			{Role: "assistant", Content: "hello"},
+			{Role: "developer", Content: "later instruction"},
+			{Role: "tool", Content: "result", ToolCallId: "call_1"},
+		},
+	}
+
+	converted, err := (&Adaptor{}).ConvertOpenAIRequest(nil, newDeepSeekRelayInfo("deepseek-flash"), request)
+	require.NoError(t, err)
+
+	convertedRequest, ok := converted.(*dto.GeneralOpenAIRequest)
+	require.True(t, ok)
+	assert.Equal(t, "system", convertedRequest.Messages[0].Role)
+	assert.Equal(t, "user", convertedRequest.Messages[1].Role)
+	assert.Equal(t, "assistant", convertedRequest.Messages[2].Role)
+	assert.Equal(t, "system", convertedRequest.Messages[3].Role)
+	assert.Equal(t, "tool", convertedRequest.Messages[4].Role)
+
+	encoded, err := common.Marshal(convertedRequest)
+	require.NoError(t, err)
+	assert.NotContains(t, string(encoded), "developer")
+}
