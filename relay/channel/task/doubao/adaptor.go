@@ -475,6 +475,13 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		common.SysLog(fmt.Sprintf("[Doubao Video] ====================================="))
 	}
 
+	// 素材跨渠道改写后的最终请求体打印：只要请求体里出现 asset:// 就打印，
+	// 用于确认替换后的素材 id 是否真的写进了上游请求。
+	if strings.Contains(string(data), "asset://") {
+		common.SysLog(fmt.Sprintf("[Doubao Video] upstream request body (channel_id=%d, after asset ref rewrite): %s",
+			info.ChannelId, truncateLogBody(string(data), 4000)))
+	}
+
 	// 保存到 context，供 savePrompt 写入 prompt_logs.request_body
 	c.Set(string(constant.ContextKeyVideoRequestBody), string(data))
 

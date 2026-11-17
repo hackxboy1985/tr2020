@@ -245,8 +245,11 @@ func (a *NaxisActionAssetAdapter) CreateAsset(req CreateAssetRequest) (*AssetRes
 		return nil, fmt.Errorf("naxis action create asset returned empty id: %s", truncateNaxisBody(respBody))
 	}
 
+	common.SysLog(fmt.Sprintf("[naxis adapter] CreateAsset ok: id=%s", created.Id))
+
 	asset, getErr := a.GetAsset(created.Id, nil)
 	if getErr != nil {
+		common.SysLog(fmt.Sprintf("[naxis adapter] CreateAsset 回查 GetAsset 失败: id=%s err=%v", created.Id, getErr))
 		// 回查失败时先落 Processing，等下游轮询再收敛为 Active
 		return &AssetResponse{
 			ID:        created.Id,
@@ -266,6 +269,8 @@ func (a *NaxisActionAssetAdapter) CreateAsset(req CreateAssetRequest) (*AssetRes
 	if asset.RawData == "" {
 		asset.RawData = string(respBody)
 	}
+	common.SysLog(fmt.Sprintf("[naxis adapter] CreateAsset result: id=%s group_id=%s status=%s asset_type=%s",
+		asset.ID, asset.GroupID, asset.Status, asset.AssetType))
 	return asset, nil
 }
 
@@ -289,6 +294,8 @@ func (a *NaxisActionAssetAdapter) GetAsset(assetID string, _ url.Values) (*Asset
 		return nil, fmt.Errorf("naxis action get asset returned empty id: %s", truncateNaxisBody(respBody))
 	}
 
+	common.SysLog(fmt.Sprintf("[naxis adapter] GetAsset result: id=%s status=%s asset_type=%s group_id=%s",
+		asset.Id, asset.Status, asset.AssetType, asset.GroupId))
 	return &AssetResponse{
 		ID:         asset.Id,
 		GroupID:    asset.GroupId,

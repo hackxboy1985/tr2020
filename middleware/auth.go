@@ -193,13 +193,29 @@ func WssAuth(c *gin.Context) {
 // Used for endpoints that need to be accessible from both the dashboard and API clients.
 func TokenOrUserAuth() func(c *gin.Context) {
 	return func(c *gin.Context) {
-		// Try session auth first (dashboard users)
 		session := sessions.Default(c)
+
+		// 请求自带 API 凭据时优先按令牌认证：
+		// 浏览器可能同时带着登录会话 cookie，若先按 session 取身份，会把令牌指定的
+		// 分组覆盖成用户分组（素材/生视频等接口按分组选渠道，会直接选错渠道）。
+		if requestHasAPICredential(c) {
+			if session.Get("id") != nil {
+				common.SysLog("[Auth] request carries both session and API credential, using API token identity")
+			}
+			TokenAuth()(c)
+			return
+		}
+
+		// Try session auth (dashboard users)
 		if id := session.Get("id"); id != nil {
 			if status, ok := session.Get("status").(int); ok && status == common.UserStatusEnabled {
 				c.Set("id", id)
 				c.Set("group", session.Get("group"))
 				c.Set("user_group", session.Get("group"))
+				if strings.Contains(c.Request.URL.Path, "/api/seedance/") || strings.Contains(c.Request.URL.Path, "/v1/video/") {
+					common.SysLog(fmt.Sprintf("[Auth] session identity: path=%s user_id=%v group=%q (no API credential)",
+						c.Request.URL.Path, id, session.Get("group")))
+				}
 				c.Next()
 				return
 			}
@@ -207,6 +223,24 @@ func TokenOrUserAuth() func(c *gin.Context) {
 		// Fall back to token auth (API clients)
 		TokenAuth()(c)
 	}
+}
+
+// requestHasAPICredential 判断请求是否携带 API 令牌凭据。
+// 覆盖 TokenAuth 支持的主要入口头：Authorization、mj-api-secret、x-api-key、
+// x-goog-api-key、Sec-WebSocket-Protocol。
+func requestHasAPICredential(c *gin.Context) bool {
+	if c == nil || c.Request == nil {
+		return false
+	}
+	if strings.TrimSpace(c.Request.Header.Get("Authorization")) != "" {
+		return true
+	}
+	for _, header := range []string{"mj-api-secret", "x-api-key", "x-goog-api-key", "Sec-WebSocket-Protocol"} {
+		if strings.TrimSpace(c.Request.Header.Get(header)) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // OptionalTokenOrUserAuth 可选的令牌/会话认证中间件。
@@ -421,6 +455,11 @@ func TokenAuth() func(c *gin.Context) {
 			userGroup = tokenGroup
 		}
 		common.SetContextKey(c, constant.ContextKeyUsingGroup, userGroup)
+		// 诊断日志：素材/生视频接口打印身份与分组来源（排查选错渠道）
+		if strings.Contains(c.Request.URL.Path, "/api/seedance/") || strings.Contains(c.Request.URL.Path, "/v1/video/") {
+			common.SysLog(fmt.Sprintf("[Auth] token identity: path=%s token_id=%d token_name=%q token_group=%q user_group=%q using_group=%q",
+				c.Request.URL.Path, token.Id, token.Name, token.Group, userCache.Group, userGroup))
+		}
 
 		err = SetupContextForToken(c, token, parts...)
 		if err != nil {

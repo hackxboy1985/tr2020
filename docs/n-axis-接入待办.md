@@ -13,7 +13,7 @@
 | D4 | 下游两套接口不变 | Action 入口（`/api/seedance/assets/v2/?Action=`）与 `/api/seedance/*` 的字段/结构/状态码均保持原样。 |
 | D5 | 不新增数据库字段 | Action 返回的签名代理 URL 不入库、不返回下游；原始响应存已有 `raw_data`。 |
 | D6 | 跨渠道自动同步**保留素材组结构**（方案 B） | 补登记时按「组名 + 组类型」在当前渠道找同名组，没有则建同名组；素材落到对应组，不一律塞默认组。仅 AIGC 适用。 |
-| D7 | 自动补登记默认**关闭** | 新增渠道配置 `asset_auto_sync`（默认 false）。打开后才会在解析 `asset://` 时自动补登记；关闭时缺绑定直接返回"需重新登记"。 |
+| D7 | 自动补登记默认**开启** | 渠道配置 `asset_auto_sync`（默认 true；显式 false 才关闭）。解析 `asset://` 时自动补登记；显式关闭时缺绑定直接返回"未同步"错误。解析入口会打诊断日志：`channel_id / asset_auto_sync / asset_upstream_version`。 |
 | D8 | LivenessFace 换渠道不可自动同步 | 跨上游账号无法复用真人核验组；缺绑定时返回明确错误，提示用户在新渠道重新核验/重新生成。 |
 | D9 | 成片地址校验口径 | 校验的是**返回给下游的成片 URL**，不是上游请求地址；只要 http/https 绝对链接即可，**不强制 https**，所有上游同一口径。 |
 | D10 | 渠道配置「是否允许返回非官链」 | `ChannelOtherSettings.allow_non_official_video_url`，默认 `false`。官链判定：**host 以 `.volces.com` 结尾**（TOS 直链，带 X-Tos 签名参数也算官链）；该判定**只对 n-axis 上游强制**，老咪咕 gateway / sdos2 保持原行为。关闭时非官链（相对路径/非 volces 域名）→ `fail_code=NON_OFFICIAL_VIDEO_URL` + 任务失败；打开时相对路径用渠道 Base URL 拼接，并代理拉流。 |
@@ -59,7 +59,7 @@
 
 | # | 任务 | 状态 | 要点 |
 |---|---|---|---|
-| T9 | 跨渠道资产库**自动同步** | ✅ 代码完成（未提交） | 渠道配置 `asset_auto_sync`（默认关）；跨渠道查询；`EnsureAssetForChannel` 惰性补登记（方案 B 组结构、LivenessFace 报错、幂等；**注册后校验状态：仅 Active 才返回新 ID，Processing/Failed 返回 not ready 并落库绑定**）；视频提交 `asset://` 改写 + 约定错误结构；controller GET/PATCH/DELETE 翻译（跨渠道删除只删本地）；列表按当前渠道去重。已知限制：并发无唯一约束兜底（依赖上游幂等）、列表 total 未按去重后重算 |
+| T9 | 跨渠道资产库**自动同步** | ✅ 代码完成（未提交） | 渠道配置 `asset_auto_sync`（**默认开启**，显式 false 才关闭）；跨渠道查询；`EnsureAssetForChannel` 惰性补登记（方案 B 组结构、LivenessFace 报错、幂等；**注册后校验状态：仅 Active 才返回新 ID，Processing/Failed 返回 not ready 并落库绑定**）；视频提交 `asset://` 改写 + 约定错误结构；controller GET/PATCH/DELETE 翻译（跨渠道删除只删本地）；列表按当前渠道去重。已知限制：并发无唯一约束兜底（依赖上游幂等）、列表 total 未按去重后重算 |
 | T9-a | 资产失效/同步失败的错误契约 | 已确认格式 | 任务提交接口返回 HTTP 400 与扁平结构：`{"code":"InvalidParameter","message":"asset not ready (status=failed): <asset-id>","param":null,"type":"BadRequest"}`；上游细节只记日志不透传。注意：AIGC 平台不预检 source_url，URL 已死只能在上游提交视频时暴露，届时同样映射为该结构 |
 | T10 | 放宽同上游账号的 `channel_id` 过滤 | 并入 T9 | 同账号换渠道行时旧素材查询不再 404 |
 | T11 | 视频异常任务标记（方案 C） | ✅ 已实现（未提交，测试通过） | `Task.FailCode varchar(64) index` + `TaskDto.fail_code`；三个码：`INVALID_VIDEO_URL` / `CHANNEL_BASE_URL_MISSING` / `NON_OFFICIAL_VIDEO_URL`（**不需要新增字段**，只是列的新取值）；轮询落库，日志含 fail_code |

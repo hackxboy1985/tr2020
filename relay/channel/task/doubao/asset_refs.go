@@ -39,6 +39,12 @@ func resolveAssetRefsForChannel(c *gin.Context, info *relaycommon.RelayInfo, req
 	if err != nil || ch == nil {
 		return nil
 	}
+	// 诊断日志：一眼确认当前渠道的 asset_auto_sync 实际读到什么值
+	assetSettings := ch.GetOtherSettings()
+	common.SysLog(fmt.Sprintf(
+		"[Doubao Video] asset ref resolution start: channel_id=%d user_id=%d asset_auto_sync=%v asset_upstream_version=%s",
+		ch.Id, info.UserId, assetSettings.AssetAutoSyncEnabled(), assetSettings.AssetUpstreamVersion,
+	))
 	adapter, err := service.NewAssetAdapterForChannel(ch)
 	if err != nil {
 		// 素材能力不可用时不阻塞视频任务，交给上游按原有逻辑报错
@@ -51,6 +57,7 @@ func resolveAssetRefsForChannel(c *gin.Context, info *relaycommon.RelayInfo, req
 		if resolveErr != nil {
 			return "", &assetRefError{ref: raw, err: resolveErr}
 		}
+		common.SysLog(fmt.Sprintf("[Doubao Video] asset ref mapped: channel_id=%d %s -> asset://%s", ch.Id, raw, resolved))
 		return "asset://" + resolved, nil
 	}
 
@@ -288,4 +295,12 @@ func rewriteAssetRefAny(value interface{}, resolve func(string) (string, error))
 	default:
 		return value, false, nil
 	}
+}
+
+// truncateLogBody 截断日志中的长请求体，避免刷爆日志。
+func truncateLogBody(body string, limit int) string {
+	if limit <= 0 || len(body) <= limit {
+		return body
+	}
+	return body[:limit] + fmt.Sprintf("...(truncated, total=%d bytes)", len(body))
 }

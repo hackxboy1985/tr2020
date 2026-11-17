@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 )
 
@@ -64,6 +65,7 @@ func EnsureAssetForChannel(userID int, ch *model.Channel, adapter AssetAdapter, 
 
 	// 已经是当前渠道的可用绑定
 	if logical.ChannelID == ch.Id && strings.EqualFold(strings.TrimSpace(logical.Status), "Active") {
+		common.SysLog(fmt.Sprintf("[AssetSync] binding hit: channel_id=%d upstream_asset_id=%s source_url=%s", ch.Id, logical.UpstreamAssetID, logical.SourceURL))
 		return logical.UpstreamAssetID, nil
 	}
 
@@ -72,6 +74,7 @@ func EnsureAssetForChannel(userID int, ch *model.Channel, adapter AssetAdapter, 
 		if existing, findErr := model.GetSeedanceAssetBySourceURLInChannel(sourceURL, userID, ch.Id, logical.AssetType); findErr == nil {
 			switch strings.ToLower(strings.TrimSpace(existing.Status)) {
 			case "active":
+				common.SysLog(fmt.Sprintf("[AssetSync] binding hit by source_url: channel_id=%d upstream_asset_id=%s source_url=%s", ch.Id, existing.UpstreamAssetID, existing.SourceURL))
 				return existing.UpstreamAssetID, nil
 			case "processing":
 				// 上次注册还在处理中：短轮询等它收敛，避免让下游直接失败
@@ -86,9 +89,18 @@ func EnsureAssetForChannel(userID int, ch *model.Channel, adapter AssetAdapter, 
 		}
 	}
 
-	// 当前渠道还没有绑定：只有开启自动补登记才继续
-	if !ch.GetOtherSettings().AssetAutoSync {
-		return "", fmt.Errorf("%w: %s (enable asset_auto_sync to re-register automatically)", ErrAssetNotSynced, assetID)
+	// 换渠道行但上游是同一个平台账号时，旧素材 ID 在上游本来就可直接用：
+	// 直接复用并落一条当前渠道的绑定，不重新注册（重新注册会新建素材，
+	// 丢掉原素材在平台侧的类型/人像授权等属性，视频生成会被审核拒绝）。
+	if reusedID, reused, reuseErr := reuseUpstreamAssetOnChannel(userID, ch, adapter, logical); reuseErr != nil {
+		return "", reuseErr
+	} else if reused {
+		return reusedID, nil
+	}
+
+	// 当前渠道还没有绑定：只有开启自动补登记才继续（默认开启，显式 false 才关闭）
+	if !ch.GetOtherSettings().AssetAutoSyncEnabled() {
+		return "", fmt.Errorf("%w: %s (asset_auto_sync is disabled)", ErrAssetNotSynced, assetID)
 	}
 
 	sourceURL := strings.TrimSpace(logical.SourceURL)
@@ -139,6 +151,8 @@ func EnsureAssetForChannel(userID int, ch *model.Channel, adapter AssetAdapter, 
 	//   - 轮询后仍未终态：落库当前状态并返回 ErrAssetNotReady，让下游稍后重试
 	//     （第二次请求会查到这条绑定，不再重复注册）。
 	status := strings.ToLower(strings.TrimSpace(created.Status))
+	common.SysLog(fmt.Sprintf("[AssetSync] CreateAsset done: channel_id=%d upstream_asset_id=%s upstream_group_id=%s status=%q source_url=%s",
+		ch.Id, created.ID, created.GroupID, status, sourceURL))
 	if status != "active" && status != "failed" {
 		if polled, pollErr := pollAssetStatus(adapter, created.ID); pollErr == nil && polled != "" {
 			status = polled
@@ -146,7 +160,7 @@ func EnsureAssetForChannel(userID int, ch *model.Channel, adapter AssetAdapter, 
 	}
 
 	// 先落库（无论可用与否），保证后续请求能命中这条绑定而不是重复注册
-	_ = model.CreateSeedanceAsset(&model.SeedanceAsset{
+	if persistErr := model.CreateSeedanceAsset(&model.SeedanceAsset{
 		UserID:          userID,
 		ChannelID:       ch.Id,
 		UpstreamAssetID: created.ID,
@@ -156,7 +170,13 @@ func EnsureAssetForChannel(userID int, ch *model.Channel, adapter AssetAdapter, 
 		SourceURL:       sourceURL,
 		Status:          assetStatusForStorage(status),
 		RawData:         created.RawData,
-	})
+	}); persistErr != nil {
+		common.SysError(fmt.Sprintf("[AssetSync] persist asset binding failed: channel_id=%d upstream_asset_id=%s err=%v",
+			ch.Id, created.ID, persistErr))
+	}
+
+	common.SysLog(fmt.Sprintf("[AssetSync] registered asset on current channel: channel_id=%d upstream_asset_id=%s upstream_group_id=%s status=%s source_url=%s",
+		ch.Id, created.ID, created.GroupID, status, sourceURL))
 
 	switch status {
 	case "active":
@@ -168,6 +188,76 @@ func EnsureAssetForChannel(userID int, ch *model.Channel, adapter AssetAdapter, 
 	default:
 		return "", fmt.Errorf("%w (status=unknown): %s", ErrAssetNotReady, created.ID)
 	}
+}
+
+// reuseUpstreamAssetOnChannel 探测当前渠道的上游账号是否已存在该素材。
+//
+// 同一平台换渠道行（channel 记录不同、上游账号相同）时，旧素材 ID 在上游
+// 本来就能直接用；直接复用可以避免重新注册导致素材属性（素材组类型、人像
+// 授权等）丢失。只有上游确实不存在该素材（不同账号）才返回 reused=false，
+// 交给后续补登记逻辑。
+func reuseUpstreamAssetOnChannel(userID int, ch *model.Channel, adapter AssetAdapter, logical *model.SeedanceAsset) (string, bool, error) {
+	if logical == nil || strings.TrimSpace(logical.UpstreamAssetID) == "" {
+		return "", false, nil
+	}
+	existing, err := adapter.GetAsset(logical.UpstreamAssetID, nil)
+	if err != nil {
+		if isUpstreamAssetNotFound(err) {
+			common.SysLog(fmt.Sprintf("[AssetSync] upstream probe: channel_id=%d upstream_asset_id=%s not found, will re-register", ch.Id, logical.UpstreamAssetID))
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("probe upstream asset failed: %w", err)
+	}
+	common.SysLog(fmt.Sprintf("[AssetSync] upstream probe: channel_id=%d upstream_asset_id=%s status=%q", ch.Id, logical.UpstreamAssetID, existing.Status))
+	if existing == nil || strings.TrimSpace(existing.ID) == "" {
+		return "", false, nil
+	}
+
+	status := strings.ToLower(strings.TrimSpace(existing.Status))
+	if status == "processing" || status == "" {
+		if polled, pollErr := pollAssetStatus(adapter, existing.ID); pollErr == nil && polled != "" {
+			status = polled
+		}
+	}
+	if status == "failed" {
+		return "", false, fmt.Errorf("%w (status=failed): %s", ErrAssetNotReady, existing.ID)
+	}
+	if status != "active" {
+		return "", false, fmt.Errorf("%w (status=%s): %s", ErrAssetNotReady, status, existing.ID)
+	}
+
+	// 落当前渠道绑定，后续请求直接命中，不再探测上游
+	if persistErr := model.CreateSeedanceAsset(&model.SeedanceAsset{
+		UserID:          userID,
+		ChannelID:       ch.Id,
+		UpstreamAssetID: existing.ID,
+		UpstreamGroupID: existing.GroupID,
+		Name:            existing.Name,
+		AssetType:       existing.AssetType,
+		SourceURL:       strings.TrimSpace(logical.SourceURL),
+		Status:          assetStatusForStorage(existing.Status),
+		RawData:         existing.RawData,
+	}); persistErr != nil {
+		common.SysError(fmt.Sprintf("[AssetSync] persist reused asset binding failed: channel_id=%d upstream_asset_id=%s err=%v",
+			ch.Id, existing.ID, persistErr))
+	}
+	common.SysLog(fmt.Sprintf("[AssetSync] reused upstream asset on current channel: channel_id=%d upstream_asset_id=%s", ch.Id, existing.ID))
+	return existing.ID, true, nil
+}
+
+// isUpstreamAssetNotFound 判断上游错误是否为"素材不存在"。
+// 用于区分"不同账号需要重新登记"与"鉴权/网络错误"：后者不能盲目补登记。
+func isUpstreamAssetNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	for _, keyword := range []string{"404", "not found", "notfound", "not exist", "does not exist", "no such asset", "resource_not_found", "resourcenotfound"} {
+		if strings.Contains(message, keyword) {
+			return true
+		}
+	}
+	return false
 }
 
 // EnsureAssetGroupForChannel 确保逻辑素材组在当前渠道有绑定，返回当前渠道的上游组 ID。
@@ -187,8 +277,8 @@ func EnsureAssetGroupForChannel(userID int, ch *model.Channel, adapter AssetAdap
 	if strings.EqualFold(strings.TrimSpace(group.GroupType), "LivenessFace") {
 		return "", ErrAssetRequiresReverification
 	}
-	if !ch.GetOtherSettings().AssetAutoSync {
-		return "", fmt.Errorf("%w: %s (enable asset_auto_sync to re-register automatically)", ErrAssetNotSynced, upstreamGroupID)
+	if !ch.GetOtherSettings().AssetAutoSyncEnabled() {
+		return "", fmt.Errorf("%w: %s (asset_auto_sync is disabled)", ErrAssetNotSynced, upstreamGroupID)
 	}
 	return ensureAssetGroupForChannel(userID, ch, adapter, group.Name, group.GroupType)
 }
@@ -205,9 +295,11 @@ func pollAssetStatus(adapter AssetAdapter, assetID string) (string, error) {
 		asset, err := adapter.GetAsset(assetID, nil)
 		if err != nil {
 			lastErr = err
+			common.SysLog(fmt.Sprintf("[AssetSync] poll GetAsset failed: attempt=%d upstream_asset_id=%s err=%v", attempt+1, assetID, err))
 			continue
 		}
 		status = strings.ToLower(strings.TrimSpace(asset.Status))
+		common.SysLog(fmt.Sprintf("[AssetSync] poll GetAsset: attempt=%d upstream_asset_id=%s status=%q", attempt+1, assetID, status))
 		if status == "active" || status == "failed" {
 			return status, nil
 		}
@@ -250,7 +342,7 @@ func ensureAssetGroupForChannel(userID int, ch *model.Channel, adapter AssetAdap
 		return "", fmt.Errorf("create asset group returned empty id")
 	}
 
-	_ = model.CreateSeedanceAssetGroup(&model.SeedanceAssetGroup{
+	if persistErr := model.CreateSeedanceAssetGroup(&model.SeedanceAssetGroup{
 		UserID:          userID,
 		ChannelID:       ch.Id,
 		UpstreamGroupID: created.ID,
@@ -258,7 +350,10 @@ func ensureAssetGroupForChannel(userID int, ch *model.Channel, adapter AssetAdap
 		Description:     created.Description,
 		GroupType:       created.GroupType,
 		RawData:         created.RawData,
-	})
+	}); persistErr != nil {
+		common.SysError(fmt.Sprintf("[AssetSync] persist asset group failed: channel_id=%d upstream_group_id=%s err=%v",
+			ch.Id, created.ID, persistErr))
+	}
 
 	return created.ID, nil
 }

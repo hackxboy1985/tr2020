@@ -503,7 +503,10 @@ func SeedanceCreateAsset(c *gin.Context) {
 		Status:          resp.Status,
 		RawData:         resp.RawData,
 	}
-	_ = model.CreateSeedanceAsset(a)
+	if persistErr := model.CreateSeedanceAsset(a); persistErr != nil {
+		logger.LogError(c, fmt.Sprintf("seedance: persist asset failed: user_id=%d channel_id=%d upstream_asset_id=%s err=%v",
+			userID, channel.Id, resp.ID, persistErr))
+	}
 
 	// 返回响应（兼容旧格式，包装在 Result 中）
 	result := map[string]interface{}{
