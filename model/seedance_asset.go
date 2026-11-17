@@ -208,12 +208,15 @@ func ListAllSeedanceAssetGroups(page, pageSize int, userID int) ([]*SeedanceAsse
 }
 
 // ListAllSeedanceAssets 管理员用，不过滤 userID
-func ListAllSeedanceAssets(page, pageSize int, userID int, groupID string, id int64, upstreamAssetID string) ([]*SeedanceAsset, int64, error) {
+func ListAllSeedanceAssets(page, pageSize int, userID int, channelID int, groupID string, id int64, upstreamAssetID string) ([]*SeedanceAsset, int64, error) {
 	var assets []*SeedanceAsset
 	var total int64
 	query := DB.Model(&SeedanceAsset{}).Where("deleted_at = 0")
 	if userID > 0 {
 		query = query.Where("user_id = ?", userID)
+	}
+	if channelID > 0 {
+		query = query.Where("channel_id = ?", channelID)
 	}
 	if groupID != "" {
 		query = query.Where("upstream_group_id = ?", groupID)

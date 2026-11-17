@@ -1012,10 +1012,15 @@ func SeedanceAdminListAssetGroups(c *gin.Context) {
 func SeedanceAdminListAssets(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	userIDFilter, _ := strconv.Atoi(c.Query("user_id"))
+	channelIDFilter, _ := strconv.Atoi(c.Query("channel_id"))
+	// 渠道筛选仅管理员可用：非管理员即使带了参数也不生效
+	if channelIDFilter > 0 && c.GetInt("role") < common.RoleAdminUser {
+		channelIDFilter = 0
+	}
 	groupID := c.Query("group_id")
 	assetID, _ := strconv.ParseInt(c.Query("id"), 10, 64)
 	upstreamAssetID := strings.TrimSpace(c.Query("upstream_asset_id"))
-	assets, total, err := model.ListAllSeedanceAssets(pageInfo.GetPage(), pageInfo.GetPageSize(), userIDFilter, groupID, assetID, upstreamAssetID)
+	assets, total, err := model.ListAllSeedanceAssets(pageInfo.GetPage(), pageInfo.GetPageSize(), userIDFilter, channelIDFilter, groupID, assetID, upstreamAssetID)
 	if err != nil {
 		common.ApiError(c, err)
 		return

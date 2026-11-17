@@ -108,15 +108,15 @@ func EnsureAssetForChannel(userID int, ch *model.Channel, adapter AssetAdapter, 
 		return "", fmt.Errorf("%w: source url is empty for asset %s", ErrAssetNotSynced, assetID)
 	}
 
-	// 组结构：优先沿用逻辑素材原组的名称与类型
+	// 组结构：优先沿用逻辑素材原组的名称与类型。
+	// 注意不要硬编码 AIGC：原组类型未知时留空，由上游按默认规则建组，
+	// 否则新建的 AIGC 组可能改变素材属性（例如真人图会按 AIGC 素材处理）。
 	groupName := ""
-	groupType := "AIGC"
+	groupType := ""
 	if logical.UpstreamGroupID != "" {
 		if group, groupErr := model.GetSeedanceAssetGroupByUpstreamIDAnyChannel(logical.UpstreamGroupID, userID); groupErr == nil {
 			groupName = strings.TrimSpace(group.Name)
-			if strings.TrimSpace(group.GroupType) != "" {
-				groupType = strings.TrimSpace(group.GroupType)
-			}
+			groupType = strings.TrimSpace(group.GroupType)
 		}
 	}
 	if strings.EqualFold(groupType, "LivenessFace") {
@@ -126,9 +126,38 @@ func EnsureAssetForChannel(userID int, ch *model.Channel, adapter AssetAdapter, 
 		groupName = fmt.Sprintf("u%d", userID)
 	}
 
-	targetGroupID, err := ensureAssetGroupForChannel(userID, ch, adapter, groupName, groupType)
-	if err != nil {
-		return "", fmt.Errorf("ensure asset group failed: %w", err)
+	// 先探测原组在上游当前账号是否存在：同一平台内组 ID 本来就能直接用，
+	// 直接复用原组（保留原组类型与属性），不要新建组。
+	targetGroupID := ""
+	if logical.UpstreamGroupID != "" {
+		if upstreamGroup, probeErr := adapter.GetAssetGroup(logical.UpstreamGroupID); probeErr == nil && upstreamGroup != nil && strings.TrimSpace(upstreamGroup.ID) != "" {
+			targetGroupID = upstreamGroup.ID
+			common.SysLog(fmt.Sprintf("[AssetSync] reused upstream asset group: channel_id=%d upstream_group_id=%s name=%s group_type=%s",
+				ch.Id, upstreamGroup.ID, upstreamGroup.Name, upstreamGroup.GroupType))
+			if persistErr := model.CreateSeedanceAssetGroup(&model.SeedanceAssetGroup{
+				UserID:          userID,
+				ChannelID:       ch.Id,
+				UpstreamGroupID: upstreamGroup.ID,
+				Name:            upstreamGroup.Name,
+				Description:     upstreamGroup.Description,
+				GroupType:       upstreamGroup.GroupType,
+				RawData:         upstreamGroup.RawData,
+			}); persistErr != nil {
+				common.SysError(fmt.Sprintf("[AssetSync] persist reused asset group failed: channel_id=%d upstream_group_id=%s err=%v",
+					ch.Id, upstreamGroup.ID, persistErr))
+			}
+		} else {
+			common.SysLog(fmt.Sprintf("[AssetSync] upstream asset group not found: channel_id=%d upstream_group_id=%s err=%v",
+				ch.Id, logical.UpstreamGroupID, probeErr))
+		}
+	}
+
+	if targetGroupID == "" {
+		var err error
+		targetGroupID, err = ensureAssetGroupForChannel(userID, ch, adapter, groupName, groupType)
+		if err != nil {
+			return "", fmt.Errorf("ensure asset group failed: %w", err)
+		}
 	}
 
 	created, err := adapter.CreateAsset(CreateAssetRequest{

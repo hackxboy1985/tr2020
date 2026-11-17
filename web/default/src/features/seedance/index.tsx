@@ -68,7 +68,16 @@ function AssetGroupsTab() {
   const columns = [
     groupColHelper.accessor('id', { header: 'ID', size: 60 }),
     ...(isAdmin
-      ? [groupColHelper.accessor('user_id', { header: t('User ID'), size: 80 })]
+      ? [
+          groupColHelper.accessor('user_id', {
+            header: t('User ID'),
+            size: 80,
+          }),
+          groupColHelper.accessor('channel_id', {
+            header: t('Channel ID'),
+            size: 80,
+          }),
+        ]
       : []),
     groupColHelper.accessor('upstream_group_id', {
       header: t('Upstream Group ID'),
@@ -122,7 +131,12 @@ function AssetsTab() {
   const [page, setPage] = useState(1)
   const [idInput, setIdInput] = useState('')
   const [upstreamAssetIdInput, setUpstreamAssetIdInput] = useState('')
-  const [filters, setFilters] = useState<{ id?: number; upstream_asset_id?: string }>({})
+  const [channelIdInput, setChannelIdInput] = useState('')
+  const [filters, setFilters] = useState<{
+    id?: number
+    upstream_asset_id?: string
+    channel_id?: number
+  }>({})
   const pageSize = 20
   const isAdmin = (useAuthStore.getState().auth.user?.role ?? 0) >= ROLE.ADMIN
   const queryParams = { p: page, page_size: pageSize, ...filters }
@@ -234,7 +248,11 @@ function AssetsTab() {
   const totalPages = Math.ceil(total / pageSize)
 
   const handleSearch = () => {
-    const nextFilters: { id?: number; upstream_asset_id?: string } = {}
+    const nextFilters: {
+      id?: number
+      upstream_asset_id?: string
+      channel_id?: number
+    } = {}
     const id = Number(idInput.trim())
     if (Number.isInteger(id) && id > 0) {
       nextFilters.id = id
@@ -242,6 +260,13 @@ function AssetsTab() {
     const upstreamAssetId = upstreamAssetIdInput.trim()
     if (upstreamAssetId) {
       nextFilters.upstream_asset_id = upstreamAssetId
+    }
+    // 渠道 ID 仅管理员可带入；普通用户即使填了也不发送
+    if (isAdmin) {
+      const channelId = Number(channelIdInput.trim())
+      if (Number.isInteger(channelId) && channelId > 0) {
+        nextFilters.channel_id = channelId
+      }
     }
     setFilters(nextFilters)
     setPage(1)
@@ -268,6 +293,17 @@ function AssetsTab() {
           placeholder={t('Upstream Asset ID')}
           className='sm:w-72'
         />
+        {isAdmin && (
+          <Input
+            value={channelIdInput}
+            onChange={(event) => setChannelIdInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') handleSearch()
+            }}
+            placeholder={t('Channel ID')}
+            className='sm:w-40'
+          />
+        )}
         <Button onClick={handleSearch}>{t('Search')}</Button>
       </div>
       <DataTable table={table} columns={columns} isLoading={isLoading} />
@@ -297,7 +333,16 @@ function FaceVerificationsTab() {
   const columns = [
     faceColHelper.accessor('id', { header: 'ID', size: 60 }),
     ...(isAdmin
-      ? [faceColHelper.accessor('user_id', { header: t('User ID'), size: 80 })]
+      ? [
+          faceColHelper.accessor('user_id', {
+            header: t('User ID'),
+            size: 80,
+          }),
+          faceColHelper.accessor('channel_id', {
+            header: t('Channel ID'),
+            size: 80,
+          }),
+        ]
       : []),
     faceColHelper.accessor('verification_id', {
       header: t('Verification ID'),

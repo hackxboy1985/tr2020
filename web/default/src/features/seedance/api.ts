@@ -32,6 +32,7 @@ export async function adminListAssets(params: {
   p?: number
   page_size?: number
   user_id?: number
+  channel_id?: number
   group_id?: string
   id?: number
   upstream_asset_id?: string
