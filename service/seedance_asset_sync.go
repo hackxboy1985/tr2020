@@ -146,9 +146,17 @@ func EnsureAssetForChannel(userID int, ch *model.Channel, adapter AssetAdapter, 
 				common.SysError(fmt.Sprintf("[AssetSync] persist reused asset group failed: channel_id=%d upstream_group_id=%s err=%v",
 					ch.Id, upstreamGroup.ID, persistErr))
 			}
-		} else {
+		} else if probeErr != nil {
+			// 只有明确的"组不存在"才允许新建组；鉴权/网络/5xx 等错误直接失败，
+			// 避免上游异常时盲目建出重复组。
+			if !isUpstreamNotFound(probeErr) {
+				return "", fmt.Errorf("probe upstream asset group failed: %w", probeErr)
+			}
 			common.SysLog(fmt.Sprintf("[AssetSync] upstream asset group not found: channel_id=%d upstream_group_id=%s err=%v",
 				ch.Id, logical.UpstreamGroupID, probeErr))
+		} else {
+			common.SysLog(fmt.Sprintf("[AssetSync] upstream asset group probe returned empty result: channel_id=%d upstream_group_id=%s",
+				ch.Id, logical.UpstreamGroupID))
 		}
 	}
 
@@ -231,7 +239,7 @@ func reuseUpstreamAssetOnChannel(userID int, ch *model.Channel, adapter AssetAda
 	}
 	existing, err := adapter.GetAsset(logical.UpstreamAssetID, nil)
 	if err != nil {
-		if isUpstreamAssetNotFound(err) {
+		if isUpstreamNotFound(err) {
 			common.SysLog(fmt.Sprintf("[AssetSync] upstream probe: channel_id=%d upstream_asset_id=%s not found, will re-register", ch.Id, logical.UpstreamAssetID))
 			return "", false, nil
 		}
@@ -274,9 +282,9 @@ func reuseUpstreamAssetOnChannel(userID int, ch *model.Channel, adapter AssetAda
 	return existing.ID, true, nil
 }
 
-// isUpstreamAssetNotFound 判断上游错误是否为"素材不存在"。
+// isUpstreamNotFound 判断上游错误是否为"资源不存在"（素材/素材组通用）。
 // 用于区分"不同账号需要重新登记"与"鉴权/网络错误"：后者不能盲目补登记。
-func isUpstreamAssetNotFound(err error) bool {
+func isUpstreamNotFound(err error) bool {
 	if err == nil {
 		return false
 	}

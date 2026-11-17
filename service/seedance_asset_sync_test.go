@@ -20,14 +20,14 @@ func TestNormalizeAssetRef(t *testing.T) {
 	}
 }
 
-func TestIsUpstreamAssetNotFound(t *testing.T) {
+func TestIsUpstreamNotFound(t *testing.T) {
 	notFound := []error{
 		fmt.Errorf("naxis upstream error 404: ResourceNotFound"),
 		fmt.Errorf("asset not found"),
 		fmt.Errorf("resource_not_found"),
 	}
 	for _, err := range notFound {
-		if !isUpstreamAssetNotFound(err) {
+		if !isUpstreamNotFound(err) {
 			t.Fatalf("expected not-found for: %v", err)
 		}
 	}
@@ -37,7 +37,7 @@ func TestIsUpstreamAssetNotFound(t *testing.T) {
 		fmt.Errorf("naxis upstream error 500: internal error"),
 	}
 	for _, err := range other {
-		if isUpstreamAssetNotFound(err) {
+		if isUpstreamNotFound(err) {
 			t.Fatalf("must not treat as not-found: %v", err)
 		}
 	}
