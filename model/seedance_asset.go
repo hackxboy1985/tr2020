@@ -111,6 +111,15 @@ func GetSeedanceAssetGroupByUpstreamIDAnyChannel(upstreamGroupID string, userID 
 	return &g, err
 }
 
+// GetSeedanceAssetGroupByName 在指定渠道仅按组名查组（组类型未知时兜底用）。
+// 上游 CreateAssetGroup 对同名组是幂等的（会返回已有组），本地也应按名字复用，避免重复行。
+func GetSeedanceAssetGroupByName(userID int, channelID int, name string) (*SeedanceAssetGroup, error) {
+	var g SeedanceAssetGroup
+	err := DB.Where("user_id = ? AND channel_id = ? AND name = ? AND deleted_at = 0",
+		userID, channelID, name).Order("id asc").First(&g).Error
+	return &g, err
+}
+
 // GetSeedanceAssetGroupByNameAndType 在指定渠道按「组名 + 组类型」查组（方案 B：复用同名组）。
 func GetSeedanceAssetGroupByNameAndType(userID int, channelID int, name, groupType string) (*SeedanceAssetGroup, error) {
 	var g SeedanceAssetGroup

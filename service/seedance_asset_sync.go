@@ -134,7 +134,9 @@ func EnsureAssetForChannel(userID int, ch *model.Channel, adapter AssetAdapter, 
 			targetGroupID = upstreamGroup.ID
 			common.SysLog(fmt.Sprintf("[AssetSync] reused upstream asset group: channel_id=%d upstream_group_id=%s name=%s group_type=%s",
 				ch.Id, upstreamGroup.ID, upstreamGroup.Name, upstreamGroup.GroupType))
-			if persistErr := model.CreateSeedanceAssetGroup(&model.SeedanceAssetGroup{
+			if existing, findErr := model.GetSeedanceAssetGroupByUpstreamID(upstreamGroup.ID, userID, ch.Id); findErr == nil {
+				_ = existing
+			} else if persistErr := model.CreateSeedanceAssetGroup(&model.SeedanceAssetGroup{
 				UserID:          userID,
 				ChannelID:       ch.Id,
 				UpstreamGroupID: upstreamGroup.ID,
@@ -360,11 +362,24 @@ func assetStatusForStorage(status string) string {
 	}
 }
 
-// ensureAssetGroupForChannel 在当前渠道按「组名 + 组类型」复用同名组，没有则创建。
+// ensureAssetGroupForChannel 在当前渠道复用同名组，没有则创建。
+//
+// 查找顺序：
+//  1. 按「组名 + 组类型」精确查；
+//  2. 组类型未知（空）时仅按组名查——上游 CreateAssetGroup 对同名组是幂等的，
+//     若按类型查会把「AIGC」和空类型当成两个组，重复建组/重复落库。
 func ensureAssetGroupForChannel(userID int, ch *model.Channel, adapter AssetAdapter, name, groupType string) (string, error) {
 	if group, err := model.GetSeedanceAssetGroupByNameAndType(userID, ch.Id, name, groupType); err == nil {
 		if strings.TrimSpace(group.UpstreamGroupID) != "" {
 			return group.UpstreamGroupID, nil
+		}
+	}
+	if strings.TrimSpace(groupType) == "" {
+		if group, err := model.GetSeedanceAssetGroupByName(userID, ch.Id, name); err == nil {
+			if strings.TrimSpace(group.UpstreamGroupID) != "" {
+				common.SysLog(fmt.Sprintf("[AssetSync] reused asset group by name only: channel_id=%d name=%s upstream_group_id=%s", ch.Id, name, group.UpstreamGroupID))
+				return group.UpstreamGroupID, nil
+			}
 		}
 	}
 
@@ -377,6 +392,13 @@ func ensureAssetGroupForChannel(userID int, ch *model.Channel, adapter AssetAdap
 	}
 	if created == nil || strings.TrimSpace(created.ID) == "" {
 		return "", fmt.Errorf("create asset group returned empty id")
+	}
+
+	// 上游对同名组幂等：可能返回的是已存在的组。落库前先按 upstream_group_id 查，
+	// 已有本地绑定就直接复用，避免每次注册都插入一条重复组记录。
+	if existing, findErr := model.GetSeedanceAssetGroupByUpstreamID(created.ID, userID, ch.Id); findErr == nil {
+		common.SysLog(fmt.Sprintf("[AssetSync] asset group already bound locally: channel_id=%d upstream_group_id=%s", ch.Id, created.ID))
+		return existing.UpstreamGroupID, nil
 	}
 
 	if persistErr := model.CreateSeedanceAssetGroup(&model.SeedanceAssetGroup{
