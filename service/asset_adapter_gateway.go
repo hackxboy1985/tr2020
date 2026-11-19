@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 )
@@ -168,12 +169,28 @@ func (a *GatewayAssetAdapter) CreateAsset(req CreateAssetRequest) (*AssetRespons
 	assetID, _ := resp.Result["Id"].(string)
 	groupID, _ := resp.Result["GroupId"].(string)
 	status, _ := resp.Result["Status"].(string)
+	name, _ := resp.Result["Name"].(string)
+	assetType, _ := resp.Result["AssetType"].(string)
+
+	// 老网关创建响应可能只回 Id/Status，用请求参数兜底，避免落地空 group/name/type
+	if strings.TrimSpace(groupID) == "" {
+		groupID = req.GroupID
+	}
+	if strings.TrimSpace(name) == "" {
+		name = req.Name
+	}
+	if strings.TrimSpace(assetType) == "" {
+		assetType = req.AssetType
+	}
 
 	return &AssetResponse{
-		ID:      assetID,
-		GroupID: groupID,
-		Status:  status,
-		RawData: string(respBody),
+		ID:        assetID,
+		GroupID:   groupID,
+		Name:      name,
+		AssetType: assetType,
+		Status:    status,
+		SourceURL: req.URL,
+		RawData:   string(respBody),
 	}, nil
 }
 

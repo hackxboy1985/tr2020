@@ -497,14 +497,29 @@ func SeedanceCreateAsset(c *gin.Context) {
 		}
 	}
 
+	// 上游创建响应可能不回 group/name/type（老网关只回 Id/Status），
+	// 用请求里的已知值兜底，避免落库出现空 group_id / 空类型。
+	groupID := strings.TrimSpace(resp.GroupID)
+	if groupID == "" {
+		groupID = strings.TrimSpace(createReq.GroupID)
+	}
+	assetName := strings.TrimSpace(resp.Name)
+	if assetName == "" {
+		assetName = createReq.Name
+	}
+	assetType := strings.TrimSpace(resp.AssetType)
+	if assetType == "" {
+		assetType = createReq.AssetType
+	}
+
 	// 保存到数据库
 	a := &model.SeedanceAsset{
 		UserID:          userID,
 		ChannelID:       channel.Id,
 		UpstreamAssetID: resp.ID,
-		UpstreamGroupID: resp.GroupID,
-		Name:            resp.Name,
-		AssetType:       resp.AssetType,
+		UpstreamGroupID: groupID,
+		Name:            assetName,
+		AssetType:       assetType,
 		SourceURL:       req.URL,
 		Status:          resp.Status,
 		RawData:         resp.RawData,
