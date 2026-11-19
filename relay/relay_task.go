@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -211,19 +212,34 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 		}
 	}
 
-	// 8. 构建请求体
-	requestBody, err := adaptor.BuildRequestBody(c, info)
+	// 8. 构建请求体（读入内存，慢请求诊断时完整打印）
+	requestBodyReader, err := adaptor.BuildRequestBody(c, info)
 	if err != nil {
 		return nil, service.TaskErrorWrapper(err, "build_request_failed", http.StatusInternalServerError)
 	}
+	var requestBodyBytes []byte
+	if requestBodyReader != nil {
+		requestBodyBytes, err = io.ReadAll(requestBodyReader)
+		if err != nil {
+			return nil, service.TaskErrorWrapper(err, "read_request_body_failed", http.StatusInternalServerError)
+		}
+	}
 
-	// 9. 发送请求
-	resp, err := adaptor.DoRequest(c, info, requestBody)
+	// 9. 发送请求（记录首字节耗时：上游同步创建视频任务可能耗时 1~3 分钟）
+	submitStart := time.Now()
+	resp, err := adaptor.DoRequest(c, info, bytes.NewReader(requestBodyBytes))
+	firstByteElapsed := time.Since(submitStart)
 	if err != nil {
+		if firstByteElapsed >= 120*time.Second {
+			logSlowTaskSubmit(c, info, firstByteElapsed, 0, requestBodyBytes, []byte(err.Error()))
+		}
 		return nil, service.TaskErrorWrapper(err, "do_request_failed", http.StatusInternalServerError)
 	}
 	if resp != nil && resp.StatusCode != http.StatusOK {
 		responseBody, _ := io.ReadAll(resp.Body)
+		if firstByteElapsed >= 120*time.Second {
+			logSlowTaskSubmit(c, info, firstByteElapsed, resp.StatusCode, requestBodyBytes, responseBody)
+		}
 		return nil, service.TaskErrorWrapper(fmt.Errorf("%s", string(responseBody)), "fail_to_fetch_task", resp.StatusCode)
 	}
 
@@ -238,7 +254,27 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	// 11. 解析响应
 	upstreamTaskID, taskData, taskErr := adaptor.DoResponse(c, resp, info)
 	if taskErr != nil {
+		if firstByteElapsed >= 120*time.Second {
+			logSlowTaskSubmit(c, info, firstByteElapsed, resp.StatusCode, requestBodyBytes, taskData)
+		}
 		return nil, taskErr
+	}
+	if firstByteElapsed >= 120*time.Second {
+		logSlowTaskSubmit(c, info, firstByteElapsed, resp.StatusCode, requestBodyBytes, taskData)
+	}
+
+	// 提交耗时 / 下游断连诊断：
+	// 边缘代理（如 ByteProxy）超时会先给下游返回 504，而本网关仍在同步等待上游创建任务，
+	// 完成写回时连接已被断开——日志表现为「耗时很长 + 200」。这里显式打出来便于对齐下游 504。
+	submitElapsed := time.Since(submitStart)
+	requestId := c.GetString(common.RequestIdKey)
+	if submitElapsed >= 60*time.Second {
+		common.SysLog(fmt.Sprintf("[Task] slow upstream submit: request_id=%s channel_id=%d model=%s public_task_id=%s upstream_task_id=%s elapsed=%.1fs",
+			requestId, info.ChannelId, info.UpstreamModelName, info.PublicTaskID, upstreamTaskID, submitElapsed.Seconds()))
+	}
+	if c.Request != nil && c.Request.Context().Err() != nil {
+		common.SysError(fmt.Sprintf("[Task] downstream connection closed before response (edge/proxy timeout suspected): request_id=%s channel_id=%d model=%s public_task_id=%s upstream_task_id=%s elapsed=%.1fs err=%v",
+			requestId, info.ChannelId, info.UpstreamModelName, info.PublicTaskID, upstreamTaskID, submitElapsed.Seconds(), c.Request.Context().Err()))
 	}
 
 	// 11. 提交后计费调整：让适配器根据上游实际返回调整 OtherRatios
@@ -256,6 +292,37 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 		Platform:       platform,
 		Quota:          finalQuota,
 	}, nil
+}
+
+// logSlowTaskSubmit 记录"首字节返回超过 120 秒"的完整请求与响应（含用户、渠道、耗时），
+// 用于对齐边缘代理/下游超时（例如下游先收到 504、网关随后才 200）的问题。
+func logSlowTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo, firstByte time.Duration, upstreamStatus int, requestBody, responseBody []byte) {
+	requestID := ""
+	userID := 0
+	tokenID := 0
+	tokenName := ""
+	if c != nil {
+		requestID = c.GetString(common.RequestIdKey)
+		userID = c.GetInt("id")
+		tokenID = c.GetInt("token_id")
+		tokenName = c.GetString("token_name")
+	}
+	channelID := 0
+	channelName := ""
+	modelName := ""
+	publicTaskID := ""
+	if c != nil {
+		channelName = c.GetString("channel_name")
+	}
+	if info != nil {
+		channelID = info.ChannelId
+		modelName = info.UpstreamModelName
+		publicTaskID = info.PublicTaskID
+	}
+	common.SysLog(fmt.Sprintf(
+		"[Task] slow first-byte >=120s: request_id=%s user_id=%d token_id=%d token_name=%q channel_id=%d channel_name=%q model=%s public_task_id=%s upstream_status=%d first_byte=%.1fs request_body=%s response_body=%s",
+		requestID, userID, tokenID, tokenName, channelID, channelName, modelName, publicTaskID,
+		upstreamStatus, firstByte.Seconds(), string(requestBody), string(responseBody)))
 }
 
 // recalcQuotaFromRatios 根据 adjustedRatios 重新计算 quota。
