@@ -316,10 +316,41 @@ func EnsureAssetGroupForChannel(userID int, ch *model.Channel, adapter AssetAdap
 	if strings.EqualFold(strings.TrimSpace(group.GroupType), "LivenessFace") {
 		return "", ErrAssetRequiresReverification
 	}
+
+	// 先探测原组在当前渠道的上游账号里是否存在：同一平台/账号时原组 ID 本来就能用，
+	// 直接复用并补一条当前渠道的本地绑定，不再走"按名字新建组"的路径。
+	probe, probeErr := adapter.GetAssetGroup(upstreamGroupID)
+	if probeErr == nil && probe != nil && strings.TrimSpace(probe.ID) != "" {
+		if _, findErr := model.GetSeedanceAssetGroupByUpstreamID(probe.ID, userID, ch.Id); findErr != nil {
+			if persistErr := model.CreateSeedanceAssetGroup(&model.SeedanceAssetGroup{
+				UserID:          userID,
+				ChannelID:       ch.Id,
+				UpstreamGroupID: probe.ID,
+				Name:            probe.Name,
+				Description:     probe.Description,
+				GroupType:       probe.GroupType,
+				RawData:         probe.RawData,
+			}); persistErr != nil {
+				common.SysError(fmt.Sprintf("[AssetSync] persist reused asset group failed: channel_id=%d upstream_group_id=%s err=%v",
+					ch.Id, probe.ID, persistErr))
+			}
+		}
+		common.SysLog(fmt.Sprintf("[AssetSync] reused upstream asset group for query: channel_id=%d upstream_group_id=%s", ch.Id, probe.ID))
+		return probe.ID, nil
+	}
+	if probeErr != nil && !isUpstreamNotFound(probeErr) {
+		return "", fmt.Errorf("probe upstream asset group failed: %w", probeErr)
+	}
+
 	if !ch.GetOtherSettings().AssetAutoSyncEnabled() {
 		return "", fmt.Errorf("%w: %s (asset_auto_sync is disabled)", ErrAssetNotSynced, upstreamGroupID)
 	}
-	return ensureAssetGroupForChannel(userID, ch, adapter, group.Name, group.GroupType)
+	groupName := strings.TrimSpace(group.Name)
+	if groupName == "" {
+		// 旧数据可能没有组名，用默认组名兜底，避免向上游创建无名组
+		groupName = fmt.Sprintf("u%d", userID)
+	}
+	return ensureAssetGroupForChannel(userID, ch, adapter, groupName, group.GroupType)
 }
 
 // pollAssetStatus 注册后的短轮询：每 500ms 查一次 GetAsset，最多 5 次。

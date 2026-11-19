@@ -292,8 +292,14 @@ func seedanceModifyAssetGroup(c *gin.Context) {
 		return
 	}
 
-	// 更新本地数据库
-	_ = model.UpdateSeedanceAssetGroupRaw(g.ID, req.Name, req.Description, "")
+	// 更新本地数据库：跨渠道时更新当前渠道的绑定记录，而不是旧渠道那条
+	localGroupID := g.ID
+	if g.ChannelID != channel.Id {
+		if bound, findErr := model.GetSeedanceAssetGroupByUpstreamID(upstreamGroupID, userID, channel.Id); findErr == nil {
+			localGroupID = bound.ID
+		}
+	}
+	_ = model.UpdateSeedanceAssetGroupRaw(localGroupID, req.Name, req.Description, "")
 
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
