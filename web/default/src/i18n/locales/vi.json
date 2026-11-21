@@ -4574,6 +4574,11 @@
     "sleeping channel": "kênh đang ngủ",
     "{{count}} selected (model, channel) pair(s) will stop being skipped. They can re-enter the pool on the next overload response.": "{{count}} cặp (mô hình, kênh) đã chọn sẽ không bị bỏ qua nữa. Chúng có thể vào lại pool ở lần quá tải tiếp theo.",
     "Only the first few candidate channels are listed.": "Chỉ hiển thị một vài kênh ứng viên đầu tiên.",
-    "{{shown}} of {{total}} channels": "{{shown}} trên {{total}} kênh"
+    "{{shown}} of {{total}} channels": "{{shown}} trên {{total}} kênh",
+    "Use Similar Model Fallback": "Dùng mô hình tương tự dự phòng",
+    "When all channels of this model are in the overload sleep pool, retry with the configured fallback model instead of failing.": "Khi tất cả kênh của mô hình này đang trong nhóm ngủ do quá tải, hãy thử lại bằng mô hình dự phòng đã cấu hình thay vì thất bại.",
+    "Fallback Models": "Mô hình dự phòng",
+    "One mapping per line, format: origin-model=fallback-model. Only used when all channels of the origin model are sleeping AND the API key enables \"Use Similar Model Fallback\".": "Mỗi dòng một ánh xạ, định dạng: origin-model=fallback-model. Chỉ dùng khi tất cả kênh của mô hình gốc đang ngủ VÀ khóa API bật \"Dùng mô hình tương tự dự phòng\".",
+    "Fallback": "Dự phòng"
   }
 }

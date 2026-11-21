@@ -43,6 +43,8 @@ const OPERATIONS_SECTIONS = [
             settings['overload_sleep_setting.sleep_minutes'] ?? 2,
           'overload_sleep_setting.status_codes':
             settings['overload_sleep_setting.status_codes'] ?? '429,503',
+          'overload_sleep_setting.fallback_models':
+            settings['overload_sleep_setting.fallback_models'] ?? '',
         }}
       />
     ),

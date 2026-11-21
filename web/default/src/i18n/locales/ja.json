@@ -4574,6 +4574,11 @@
     "sleeping channel": "スリープ中チャネル",
     "{{count}} selected (model, channel) pair(s) will stop being skipped. They can re-enter the pool on the next overload response.": "選択した {{count}} 件の（モデル, チャネル）の組み合わせはスキップされなくなります。次回の過負荷応答で再びプールに入ります。",
     "Only the first few candidate channels are listed.": "候補チャネルは先頭のいくつかだけが表示されます。",
-    "{{shown}} of {{total}} channels": "{{total}} チャネル中 {{shown}} 件"
+    "{{shown}} of {{total}} channels": "{{total}} チャネル中 {{shown}} 件",
+    "Use Similar Model Fallback": "類似モデルでのフォールバックを使用",
+    "When all channels of this model are in the overload sleep pool, retry with the configured fallback model instead of failing.": "このモデルのすべてのチャネルが過負荷スリーププールにある場合、失敗する代わりに設定されたフォールバックモデルで再試行します。",
+    "Fallback Models": "フォールバックモデル",
+    "One mapping per line, format: origin-model=fallback-model. Only used when all channels of the origin model are sleeping AND the API key enables \"Use Similar Model Fallback\".": "1 行につき 1 つのマッピング、形式: origin-model=fallback-model。元のモデルのすべてのチャネルがスリープ中で、かつ API キーで「類似モデルでのフォールバックを使用」が有効な場合にのみ使用されます。",
+    "Fallback": "フォールバック"
   }
 }

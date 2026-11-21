@@ -37,6 +37,7 @@ export function getApiKeyFormSchema(t: TFunction) {
       allow_ips: z.string().optional(),
       group: z.string().optional(),
       cross_group_retry: z.boolean().optional(),
+      fallback_model_enabled: z.boolean().optional(),
       save_prompt: z.boolean().optional(),
       tokenCount: z.number().min(1).optional(),
     })
@@ -73,6 +74,7 @@ export const API_KEY_FORM_DEFAULT_VALUES: ApiKeyFormValues = {
   allow_ips: '',
   group: DEFAULT_GROUP,
   cross_group_retry: true,
+  fallback_model_enabled: false,
   save_prompt: false,
   tokenCount: 1,
 }
@@ -84,6 +86,8 @@ export function getApiKeyFormDefaultValues(
     ...API_KEY_FORM_DEFAULT_VALUES,
     group: defaultUseAutoGroup ? 'auto' : DEFAULT_GROUP,
     cross_group_retry: defaultUseAutoGroup,
+    // Fallback model is independent of the auto-group default and starts off.
+    fallback_model_enabled: false,
   }
 }
 
@@ -111,6 +115,7 @@ export function transformFormDataToPayload(
     allow_ips: data.allow_ips || '',
     group: data.group || '',
     cross_group_retry: data.group === 'auto' ? !!data.cross_group_retry : false,
+    fallback_model_enabled: !!data.fallback_model_enabled,
     save_prompt: !!data.save_prompt,
   }
 }
@@ -137,6 +142,7 @@ export function transformApiKeyToFormDefaults(
     allow_ips: apiKey.allow_ips || '',
     group: apiKey.group || DEFAULT_GROUP,
     cross_group_retry: !!apiKey.cross_group_retry,
+    fallback_model_enabled: !!apiKey.fallback_model_enabled,
     save_prompt: !!apiKey.save_prompt,
     tokenCount: 1,
   }

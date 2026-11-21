@@ -217,6 +217,13 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
                     copyable={false}
                   />
                 )}
+                {apiKey.fallback_model_enabled && (
+                  <StatusBadge
+                    label={t('Fallback')}
+                    variant='purple'
+                    copyable={false}
+                  />
+                )}
               </TooltipTrigger>
               <TooltipContent>
                 <span className='text-xs'>
@@ -226,6 +233,18 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
                 </span>
               </TooltipContent>
             </Tooltip>
+          )
+        }
+        if (apiKey.fallback_model_enabled) {
+          return (
+            <span className='inline-flex items-center gap-1.5'>
+              <GroupBadge group={group} ratio={ratio} />
+              <StatusBadge
+                label={t('Fallback')}
+                variant='purple'
+                copyable={false}
+              />
+            </span>
           )
         }
         return <GroupBadge group={group} ratio={ratio} />

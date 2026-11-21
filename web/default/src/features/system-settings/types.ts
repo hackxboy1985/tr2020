@@ -315,6 +315,7 @@ export type OperationsSettings = {
   'overload_sleep_setting.enabled': boolean
   'overload_sleep_setting.sleep_minutes': number
   'overload_sleep_setting.status_codes': string
+  'overload_sleep_setting.fallback_models': string
 }
 
 export type SecuritySettings = {

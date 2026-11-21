@@ -257,6 +257,9 @@ func migrateDB() error {
 	if err := ensureTokenSavePromptColumn(); err != nil {
 		return err
 	}
+	if err := ensureTokenFallbackModelEnabledColumn(); err != nil {
+		return err
+	}
 
 	err := DB.AutoMigrate(
 		&Channel{},
@@ -310,6 +313,9 @@ func migrateDB() error {
 
 func migrateDBFast() error {
 	if err := ensureTokenSavePromptColumn(); err != nil {
+		return err
+	}
+	if err := ensureTokenFallbackModelEnabledColumn(); err != nil {
 		return err
 	}
 
@@ -465,6 +471,19 @@ PRIMARY KEY (` + "`id`" + `)
 		if err := DB.Exec("ALTER TABLE `" + tableName + "` ADD COLUMN " + col.DDL).Error; err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// ensureTokenFallbackModelEnabledColumn adds tokens.fallback_model_enabled for instances upgraded from older schemas.
+func ensureTokenFallbackModelEnabledColumn() error {
+	tableName := "tokens"
+	columnName := "fallback_model_enabled"
+	if !DB.Migrator().HasTable(tableName) || DB.Migrator().HasColumn(&Token{}, columnName) {
+		return nil
+	}
+	if err := DB.Migrator().AddColumn(&Token{}, "FallbackModelEnabled"); err != nil {
+		return fmt.Errorf("failed to add %s.%s column: %w", tableName, columnName, err)
 	}
 	return nil
 }

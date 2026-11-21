@@ -18,6 +18,9 @@ type RetryParam struct {
 	ModelName    string
 	Retry        *int
 	resetNextTry bool
+	// AllChannelsSleeping 本次选择时该模型（该分组下）全部渠道都处于过载休眠池，
+	// 供上层决定是否切换到备用模型。
+	AllChannelsSleeping bool
 }
 
 func (p *RetryParam) GetRetry() int {
@@ -245,6 +248,7 @@ func selectChannelSkippingSleeping(param *RetryParam, group string, retry int) (
 	}
 	if result.AllSleeping {
 		SetOverloadSleepAllSleeping(param.Ctx, param.ModelName)
+		param.AllChannelsSleeping = true
 	}
 	return result.Channel, nil
 }

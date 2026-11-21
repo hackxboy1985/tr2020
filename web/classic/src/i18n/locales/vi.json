@@ -4267,6 +4267,11 @@
     "并确认自行承担部署": "confirm that I bear legal responsibility arising from deployment",
     "运营和收费行为产生的法律责任": "operation and charging behavior",
     "，": ", ",
-    "、": ", "
+    "、": ", ",
+    "使用相近模型兜底": "Dùng mô hình tương tự dự phòng",
+    "当该模型全部渠道都进入休眠池时，改用备用模型重试，避免直接失败": "Khi tất cả kênh của mô hình này đều nằm trong bể ngủ, hãy thử lại bằng mô hình dự phòng thay vì thất bại trực tiếp",
+    "兜底": "Dự phòng",
+    "备用模型": "Mô hình dự phòng",
+    "每行一个映射，格式：原模型=备用模型。仅当原模型全部渠道休眠、且 API 密钥开启了「使用相近模型兜底」时生效。": "Mỗi dòng một ánh xạ, định dạng: mô hình gốc=mô hình dự phòng. Chỉ có hiệu lực khi tất cả kênh của mô hình gốc đang ngủ và khóa API đã bật «Dùng mô hình tương tự dự phòng»."
   }
 }

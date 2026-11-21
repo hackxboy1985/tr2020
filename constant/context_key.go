@@ -70,6 +70,14 @@ const (
 	// ContextKeyOverloadSleepAllSleeping 标记本次选择发生了「该模型全部渠道休眠，兜底取最后一个渠道」。
 	ContextKeyOverloadSleepAllSleeping ContextKey = "overload_sleep_all_sleeping"
 
+	/* 备用模型兜底（Fallback Model）相关 */
+	// ContextKeyTokenFallbackModelEnabled 本次请求的 API 密钥是否开启「使用相近模型兜底」
+	ContextKeyTokenFallbackModelEnabled ContextKey = "token_fallback_model_enabled"
+	// ContextKeyFallbackOriginModel 触发兜底时的原始模型名（非空表示已兜底过，禁止二次兜底）
+	ContextKeyFallbackOriginModel ContextKey = "fallback_origin_model"
+	// ContextKeyFallbackModelName 本次兜底切换到的备用模型名
+	ContextKeyFallbackModelName ContextKey = "fallback_model_name"
+
 	// ContextKeyLanguage stores the user's language preference for i18n
 	ContextKeyLanguage     ContextKey = "language"
 	ContextKeyPromptToSave ContextKey = "prompt_to_save"

@@ -84,6 +84,7 @@ const OperationSetting = () => {
     'overload_sleep_setting.enabled': false,
     'overload_sleep_setting.sleep_minutes': 2,
     'overload_sleep_setting.status_codes': '429,503',
+    'overload_sleep_setting.fallback_models': '',
 
     /* 令牌设置 */
     'token_setting.max_user_tokens': 1000,

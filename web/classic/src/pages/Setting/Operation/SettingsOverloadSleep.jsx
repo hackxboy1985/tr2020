@@ -42,11 +42,13 @@ import HttpStatusCodeRulesInput from '../../../components/settings/HttpStatusCod
 const KEY_ENABLED = 'overload_sleep_setting.enabled';
 const KEY_SLEEP_MINUTES = 'overload_sleep_setting.sleep_minutes';
 const KEY_STATUS_CODES = 'overload_sleep_setting.status_codes';
+const KEY_FALLBACK_MODELS = 'overload_sleep_setting.fallback_models';
 
 const DEFAULT_INPUTS = {
   [KEY_ENABLED]: false,
   [KEY_SLEEP_MINUTES]: 2,
   [KEY_STATUS_CODES]: '429,503',
+  [KEY_FALLBACK_MODELS]: '',
 };
 
 const MIN_SLEEP_MINUTES = 1;
@@ -214,6 +216,20 @@ export default function SettingsOverloadSleep(props) {
                   onChange={handleFieldChange(KEY_STATUS_CODES)}
                   parsed={parsedStatusCodes}
                   invalidText={t('过载状态码格式不正确')}
+                />
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 12 }}>
+              <Col xs={24} sm={16}>
+                <Form.TextArea
+                  field={KEY_FALLBACK_MODELS}
+                  label={t('备用模型')}
+                  placeholder={'gemini-3.6-flash=gemini-3.7-flash'}
+                  extraText={t(
+                    '每行一个映射，格式：原模型=备用模型。仅当原模型全部渠道休眠、且 API 密钥开启了「使用相近模型兜底」时生效。',
+                  )}
+                  autosize={{ minRows: 3, maxRows: 12 }}
+                  onChange={handleFieldChange(KEY_FALLBACK_MODELS)}
                 />
               </Col>
             </Row>

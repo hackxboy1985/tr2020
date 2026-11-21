@@ -4574,6 +4574,11 @@
     "sleeping channel": "canal en veille",
     "{{count}} selected (model, channel) pair(s) will stop being skipped. They can re-enter the pool on the next overload response.": "{{count}} paire(s) (modèle, canal) sélectionnée(s) ne seront plus ignorées. Elles peuvent réintégrer le pool lors de la prochaine surcharge.",
     "Only the first few candidate channels are listed.": "Seuls les premiers canaux candidats sont affichés.",
-    "{{shown}} of {{total}} channels": "{{shown}} sur {{total}} canaux"
+    "{{shown}} of {{total}} channels": "{{shown}} sur {{total}} canaux",
+    "Use Similar Model Fallback": "Utiliser le repli vers un modèle similaire",
+    "When all channels of this model are in the overload sleep pool, retry with the configured fallback model instead of failing.": "Lorsque tous les canaux de ce modèle sont dans le pool de sommeil pour surcharge, réessayez avec le modèle de repli configuré au lieu d'échouer.",
+    "Fallback Models": "Modèles de repli",
+    "One mapping per line, format: origin-model=fallback-model. Only used when all channels of the origin model are sleeping AND the API key enables \"Use Similar Model Fallback\".": "Une correspondance par ligne, format : origin-model=fallback-model. Utilisé uniquement lorsque tous les canaux du modèle d'origine sont en sommeil ET que la clé API active « Utiliser le repli vers un modèle similaire ».",
+    "Fallback": "Repli"
   }
 }

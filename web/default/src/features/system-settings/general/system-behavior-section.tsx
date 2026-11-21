@@ -34,6 +34,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
 import {
   SettingsForm,
   SettingsSwitchContent,
@@ -58,6 +59,7 @@ type FlatBehaviorDefaults = {
   'overload_sleep_setting.enabled': boolean
   'overload_sleep_setting.sleep_minutes': number
   'overload_sleep_setting.status_codes': string
+  'overload_sleep_setting.fallback_models': string
 }
 
 const behaviorSchema = z
@@ -70,6 +72,8 @@ const behaviorSchema = z
       enabled: z.boolean(),
       sleep_minutes: z.coerce.number().int().min(1).max(1440),
       status_codes: z.string(),
+      // Free-form model mapping, one "origin=fallback" pair per line; empty is allowed.
+      fallback_models: z.string(),
     }),
   })
   .superRefine((values, ctx) => {
@@ -103,6 +107,7 @@ const buildFormDefaults = (
     enabled: defaults['overload_sleep_setting.enabled'] ?? false,
     sleep_minutes: defaults['overload_sleep_setting.sleep_minutes'] ?? 2,
     status_codes: defaults['overload_sleep_setting.status_codes'] ?? '429,503',
+    fallback_models: defaults['overload_sleep_setting.fallback_models'] ?? '',
   },
 })
 
@@ -118,6 +123,8 @@ const flattenFormValues = (
     values.overload_sleep_setting.sleep_minutes,
   'overload_sleep_setting.status_codes':
     values.overload_sleep_setting.status_codes,
+  'overload_sleep_setting.fallback_models':
+    values.overload_sleep_setting.fallback_models,
 })
 
 export function SystemBehaviorSection(props: SystemBehaviorSectionProps) {
@@ -322,6 +329,34 @@ export function SystemBehaviorSection(props: SystemBehaviorSectionProps) {
                 <FormDescription>
                   {t(
                     'Comma-separated status codes; ranges are supported (for example 429,500-599).'
+                  )}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='overload_sleep_setting.fallback_models'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Fallback Models')}</FormLabel>
+                <FormControl>
+                  <Textarea
+                    placeholder='gemini-3.6-flash=gemini-3.7-flash'
+                    value={field.value ?? ''}
+                    onChange={(event) => field.onChange(event.target.value)}
+                    name={field.name}
+                    onBlur={field.onBlur}
+                    ref={field.ref}
+                    rows={4}
+                    disabled={!sleepEnabled}
+                  />
+                </FormControl>
+                <FormDescription>
+                  {t(
+                    'One mapping per line, format: origin-model=fallback-model. Only used when all channels of the origin model are sleeping AND the API key enables "Use Similar Model Fallback".'
                   )}
                 </FormDescription>
                 <FormMessage />

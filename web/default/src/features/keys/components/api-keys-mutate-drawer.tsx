@@ -347,6 +347,31 @@ export function ApiKeysMutateDrawer({
 
               <FormField
                 control={form.control}
+                name='fallback_model_enabled'
+                render={({ field }) => (
+                  <FormItem className={sideDrawerSwitchItemClassName()}>
+                    <div className='flex flex-col gap-0.5'>
+                      <FormLabel className='text-sm'>
+                        {t('Use Similar Model Fallback')}
+                      </FormLabel>
+                      <FormDescription className='line-clamp-2 text-xs sm:line-clamp-none'>
+                        {t(
+                          'When all channels of this model are in the overload sleep pool, retry with the configured fallback model instead of failing.'
+                        )}
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={!!field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name='expired_time'
                 render={({ field }) => (
                   <FormItem>

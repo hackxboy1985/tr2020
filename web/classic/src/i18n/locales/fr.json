@@ -3734,6 +3734,11 @@
     "并确认自行承担部署": "confirm that I bear legal responsibility arising from deployment",
     "运营和收费行为产生的法律责任": "operation and charging behavior",
     "，": ", ",
-    "、": ", "
+    "、": ", ",
+    "使用相近模型兜底": "Utiliser un modèle similaire en secours",
+    "当该模型全部渠道都进入休眠池时，改用备用模型重试，避免直接失败": "Lorsque tous les canaux de ce modèle sont dans le pool de veille, réessayer avec un modèle de secours au lieu d'échouer directement",
+    "兜底": "Secours",
+    "备用模型": "Modèles de secours",
+    "每行一个映射，格式：原模型=备用模型。仅当原模型全部渠道休眠、且 API 密钥开启了「使用相近模型兜底」时生效。": "Une correspondance par ligne, format : modèle d’origine=modèle de secours. Ne s’applique que lorsque tous les canaux du modèle d’origine sont en veille et que la clé API a activé « Utiliser un modèle similaire en secours »."
   }
 }

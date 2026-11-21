@@ -81,6 +81,7 @@ const EditTokenModal = (props) => {
     allow_ips: '',
     group: '',
     cross_group_retry: false,
+    fallback_model_enabled: false,
     tokenCount: 1,
   });
 
@@ -422,6 +423,16 @@ const EditTokenModal = (props) => {
                       size='default'
                       extraText={t(
                         '开启后，当前分组渠道失败时会按顺序尝试下一个分组的渠道',
+                      )}
+                    />
+                  </Col>
+                  <Col span={24}>
+                    <Form.Switch
+                      field='fallback_model_enabled'
+                      label={t('使用相近模型兜底')}
+                      size='default'
+                      extraText={t(
+                        '当该模型全部渠道都进入休眠池时，改用备用模型重试，避免直接失败',
                       )}
                     />
                   </Col>

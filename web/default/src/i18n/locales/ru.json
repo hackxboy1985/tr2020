@@ -4574,6 +4574,11 @@
     "sleeping channel": "спящий канал",
     "{{count}} selected (model, channel) pair(s) will stop being skipped. They can re-enter the pool on the next overload response.": "Выбранные пары (модель, канал) в количестве {{count}} перестанут пропускаться. Они снова попадут в пул при следующей перегрузке.",
     "Only the first few candidate channels are listed.": "Показаны только первые несколько каналов-кандидатов.",
-    "{{shown}} of {{total}} channels": "{{shown}} из {{total}} каналов"
+    "{{shown}} of {{total}} channels": "{{shown}} из {{total}} каналов",
+    "Use Similar Model Fallback": "Использовать резервную модель",
+    "When all channels of this model are in the overload sleep pool, retry with the configured fallback model instead of failing.": "Когда все каналы этой модели находятся в пуле спящих из-за перегрузки, повторите попытку с настроенной резервной моделью вместо ошибки.",
+    "Fallback Models": "Резервные модели",
+    "One mapping per line, format: origin-model=fallback-model. Only used when all channels of the origin model are sleeping AND the API key enables \"Use Similar Model Fallback\".": "По одной паре на строку, формат: origin-model=fallback-model. Используется только когда все каналы исходной модели спят И в API-ключе включено «Использовать резервную модель».",
+    "Fallback": "Резерв"
   }
 }

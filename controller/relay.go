@@ -270,8 +270,13 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		// 过载休眠池：上游返回配置的过载状态码（默认 429/503）时，把 (模型, 渠道) 放入休眠池，
 		// 后续请求将跳过该渠道，直接使用下一渠道。
+		//
+		// 注意：若本次请求已兜底切换到备用模型，则必须用**备用模型名**标记休眠。
+		// 否则会把「备用模型的渠道」错误地记到原模型名下：既污染原模型的休眠池
+		// （该渠道对原模型可能完全健康），又导致备用模型自身永不被标记，
+		// 后续请求会反复命中同一个已过载的备用模型渠道。
 		if operation_setting.IsOverloadStatusCode(newAPIError.StatusCode) {
-			service.MarkOverloadSleep(c, relayInfo.OriginModelName, channel,
+			service.MarkOverloadSleep(c, overloadSleepModelName(c, relayInfo), channel,
 				common.GetContextKeyString(c, constant.ContextKeyUsingGroup), newAPIError.StatusCode)
 		}
 
@@ -334,6 +339,153 @@ func fastTokenCountMetaForPricing(request dto.Request) *types.TokenCountMeta {
 	return meta
 }
 
+// tryFallbackModel 在原模型「全部渠道都在过载休眠池」时，尝试改用备用模型。
+//
+// 这是「备用模型兜底」的接线点，返回最终应使用的渠道（一定非 nil）。
+//
+// 关键约束（用户明确要求）：
+//   - 只有 API 密钥开启了「使用相近模型兜底」才会切换；关闭时必须回退到
+//     「原模型休眠池中的最后一个渠道」重试，绝不能使用备用模型。
+//     该判断由 service.ResolveFallbackModel 内部完成。
+//   - 备用模型也会跳过它自己处于休眠中的渠道；
+//   - 若备用模型的渠道会把请求映射回原模型（形成循环），跳过这些渠道；
+//   - 任何一步失败都保留原渠道，保证「不会一个渠道都不请求」。
+func tryFallbackModel(
+	c *gin.Context,
+	info *relaycommon.RelayInfo,
+	retryParam *service.RetryParam,
+	channel *model.Channel,
+	selectGroup string,
+) *model.Channel {
+	if channel == nil || retryParam == nil || !retryParam.AllChannelsSleeping {
+		return channel
+	}
+	originModel := info.OriginModelName
+	if originModel == "" {
+		return channel
+	}
+	// 二次确认：当前渠道确实仍在休眠池中，才说明「原模型没有可用渠道，
+	// 这个渠道是被『全部休眠取最后一个』兜底选中的」。
+	// 注意不能用 AllChannelsSleeping 单独判断：auto 分组下它是粘性标志，
+	// 可能某个分组全休眠、但后续分组已经取到了可用渠道。
+	if len(service.GetOverloadSleepExcludedChannels(originModel, []int{channel.Id})) == 0 {
+		return channel
+	}
+
+	fallbackModel, ok := service.ResolveFallbackModel(c, originModel)
+	if !ok {
+		// 未开启兜底 / 未配置 / 已兜底过 / 配置存在环：沿用原渠道（最后一个渠道）
+		return channel
+	}
+
+	candidates := model.GetSatisfiedChannelCandidates(selectGroup, fallbackModel)
+	if len(candidates) == 0 {
+		logger.LogInfo(c, fmt.Sprintf("备用模型兜底：备用模型 %s 在分组 %s 下没有可用渠道，回退到原模型的最后一个渠道", fallbackModel, selectGroup))
+		return channel
+	}
+
+	// 剔除「会把备用模型映射回原模型」的渠道，避免死循环
+	kept, skipped := service.FilterChannelsCausingFallbackCycle(c, candidates, originModel, fallbackModel)
+	if len(kept) == 0 {
+		logger.LogInfo(c, fmt.Sprintf("备用模型兜底：备用模型 %s 的渠道都会绕回原模型 %s（共跳过 %d 个渠道），放弃兜底，回退到原模型的最后一个渠道", fallbackModel, originModel, len(skipped)))
+		return channel
+	}
+
+	// 备用模型自身也要跳过处于休眠中的渠道
+	candidateIds := make([]int, 0, len(kept))
+	for _, candidate := range kept {
+		candidateIds = append(candidateIds, candidate.ChannelId)
+	}
+	sleeping := service.GetOverloadSleepExcludedChannels(fallbackModel, candidateIds)
+	exclude := make(map[int]struct{}, len(sleeping))
+	for channelId := range sleeping {
+		exclude[channelId] = struct{}{}
+	}
+
+	result, err := model.SelectChannelAvoidingExcluded(kept, retryParam.GetRetry(), exclude)
+	if err != nil || result == nil || result.Channel == nil {
+		logger.LogInfo(c, fmt.Sprintf("备用模型兜底：为备用模型 %s 选择渠道失败，回退到原模型的最后一个渠道", fallbackModel))
+		return channel
+	}
+
+	// 切换成功。
+	//
+	// 关键设计：只把「发给上游的模型名」改成备用模型，**不改 relayInfo.OriginModelName**。
+	// 原因：
+	//   - 预扣费在进入重试循环之前就已按原模型算好（ModelPriceHelper 用的就是
+	//     OriginModelName），而 BillingSettler 只提供 Reserve（只能补不能重算），
+	//     若此时改 OriginModelName，会导致「预扣按原模型、结算按备用模型」两边不一致；
+	//   - 从用户视角看，他请求的就是原模型，按原模型计费也是合理的。
+	//
+	// 上游模型名通过 info.ChannelMeta.UpstreamModelName 传递：
+	// ModelMappedHelper 会在每次请求时用 info.OriginModelName 重新计算它，
+	// 因此这里需要同时把 context 中的「模型映射基准」调整为备用模型。
+	service.MarkFallbackSwitched(c, originModel, fallbackModel)
+
+	// 用 context key 承载「本次实际使用的模型」，供 ModelMappedHelper 取用上游模型名。
+	common.SetContextKey(c, constant.ContextKeyFallbackModelName, fallbackModel)
+	// retryParam.ModelName 决定后续重试选哪个模型的渠道，必须是备用模型。
+	retryParam.ModelName = fallbackModel
+	retryParam.AllChannelsSleeping = false
+	// 标记已兜底，避免二次兜底（ResolveFallbackModel 内部读它）。
+	common.SetContextKey(c, constant.ContextKeyFallbackOriginModel, originModel)
+
+	// 分组倍率按「备用模型实际命中的分组」重算并补扣差额。
+	//
+	// 为什么要重算：分组倍率在选渠道前就已写进 PriceData.GroupRatioInfo，
+	// 而备用模型可能只存在于另一个分组（例如原模型在 default 组、备用模型在 vip 组），
+	// 两者分组倍率不同。按约定，兜底后应按实际使用的分组倍率计费。
+	// selectGroup 是本次从主导航流程一路传下来的分组，
+	// 备用模型的候选渠道就是从这个分组里检索的，因此它就是「实际命中的分组」。
+	applyFallbackGroupRatio(c, info, selectGroup)
+
+	return result.Channel
+}
+
+// applyFallbackGroupRatio 兜底切换后，按「备用模型实际命中的分组」重新计算分组倍率，
+// 并在需要补扣时通过 BillingSession.Reserve 补足预扣额度。
+//
+// 说明：这里只处理「补扣」（备用分组倍率更高的情况）。若备用分组倍率更低，
+// 预扣额度不会被主动退还，但结算时 PostConsumeQuota 会按实际额度做差额返还
+// （delta 为负时会 IncreaseUserQuota），因此不会多收。
+func applyFallbackGroupRatio(c *gin.Context, info *relaycommon.RelayInfo, targetGroup string) {
+	if c == nil || info == nil || targetGroup == "" {
+		return
+	}
+	if targetGroup == info.UsingGroup {
+		// 同一分组：分组倍率不变，无需处理（绝大多数情况走这里）
+		return
+	}
+
+	oldGroupRatio := info.PriceData.GroupRatioInfo.GroupRatio
+	previousGroup := info.UsingGroup
+
+	// 用「备用模型实际命中的分组」重新计算分组倍率
+	info.UsingGroup = targetGroup
+	newGroupRatioInfo := helper.HandleGroupRatio(c, info)
+	if newGroupRatioInfo.GroupRatio == oldGroupRatio {
+		// 两个分组倍率相同（常见：多分组共用一个倍率），值不用改
+		return
+	}
+	info.PriceData.GroupRatioInfo = newGroupRatioInfo
+	common.SetContextKey(c, constant.ContextKeyAutoGroup, targetGroup)
+
+	logger.LogInfo(c, fmt.Sprintf(
+		"备用模型兜底：实际使用分组 %s（原分组 %s），分组倍率 %v -> %v",
+		targetGroup, previousGroup, oldGroupRatio, newGroupRatioInfo.GroupRatio))
+
+	// 预扣额度是按旧分组倍率算的；若新倍率更高，补足预扣额度，
+	// 避免「预扣不足」在结算时被当作超额消费。
+	if info.Billing != nil && info.PriceData.QuotaToPreConsume > 0 && oldGroupRatio > 0 {
+		target := int(float64(info.PriceData.QuotaToPreConsume) * (newGroupRatioInfo.GroupRatio / oldGroupRatio))
+		if target > 0 {
+			if err := info.Billing.Reserve(target); err != nil {
+				logger.LogError(c, fmt.Sprintf("备用模型兜底：补足预扣额度失败（分组 %s）：%s", targetGroup, err.Error()))
+			}
+		}
+	}
+}
+
 func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service.RetryParam) (*model.Channel, *types.NewAPIError) {
 	if info.ChannelMeta == nil {
 		autoBan := c.GetBool("auto_ban")
@@ -359,11 +511,33 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 		return nil, types.NewError(fmt.Errorf("分组 %s 下模型 %s 的可用渠道不存在（retry）", selectGroup, info.OriginModelName), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
 	}
 
+	// 备用模型兜底：原模型全部渠道都在休眠池中时，按需切换到备用模型。
+	// 密钥「使用相近模型兜底」开关关闭时，此调用内部会直接返回原渠道，
+	// 即继续使用「休眠池中的最后一个渠道」重试。
+	channel = tryFallbackModel(c, info, retryParam, channel, selectGroup)
+
+	// 兜底过程可能已把 info.OriginModelName 切换为备用模型，
+	// 这里必须用最新的模型名写入渠道上下文，保证上游请求与渠道模型映射一致。
 	newAPIError := middleware.SetupContextForSelectedChannel(c, channel, info.OriginModelName)
 	if newAPIError != nil {
 		return nil, newAPIError
 	}
 	return channel, nil
+}
+
+// overloadSleepModelName 返回「标记过载休眠时应使用的模型名」。
+//
+// 正常情况下就是用户请求的模型名；若本次请求因原模型全渠道休眠而兜底切换到了
+// 备用模型，则实际请求的是备用模型，休眠必须记在备用模型名下，
+// 否则会污染原模型的休眠池且备用模型自身不会被休眠。
+func overloadSleepModelName(c *gin.Context, info *relaycommon.RelayInfo) string {
+	if fallbackModel := service.GetFallbackModelName(c); fallbackModel != "" {
+		return fallbackModel
+	}
+	if info != nil && info.OriginModelName != "" {
+		return info.OriginModelName
+	}
+	return common.GetContextKeyString(c, constant.ContextKeyOriginalModel)
 }
 
 func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) bool {
@@ -613,7 +787,7 @@ func RelayTask(c *gin.Context) {
 		// 过载休眠池：任务提交同样按过载状态码休眠 (模型, 渠道)
 		if !taskErr.LocalError && operation_setting.IsOverloadStatusCode(taskErr.StatusCode) {
 			var triggerChannel *model.Channel = channel
-			service.MarkOverloadSleep(c, relayInfo.OriginModelName, triggerChannel,
+			service.MarkOverloadSleep(c, overloadSleepModelName(c, relayInfo), triggerChannel,
 				common.GetContextKeyString(c, constant.ContextKeyUsingGroup), taskErr.StatusCode)
 		}
 

@@ -4594,6 +4594,11 @@
     "sleeping channel": "sleeping channel",
     "{{count}} selected (model, channel) pair(s) will stop being skipped. They can re-enter the pool on the next overload response.": "{{count}} selected (model, channel) pair(s) will stop being skipped. They can re-enter the pool on the next overload response.",
     "Only the first few candidate channels are listed.": "Only the first few candidate channels are listed.",
-    "{{shown}} of {{total}} channels": "{{shown}} of {{total}} channels"
+    "{{shown}} of {{total}} channels": "{{shown}} of {{total}} channels",
+    "Use Similar Model Fallback": "Use Similar Model Fallback",
+    "When all channels of this model are in the overload sleep pool, retry with the configured fallback model instead of failing.": "When all channels of this model are in the overload sleep pool, retry with the configured fallback model instead of failing.",
+    "Fallback Models": "Fallback Models",
+    "One mapping per line, format: origin-model=fallback-model. Only used when all channels of the origin model are sleeping AND the API key enables \"Use Similar Model Fallback\".": "One mapping per line, format: origin-model=fallback-model. Only used when all channels of the origin model are sleeping AND the API key enables \"Use Similar Model Fallback\".",
+    "Fallback": "Fallback"
   }
 }

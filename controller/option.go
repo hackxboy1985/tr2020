@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -75,6 +76,49 @@ func buildCompletionRatioMetaValue(optionValues map[string]string) string {
 	return string(jsonBytes)
 }
 
+// validateFallbackModelsOptionValue 校验备用模型配置项：必须是字符串，且每行格式合法。
+func validateFallbackModelsOptionValue(value any) error {
+	raw, ok := value.(string)
+	if !ok {
+		return errors.New("备用模型配置格式非法，应为 每行 原模型=备用模型（值必须是多行文本字符串）")
+	}
+	return validateFallbackModelMappingsFormat(raw)
+}
+
+// validateFallbackModelMappingsFormat 校验「原模型=备用模型」多行配置的格式。
+//
+// 合法行：
+//   - 空行（含纯空白行）；
+//   - 以 # 开头的注释行；
+//   - 用第一个 '=' 切分后，两侧去空白都非空的「原模型=备用模型」。
+//
+// 非法行（返回错误）：
+//   - 非空、非注释，但不含 '='；
+//   - 含 '=' 但任一侧为空，如 "a="、"=b"、"a = "。
+//
+// 不视为非法（与运行时解析器语义保持一致）：
+//   - 自映射 "a=a"：运行时解析器会直接丢弃该行；
+//   - 配置环 "a=b" + "b=a"：允许配置，运行时由 service.ResolveFallbackModel 检测并中断。
+func validateFallbackModelMappingsFormat(raw string) error {
+	for index, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		lineNo := index + 1
+		idx := strings.Index(line, "=")
+		if idx < 0 {
+			return fmt.Errorf("备用模型配置格式非法，应为 每行 原模型=备用模型（第 %d 行缺少 '='：%s）", lineNo, line)
+		}
+		origin := strings.TrimSpace(line[:idx])
+		fallback := strings.TrimSpace(line[idx+1:])
+		if origin == "" || fallback == "" {
+			return fmt.Errorf("备用模型配置格式非法，应为 每行 原模型=备用模型（第 %d 行的 '=' 两侧都不能为空：%s）", lineNo, line)
+		}
+	}
+	return nil
+}
+
 func GetOptions(c *gin.Context) {
 	var options []*model.Option
 	optionValues := make(map[string]string)
@@ -127,6 +171,9 @@ func UpdateOption(c *gin.Context) {
 		})
 		return
 	}
+	// 保留解码后的原始类型：个别配置项（如备用模型多行文本）需要严格校验类型，
+	// 不能只看下面统一转换后的字符串，否则数组/对象会被 fmt.Sprintf("%v") 拍平后绕过校验。
+	originalValue := option.Value
 	switch option.Value.(type) {
 	case bool:
 		option.Value = common.Interface2String(option.Value.(bool))
@@ -229,6 +276,17 @@ func UpdateOption(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
 				"message": "过载状态码配置非法：" + err.Error(),
+			})
+			return
+		}
+	case "overload_sleep_setting.fallback_models":
+		// 备用模型配置：必须是字符串，且只校验「每行 原模型=备用模型」的格式，
+		// 不拒绝自映射/配置环：自映射会被解析器静默丢弃；a=b 与 b=a 这类配置环是允许的，
+		// 由 service.ResolveFallbackModel 在运行时检测并中断（见 DescribeFallbackModelCycle）。
+		if err = validateFallbackModelsOptionValue(originalValue); err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": err.Error(),
 			})
 			return
 		}

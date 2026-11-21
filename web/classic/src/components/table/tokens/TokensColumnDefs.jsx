@@ -91,17 +91,24 @@ const renderStatus = (text, record, t) => {
 const renderGroupColumn = (text, record, t, groupRatios = {}) => {
   if (text === 'auto') {
     return (
-      <Tooltip
-        content={t(
-          '当前分组为 auto，会自动选择最优分组，当一个组不可用时自动降级到下一个组（熔断机制）',
+      <span className='flex items-center gap-1'>
+        <Tooltip
+          content={t(
+            '当前分组为 auto，会自动选择最优分组，当一个组不可用时自动降级到下一个组（熔断机制）',
+          )}
+          position='top'
+        >
+          <Tag color='white' shape='circle'>
+            {t('智能熔断')}
+            {record && record.cross_group_retry ? `(${t('跨分组')})` : ''}
+          </Tag>
+        </Tooltip>
+        {record && record.fallback_model_enabled && (
+          <Tag size='small' color='purple' shape='circle'>
+            {t('兜底')}
+          </Tag>
         )}
-        position='top'
-      >
-        <Tag color='white' shape='circle'>
-          {t('智能熔断')}
-          {record && record.cross_group_retry ? `(${t('跨分组')})` : ''}
-        </Tag>
-      </Tooltip>
+      </span>
     );
   }
   const ratio = groupRatios[text];
@@ -111,6 +118,11 @@ const renderGroupColumn = (text, record, t, groupRatios = {}) => {
       {ratio !== undefined && (
         <Tag size='small' color='green' shape='circle'>
           {ratio}x
+        </Tag>
+      )}
+      {record && record.fallback_model_enabled && (
+        <Tag size='small' color='purple' shape='circle'>
+          {t('兜底')}
         </Tag>
       )}
     </span>

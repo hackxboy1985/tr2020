@@ -4717,6 +4717,10 @@
     "sleeping channel": "休眠渠道",
     "{{count}} selected (model, channel) pair(s) will stop being skipped. They can re-enter the pool on the next overload response.": "选中的 {{count}} 个（模型, 渠道）组合将不再被跳过；下次过载时会重新进入休眠池。",
     "Only the first few candidate channels are listed.": "仅列出前几个候选渠道。",
-    "{{shown}} of {{total}} channels": "{{shown}} / {{total}} 个渠道"
+    "{{shown}} of {{total}} channels": "{{shown}} / {{total}} 个渠道",
+    "Use Similar Model Fallback": "使用相近模型兜底",
+    "When all channels of this model are in the overload sleep pool, retry with the configured fallback model instead of failing.": "当该模型的所有渠道都处于过载休眠池时，改用配置的备用模型重试，而不是直接失败。",
+    "Fallback Models": "备用模型",
+    "One mapping per line, format: origin-model=fallback-model. Only used when all channels of the origin model are sleeping AND the API key enables \"Use Similar Model Fallback\".": "每行一条映射，格式：origin-model=fallback-model。仅当源模型的所有渠道都在休眠，且 API 密钥启用了「使用相近模型兜底」时才会生效。"
   }
 }

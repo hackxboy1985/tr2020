@@ -3880,6 +3880,11 @@
     "并确认自行承担部署": "confirm that I bear legal responsibility arising from deployment",
     "运营和收费行为产生的法律责任": "operation and charging behavior",
     "，": ", ",
-    "、": ", "
+    "、": ", ",
+    "使用相近模型兜底": "Use similar model fallback",
+    "当该模型全部渠道都进入休眠池时，改用备用模型重试，避免直接失败": "When all channels of this model are in the sleep pool, retry with a fallback model instead of failing directly",
+    "兜底": "Fallback",
+    "备用模型": "Fallback models",
+    "每行一个映射，格式：原模型=备用模型。仅当原模型全部渠道休眠、且 API 密钥开启了「使用相近模型兜底」时生效。": "One mapping per line, format: original model=fallback model. Only takes effect when all channels of the original model are sleeping and the API key has \"Use similar model fallback\" enabled."
   }
 }
