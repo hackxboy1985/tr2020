@@ -694,7 +694,8 @@ func tryDoubaoRealtimeFetch(task *model.Task, c *gin.Context) []byte {
 // content.video_url 替换为本服务的成片下载入口（/v1/videos/{publicTaskID}/content）。
 //
 //   - 官链（.volces.com）：下游可直连，保持原地址，不代理；
-//   - 非官链且渠道允许（或 sdos2 这类受保护接口）：替换为代理入口。
+//   - allow_non_official_video_url 打开时，绝对 http(s) 非官链原样返回；
+//     相对路径，以及 sdos2 这类受保护接口，才替换为代理入口。
 func rewriteDoubaoVideoContentURL(taskData map[string]interface{}, publicTaskID string, ch *model.Channel) {
 	if taskData == nil || strings.TrimSpace(publicTaskID) == "" || ch == nil {
 		return

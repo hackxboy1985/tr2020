@@ -945,7 +945,7 @@ func (a *TaskAdaptor) ConvertToOpenAIVideo(originTask *model.Task) ([]byte, erro
 		}
 	}
 	if videoURL != "" {
-		// 逐 URL 判定：官链直连不代理；非官链（且渠道允许）才替换为本服务代理地址
+		// 逐 URL 判定：官链和绝对 http(s) 非官链原样返回；相对路径（且渠道允许）才替换为本服务代理地址
 		if ch, err := model.CacheGetChannel(originTask.ChannelId); err == nil && service.ShouldProxyVideoURL(ch, videoURL) {
 			// 本服务下载入口基址：渠道 other.sdos2_relay_base_url 优先，其次系统 ServerAddress
 			if base := service.ResolveVideoContentBaseURL(ch); base != "" {

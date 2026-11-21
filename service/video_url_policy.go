@@ -43,7 +43,9 @@ func IsOfficialVideoURL(raw string) bool {
 //
 //   - sdos2 上游：地址天然是受 Bearer 保护的接口路径 → 总是代理；
 //   - 官链（.volces.com）：下游可直连 → 不代理（省带宽）；
-//   - 非官链：仅当渠道开启 allow_non_official_video_url 时代理。
+//   - 渠道开启 allow_non_official_video_url：
+//     绝对 http(s) 地址下游可直接访问，原样返回；
+//     相对路径（不以 http:// / https:// 开头）才换成 /v1/videos/{task_id}/content。
 func ShouldProxyVideoURL(ch *model.Channel, raw string) bool {
 	if ch == nil {
 		return false
@@ -54,5 +56,14 @@ func ShouldProxyVideoURL(ch *model.Channel, raw string) bool {
 	if IsOfficialVideoURL(raw) {
 		return false
 	}
-	return AllowNonOfficialVideoURL(ch)
+	if !AllowNonOfficialVideoURL(ch) {
+		return false
+	}
+	return !isAbsoluteHTTPVideoURL(raw)
+}
+
+// isAbsoluteHTTPVideoURL 判断成片地址是否已经是下游可直接访问的绝对 http(s) 链接。
+func isAbsoluteHTTPVideoURL(raw string) bool {
+	lower := strings.ToLower(strings.TrimSpace(raw))
+	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://")
 }

@@ -36,8 +36,11 @@ func TestShouldProxyVideoURL(t *testing.T) {
 	sdos2 := &model.Channel{Type: 54, Other: `{"asset_upstream_version":"sdos2"}`}
 
 	nonOfficial := "https://platform.n-axis.com/v1/videos/x.mp4"
-	if !ShouldProxyVideoURL(allow, nonOfficial) {
-		t.Fatalf("allow channel must proxy non-official url")
+	if ShouldProxyVideoURL(allow, nonOfficial) {
+		t.Fatalf("absolute http(s) non-official url must be returned as-is")
+	}
+	if !ShouldProxyVideoURL(allow, "/v1/videos/task_x/content") {
+		t.Fatalf("relative non-official url must be proxied")
 	}
 	if ShouldProxyVideoURL(deny, nonOfficial) {
 		t.Fatalf("deny channel must not proxy")
