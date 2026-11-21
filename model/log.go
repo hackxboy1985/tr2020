@@ -196,6 +196,9 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 	username := c.GetString("username")
 	requestId := c.GetString(common.RequestIdKey)
 	upstreamRequestId := c.GetString(common.UpstreamRequestIdKey)
+	// 若本次请求跳过过「过载休眠池」中的渠道，把跳过明细挂到这条日志的 other 里，
+	// 而不是额外写一条日志（避免一个请求产生多条冗余记录）。
+	InjectOverloadSleepInfoIntoOther(c, other)
 	otherStr := common.MapToJsonStr(other)
 	// 判断是否需要记录 IP
 	needRecordIp := false
@@ -291,6 +294,9 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	username := c.GetString("username")
 	requestId := c.GetString(common.RequestIdKey)
 	upstreamRequestId := c.GetString(common.UpstreamRequestIdKey)
+	// 若本次请求跳过过「过载休眠池」中的渠道，把跳过明细挂到这条日志的 other 里，
+	// 而不是额外写一条日志（避免一个请求产生多条冗余记录）。
+	InjectOverloadSleepInfoIntoOther(c, params.Other)
 	otherStr := common.MapToJsonStr(params.Other)
 	// 判断是否需要记录 IP
 	needRecordIp := false

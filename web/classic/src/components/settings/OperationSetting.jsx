@@ -27,6 +27,7 @@ import SettingsLog from '../../pages/Setting/Operation/SettingsLog';
 import SettingsMonitoring from '../../pages/Setting/Operation/SettingsMonitoring';
 import SettingsCreditLimit from '../../pages/Setting/Operation/SettingsCreditLimit';
 import SettingsCheckin from '../../pages/Setting/Operation/SettingsCheckin';
+import SettingsOverloadSleep from '../../pages/Setting/Operation/SettingsOverloadSleep';
 import { API, showError, toBoolean } from '../../helpers';
 
 const OperationSetting = () => {
@@ -78,6 +79,11 @@ const OperationSetting = () => {
     'checkin_setting.enabled': false,
     'checkin_setting.min_quota': 1000,
     'checkin_setting.max_quota': 10000,
+
+    /* 过载休眠池 */
+    'overload_sleep_setting.enabled': false,
+    'overload_sleep_setting.sleep_minutes': 2,
+    'overload_sleep_setting.status_codes': '429,503',
 
     /* 令牌设置 */
     'token_setting.max_user_tokens': 1000,
@@ -153,6 +159,10 @@ const OperationSetting = () => {
         {/* 签到设置 */}
         <Card style={{ marginTop: '10px' }}>
           <SettingsCheckin options={inputs} refresh={onRefresh} />
+        </Card>
+        {/* 过载休眠池 */}
+        <Card style={{ marginTop: '10px' }}>
+          <SettingsOverloadSleep options={inputs} refresh={onRefresh} />
         </Card>
       </Spin>
     </>

@@ -64,10 +64,16 @@ const (
 	// It is not returned to end users, but can be persisted into consume/error logs for debugging.
 	ContextKeyAdminRejectReason ContextKey = "admin_reject_reason"
 
+	// ContextKeyOverloadSleepSkipped 记录本次请求中因「过载休眠池」被跳过的渠道，
+	// 用于在日志表写入跳过记录（避免被误认为 bug）。
+	ContextKeyOverloadSleepSkipped ContextKey = "overload_sleep_skipped"
+	// ContextKeyOverloadSleepAllSleeping 标记本次选择发生了「该模型全部渠道休眠，兜底取最后一个渠道」。
+	ContextKeyOverloadSleepAllSleeping ContextKey = "overload_sleep_all_sleeping"
+
 	// ContextKeyLanguage stores the user's language preference for i18n
-	ContextKeyLanguage ContextKey = "language"
-	ContextKeyPromptToSave  ContextKey = "prompt_to_save"
-	ContextKeyIsStream ContextKey = "is_stream"
+	ContextKeyLanguage     ContextKey = "language"
+	ContextKeyPromptToSave ContextKey = "prompt_to_save"
+	ContextKeyIsStream     ContextKey = "is_stream"
 
 	// video channel request/response body saving
 	ContextKeyVideoSaveRequestResponse ContextKey = "video_save_request_response"

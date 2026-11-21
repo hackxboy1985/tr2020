@@ -7,6 +7,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/pkg/sleeppool"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/gin-gonic/gin"
 )
@@ -66,6 +67,11 @@ func (p *RetryParam) ResetRetryNextTry() {
 //   - When GetRandomSatisfiedChannel returns nil (priorities exhausted), moves to next group.
 //     当 GetRandomSatisfiedChannel 返回 nil（优先级用完）时，切换到下一个分组。
 //
+// 过载休眠池（overload sleep pool）：
+// 当总开关打开时，选择渠道会跳过处于休眠中的 (模型, 渠道) 组合，
+// 并把这些跳过记录写入 gin.Context，供上层写日志表；
+// 若该模型所有渠道都在休眠，则按需求兜底取「最后一个渠道」，保证至少发起一次请求。
+//
 // Example flow (2 groups, each with 2 priorities, RetryTimes=3):
 // 示例流程（2个分组，每个有2个优先级，RetryTimes=3）：
 //
@@ -85,6 +91,11 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 	var err error
 	selectGroup := param.TokenGroup
 	userGroup := common.GetContextKeyString(param.Ctx, constant.ContextKeyUserGroup)
+
+	// 休眠池开关打开时，选择渠道会跳过处于休眠中的 (模型, 渠道)。
+	// 注意：休眠条目是「一个 (模型, 渠道) 一个 key」，无法凭模型名直接枚举，
+	// 所以这里先取候选渠道（内存缓存，无 IO），再用一次 MGET 精确查询哪些在休眠。
+	sleepPoolActive := IsOverloadSleepPoolActive()
 
 	if param.TokenGroup == "auto" {
 		if len(setting.GetAutoGroups()) == 0 {
@@ -115,7 +126,17 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			}
 			logger.LogDebug(param.Ctx, "Auto selecting group: %s, priorityRetry: %d", autoGroup, priorityRetry)
 
-			channel, _ = model.GetRandomSatisfiedChannel(autoGroup, param.ModelName, priorityRetry)
+			if sleepPoolActive {
+				// auto 分组的语义是「本分组取不到渠道就换下一个分组」，
+				// 因此这里的错误与原逻辑一致地吞掉，只记 debug 日志，继续尝试下一个分组。
+				channel, err = selectChannelSkippingSleeping(param, autoGroup, priorityRetry)
+				if err != nil {
+					logger.LogDebug(param.Ctx, "Select channel skipping overload sleeping failed in group %s: %s", autoGroup, err.Error())
+					channel = nil
+				}
+			} else {
+				channel, _ = model.GetRandomSatisfiedChannel(autoGroup, param.ModelName, priorityRetry)
+			}
 			if channel == nil {
 				// Current group has no available channel for this model, try next group
 				// 当前分组没有该模型的可用渠道，尝试下一个分组
@@ -162,10 +183,68 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			break
 		}
 	} else {
-		channel, err = model.GetRandomSatisfiedChannel(param.TokenGroup, param.ModelName, param.GetRetry())
-		if err != nil {
-			return nil, param.TokenGroup, err
+		if sleepPoolActive {
+			channel, err = selectChannelSkippingSleeping(param, param.TokenGroup, param.GetRetry())
+			if err != nil {
+				return nil, param.TokenGroup, err
+			}
+		} else {
+			channel, err = model.GetRandomSatisfiedChannel(param.TokenGroup, param.ModelName, param.GetRetry())
+			if err != nil {
+				return nil, param.TokenGroup, err
+			}
 		}
 	}
 	return channel, selectGroup, nil
+}
+
+// selectChannelSkippingSleeping 在指定分组内选择渠道，跳过处于过载休眠池中的渠道。
+//
+// 若该分组下该模型的所有渠道都在休眠，则兜底选择「最后一个渠道」（优先级最低、同优先级内最后一个），
+// 以保证不会出现「一个渠道都不请求」的情况。
+//
+// 性能说明：休眠条目是「一个 (模型, 渠道) 一个 key」，无法凭模型名枚举，
+// 所以这里先用内存缓存取候选渠道，再对候选渠道做一次 MGET，固定 1 次 Redis 往返。
+func selectChannelSkippingSleeping(param *RetryParam, group string, retry int) (*model.Channel, error) {
+	candidates := model.GetSatisfiedChannelCandidates(group, param.ModelName)
+	if len(candidates) == 0 {
+		// 缓存/数据库都没有渠道时，回落到原有逻辑（保持错误语义一致）
+		return model.GetRandomSatisfiedChannel(group, param.ModelName, retry)
+	}
+
+	// 只查「当前分组该模型的候选渠道」，避免 SCAN。
+	candidateIds := make([]int, 0, len(candidates))
+	for _, candidate := range candidates {
+		candidateIds = append(candidateIds, candidate.ChannelId)
+	}
+	sleeping := GetOverloadSleepExcludedChannels(param.ModelName, candidateIds)
+
+	excluded := make(map[int]struct{}, len(sleeping))
+	for channelId := range sleeping {
+		excluded[channelId] = struct{}{}
+	}
+
+	result, err := model.SelectChannelAvoidingExcluded(candidates, retry, excluded)
+	if err != nil {
+		return nil, err
+	}
+	if result == nil || result.Channel == nil {
+		return nil, errors.New("no available channel after skipping overload sleeping channels")
+	}
+
+	if len(result.SkippedChannelIds) > 0 {
+		skipped := make(map[int]*sleeppool.Entry, len(result.SkippedChannelIds))
+		for _, channelId := range result.SkippedChannelIds {
+			if entry, ok := sleeping[channelId]; ok {
+				skipped[channelId] = entry
+				continue
+			}
+			skipped[channelId] = &sleeppool.Entry{ChannelId: channelId, ModelName: param.ModelName}
+		}
+		RecordOverloadSleepSkip(param.Ctx, param.ModelName, group, skipped)
+	}
+	if result.AllSleeping {
+		SetOverloadSleepAllSleeping(param.Ctx, param.ModelName)
+	}
+	return result.Channel, nil
 }

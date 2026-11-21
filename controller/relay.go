@@ -268,6 +268,13 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError)
 
+		// 过载休眠池：上游返回配置的过载状态码（默认 429/503）时，把 (模型, 渠道) 放入休眠池，
+		// 后续请求将跳过该渠道，直接使用下一渠道。
+		if operation_setting.IsOverloadStatusCode(newAPIError.StatusCode) {
+			service.MarkOverloadSleep(c, relayInfo.OriginModelName, channel,
+				common.GetContextKeyString(c, constant.ContextKeyUsingGroup), newAPIError.StatusCode)
+		}
+
 		if !shouldRetry(c, newAPIError, common.RetryTimes-retryParam.GetRetry()) {
 			break
 		}
@@ -601,6 +608,13 @@ func RelayTask(c *gin.Context) {
 				*types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey,
 					common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()),
 				types.NewOpenAIError(taskErr.Error, types.ErrorCodeBadResponseStatusCode, taskErr.StatusCode))
+		}
+
+		// 过载休眠池：任务提交同样按过载状态码休眠 (模型, 渠道)
+		if !taskErr.LocalError && operation_setting.IsOverloadStatusCode(taskErr.StatusCode) {
+			var triggerChannel *model.Channel = channel
+			service.MarkOverloadSleep(c, relayInfo.OriginModelName, triggerChannel,
+				common.GetContextKeyString(c, constant.ContextKeyUsingGroup), taskErr.StatusCode)
 		}
 
 		if !shouldRetryTaskRelay(c, channel.Id, taskErr, common.RetryTimes-retryParam.GetRetry()) {

@@ -223,6 +223,15 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
+	case "overload_sleep_setting.status_codes":
+		// 过载休眠池：状态码必须可解析，避免写入后整套跳过逻辑失效
+		if err = operation_setting.ValidateOverloadSleepStatusCodes(option.Value.(string)); err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "过载状态码配置非法：" + err.Error(),
+			})
+			return
+		}
 	case "GroupRatio":
 		err = ratio_setting.CheckGroupRatio(option.Value.(string))
 		if err != nil {

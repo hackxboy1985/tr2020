@@ -80,6 +80,7 @@ import {
   Package,
   Server,
   CalendarClock,
+  Moon,
 } from 'lucide-react';
 import {
   SiAtlassian,
@@ -160,6 +161,8 @@ export function getLucideIcon(key, selected = false) {
       return <ImageIcon {...commonProps} color={iconColor} />;
     case 'task':
       return <CheckSquare {...commonProps} color={iconColor} />;
+    case 'overload_sleep':
+      return <Moon {...commonProps} color={iconColor} />;
     case 'topup':
       return <CreditCard {...commonProps} color={iconColor} />;
     case 'channel':

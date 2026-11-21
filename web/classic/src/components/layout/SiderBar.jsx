@@ -45,6 +45,7 @@ const routerMap = {
   detail: '/console',
   pricing: '/pricing',
   task: '/console/task',
+  overload_sleep: '/console/overload_sleep',
   models: '/console/models',
   deployment: '/console/deployment',
   playground: '/console/playground',
@@ -105,10 +106,22 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         className:
           localStorage.getItem('enable_task') === 'true' ? '' : 'tableHiddle',
       },
+      {
+        // 休眠模型：仅管理员可见，不纳入侧边栏模块可配置项
+        text: t('休眠模型'),
+        itemKey: 'overload_sleep',
+        to: '/overload_sleep',
+        adminOnly: true,
+        className: isAdmin() ? '' : 'tableHiddle',
+      },
     ];
 
     // 根据配置过滤项目
     const filteredItems = items.filter((item) => {
+      // item 级别的管理员限定项：普通用户绝对不可见
+      if (item.adminOnly) {
+        return isAdmin() && item.className !== 'tableHiddle';
+      }
       const configVisible = isModuleVisible('console', item.itemKey);
       return configVisible;
     });
@@ -118,6 +131,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
     localStorage.getItem('enable_data_export'),
     localStorage.getItem('enable_drawing'),
     localStorage.getItem('enable_task'),
+    isAdmin(),
     t,
     isModuleVisible,
   ]);

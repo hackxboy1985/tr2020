@@ -51,9 +51,18 @@ export function useSidebarView(): ResolvedSidebarView {
 
   const rootNavGroups = useMemo<NavGroup[]>(() => {
     const isAdmin = userRole !== undefined && userRole >= ROLE.ADMIN
-    return configFilteredRoot.filter((group) =>
-      group.id === 'admin' ? isAdmin : true
-    )
+    return configFilteredRoot
+      .filter((group) => (group.id === 'admin' ? isAdmin : true))
+      .map((group) => ({
+        ...group,
+        // Defense in depth: `useSidebarConfig` already drops item-level
+        // adminOnly entries, re-apply the role gate here so the item can
+        // never leak through another navigation surface.
+        items: group.items.filter(
+          (item) => !item.adminOnly || isAdmin
+        ),
+      }))
+      .filter((group) => group.items.length > 0)
   }, [configFilteredRoot, userRole])
 
   const view = resolveSidebarView(pathname)

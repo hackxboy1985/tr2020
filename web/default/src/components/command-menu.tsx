@@ -23,6 +23,8 @@ import { useTranslation } from 'react-i18next'
 import { useSearch } from '@/context/search-provider'
 import { useTheme } from '@/context/theme-provider'
 import { useSidebarData } from '@/hooks/use-sidebar-data'
+import { useAuthStore } from '@/stores/auth-store'
+import { ROLE } from '@/lib/roles'
 import {
   Command,
   CommandDialog,
@@ -43,10 +45,22 @@ export function CommandMenu() {
   const { open, setOpen } = useSearch()
   const { pathname } = useLocation()
   const sidebarData = useSidebarData()
+  const userRole = useAuthStore((s) => s.auth.user?.role)
 
   // Use the active nested sidebar view's nav groups when one matches
   // the current URL; otherwise fall back to the root navigation.
-  const navGroups = getNavGroupsForPath(pathname, t) ?? sidebarData.navGroups
+  const navGroups = React.useMemo(() => {
+    const groups = getNavGroupsForPath(pathname, t) ?? sidebarData.navGroups
+    const isAdmin = userRole !== undefined && userRole >= ROLE.ADMIN
+    // Mirror the sidebar's item-level admin gate so admin-only destinations
+    // are not discoverable through the command palette.
+    return groups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => !item.adminOnly || isAdmin),
+      }))
+      .filter((group) => group.items.length > 0)
+  }, [pathname, t, sidebarData.navGroups, userRole])
 
   const runCommand = React.useCallback(
     (command: () => unknown) => {

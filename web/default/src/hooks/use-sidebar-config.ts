@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useMemo } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
 import { useStatus } from '@/hooks/use-status'
+import { ROLE } from '@/lib/roles'
 import type { NavGroup, NavItem } from '@/components/layout/types'
 
 type SidebarSectionConfig = {
@@ -220,6 +221,22 @@ function isModuleEnabled(
 }
 
 /**
+ * Item-level admin gate.
+ *
+ * Items flagged with `adminOnly` must never be shown to non-admins, even when
+ * they have no entry in `URL_TO_CONFIG_MAP` (unmapped URLs default to
+ * visible). While the role is still unknown we hide the item to avoid a
+ * transient leak of admin-only navigation.
+ */
+function isItemAllowedForRole(
+  item: { adminOnly?: boolean },
+  userRole?: number
+): boolean {
+  if (!item.adminOnly) return true
+  return userRole !== undefined && userRole >= ROLE.ADMIN
+}
+
+/**
  * Check if a navigation item should be visible
  */
 function isNavItemVisible(
@@ -228,6 +245,8 @@ function isNavItemVisible(
   userConfig: SidebarModulesUserConfig,
   userRole?: number
 ): boolean {
+  if (!isItemAllowedForRole(item, userRole)) return false
+
   // Handle dynamic chat presets type — also runs the admin × user AND gate
   if ('type' in item && item.type === 'chat-presets') {
     const adminChat = adminConfig.chat
@@ -284,8 +303,15 @@ function filterNavItems(
     .map((item) => {
       // If collapsible item, also filter its sub-items
       if ('items' in item && item.items) {
-        const filteredSubItems = item.items.filter((subItem) =>
-          isModuleEnabled(subItem.url as string, adminConfig, userConfig, userRole)
+        const filteredSubItems = item.items.filter(
+          (subItem) =>
+            isItemAllowedForRole(subItem, userRole) &&
+            isModuleEnabled(
+              subItem.url as string,
+              adminConfig,
+              userConfig,
+              userRole
+            )
         )
 
         return {

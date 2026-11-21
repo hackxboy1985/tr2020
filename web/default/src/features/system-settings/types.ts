@@ -284,6 +284,7 @@ export type OperationsSettings = {
   'monitor_setting.auto_test_channel_enabled': boolean
   'monitor_setting.auto_test_channel_minutes': number
   NotifyOnChannelStatusChange: boolean
+  ZeroTpsThreshold: number
   SMTPServer: string
   SMTPPort: string
   SMTPAccount: string
@@ -295,6 +296,7 @@ export type OperationsSettings = {
   WorkerValidKey: string
   WorkerAllowHttpImageRequestEnabled: boolean
   LogConsumeEnabled: boolean
+  LogUpstreamRequestEnabled: boolean
   SavePromptEnabled: boolean
   SavePromptUserVisible: boolean
   SavePromptBodyMaxBytes: number
@@ -310,6 +312,9 @@ export type OperationsSettings = {
   'perf_metrics_setting.flush_interval': number
   'perf_metrics_setting.bucket_time': 'hour' | 'minute' | '5min'
   'perf_metrics_setting.retention_days': number
+  'overload_sleep_setting.enabled': boolean
+  'overload_sleep_setting.sleep_minutes': number
+  'overload_sleep_setting.status_codes': string
 }
 
 export type SecuritySettings = {

@@ -40,6 +40,8 @@ const defaultOperationsSettings: OperationsSettings = {
     '100-199,300-399,401-407,409-499,500-503,505-523,525-599',
   'monitor_setting.auto_test_channel_enabled': false,
   'monitor_setting.auto_test_channel_minutes': 10,
+  NotifyOnChannelStatusChange: false,
+  ZeroTpsThreshold: 5,
   SMTPServer: '',
   SMTPPort: '',
   SMTPAccount: '',
@@ -51,6 +53,7 @@ const defaultOperationsSettings: OperationsSettings = {
   WorkerValidKey: '',
   WorkerAllowHttpImageRequestEnabled: false,
   LogConsumeEnabled: false,
+  LogUpstreamRequestEnabled: false,
   SavePromptEnabled: false,
   SavePromptUserVisible: false,
   SavePromptBodyMaxBytes: 500,
@@ -66,6 +69,9 @@ const defaultOperationsSettings: OperationsSettings = {
   'perf_metrics_setting.flush_interval': 5,
   'perf_metrics_setting.bucket_time': 'hour',
   'perf_metrics_setting.retention_days': 0,
+  'overload_sleep_setting.enabled': false,
+  'overload_sleep_setting.sleep_minutes': 2,
+  'overload_sleep_setting.status_codes': '429,503',
 }
 
 export function OperationsSettings() {

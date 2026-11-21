@@ -622,6 +622,9 @@ func handleConfigUpdate(key, value string) bool {
 		billingexpr.InvalidateCache() // 清除表达式编译缓存
 	} else if configName == "theme" {
 		system_setting.UpdateAndSyncTheme()
+	} else if configName == "overload_sleep_setting" {
+		// 归一化休眠分钟数与状态码区间，并刷新解析缓存
+		operation_setting.NormalizeOverloadSleepSetting()
 	}
 
 	return true // 已处理

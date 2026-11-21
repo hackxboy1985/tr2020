@@ -199,6 +199,14 @@ func SetApiRouter(router *gin.Engine) {
 			optionRoute.POST("/waffo-pancake/subscription-product-options", controller.ListWaffoPancakeSubscriptionProductOptions)
 		}
 
+		// 过载休眠池管理（管理员可见；写入休眠池本身由中继流程触发）
+		sleepPoolRoute := apiRouter.Group("/channel_sleep_pool")
+		sleepPoolRoute.Use(middleware.AdminAuth())
+		{
+			sleepPoolRoute.GET("/", controller.GetChannelSleepPool)
+			sleepPoolRoute.DELETE("/", controller.DeleteChannelSleepPoolEntry)
+		}
+
 		// Custom OAuth provider management (root only)
 		customOAuthRoute := apiRouter.Group("/custom-oauth-provider")
 		customOAuthRoute.Use(middleware.RootAuth())

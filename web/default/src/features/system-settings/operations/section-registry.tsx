@@ -37,6 +37,12 @@ const OPERATIONS_SECTIONS = [
           DefaultCollapseSidebar: settings.DefaultCollapseSidebar,
           DemoSiteEnabled: settings.DemoSiteEnabled,
           SelfUseModeEnabled: settings.SelfUseModeEnabled,
+          'overload_sleep_setting.enabled':
+            settings['overload_sleep_setting.enabled'] ?? false,
+          'overload_sleep_setting.sleep_minutes':
+            settings['overload_sleep_setting.sleep_minutes'] ?? 2,
+          'overload_sleep_setting.status_codes':
+            settings['overload_sleep_setting.status_codes'] ?? '429,503',
         }}
       />
     ),
@@ -60,6 +66,7 @@ const OPERATIONS_SECTIONS = [
           'monitor_setting.auto_test_channel_minutes':
             settings['monitor_setting.auto_test_channel_minutes'],
           NotifyOnChannelStatusChange: settings.NotifyOnChannelStatusChange,
+          ZeroTpsThreshold: settings.ZeroTpsThreshold ?? 5,
         }}
       />
     ),

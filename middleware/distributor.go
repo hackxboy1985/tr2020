@@ -104,7 +104,13 @@ func Distribute() func(c *gin.Context) {
 				if preferredChannelID, found := service.GetPreferredChannelByAffinity(c, modelRequest.Model, usingGroup); found {
 					affinityUsable := false
 					preferred, err := model.CacheGetChannel(preferredChannelID)
-					if err == nil && preferred != nil && preferred.Status == common.ChannelStatusEnabled {
+					preferredUsable := err == nil && preferred != nil && preferred.Status == common.ChannelStatusEnabled
+					// 过载休眠池：优先（亲和）渠道若正处于休眠期，本次请求不使用亲和渠道，
+					// 让它走下面的正常选择逻辑（该逻辑会跳过所有休眠渠道并写跳过日志）。
+					if preferredUsable && service.IsChannelOverloadSleeping(c, modelRequest.Model, usingGroup, preferred) {
+						preferredUsable = false
+					}
+					if preferredUsable {
 						if usingGroup == "auto" {
 							userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
 							autoGroups := service.GetUserAutoGroup(userGroup)

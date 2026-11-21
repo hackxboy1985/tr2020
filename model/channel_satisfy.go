@@ -43,6 +43,9 @@ func IsChannelEnabledForAnyGroupModel(groups []string, modelName string, channel
 }
 
 func isChannelEnabledForGroupModelDB(group string, modelName string, channelID int) bool {
+	if DB == nil {
+		return false
+	}
 	var count int64
 	err := DB.Model(&Ability{}).
 		Where(commonGroupCol+" = ? and model = ? and channel_id = ? and enabled = ?", group, modelName, channelID, true).

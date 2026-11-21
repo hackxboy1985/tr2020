@@ -28,6 +28,13 @@ type BaseNavItem = {
   icon?: React.ElementType
   activeUrls?: (LinkProps['to'] | (string & {}))[]
   configUrls?: (LinkProps['to'] | (string & {}))[]
+  /**
+   * Item-level admin gate. Entries marked `adminOnly` are hidden from any
+   * user whose role is below ROLE.ADMIN, regardless of the
+   * `sidebar_modules` configuration. Use it for admin-only pages that are
+   * not part of the configurable sidebar modules map.
+   */
+  adminOnly?: boolean
 }
 
 /**
