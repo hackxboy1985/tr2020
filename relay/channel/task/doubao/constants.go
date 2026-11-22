@@ -46,10 +46,19 @@ var videoPriceMap = map[string]videoResolutionPrices{
 	// doubao-seedance-2.5
 	//   480p/720p：不含视频 70.00，含视频 42.00
 	//   1080p    ：不含视频 77.00，含视频 46.00
+	//   4k       ：不含视频 31.00，含视频 19.00
 	"doubao-seedance-2-5-260628": {
 		Resolution480P:  {70.0, 42.0},
 		Resolution720P:  {70.0, 42.0},
 		Resolution1080P: {77.0, 46.0},
+		Resolution4K:    {31.0, 19.0},
+	},
+
+	// doubao-seedance-2.5-flash（仅支持 480p/720p，两档同价）
+	//   480p/720p：不含视频 46.00，含视频 28.00
+	"doubao-seedance-2-5-flash-261115": {
+		Resolution480P: {46.0, 28.0},
+		Resolution720P: {46.0, 28.0},
 	},
 
 	// doubao-seedance-2.0

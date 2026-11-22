@@ -13,10 +13,11 @@ import (
 )
 
 const (
-	model25   = "doubao-seedance-2-5-260628"
-	model20   = "doubao-seedance-2-0-260128"
-	modelFast = "doubao-seedance-2-0-fast-260128"
-	modelMini = "doubao-seedance-2-0-mini-260615"
+	model25    = "doubao-seedance-2-5-260628"
+	model20    = "doubao-seedance-2-0-260128"
+	modelFast  = "doubao-seedance-2-0-fast-260128"
+	modelMini  = "doubao-seedance-2-0-mini-260615"
+	modelFlash = "doubao-seedance-2-5-flash-261115"
 )
 
 func almostEqual(a, b float64) bool {
@@ -37,6 +38,7 @@ func TestVideoResolutionPriceTable(t *testing.T) {
 		{model25, "480p", 70.0, 42.0},
 		{model25, "720p", 70.0, 42.0},
 		{model25, "1080p", 77.0, 46.0},
+		{model25, "4k", 31.0, 19.0},
 		// doubao-seedance-2.0
 		{model20, "480p", 46.0, 28.0},
 		{model20, "720p", 46.0, 28.0},
@@ -48,6 +50,9 @@ func TestVideoResolutionPriceTable(t *testing.T) {
 		// doubao-seedance-2.0-mini
 		{modelMini, "480p", 23.0, 14.0},
 		{modelMini, "720p", 23.0, 14.0},
+		// doubao-seedance-2.5-flash（仅 480p/720p）
+		{modelFlash, "480p", 46.0, 28.0},
+		{modelFlash, "720p", 46.0, 28.0},
 	}
 	for _, tc := range cases {
 		gotWithout, gotWith, ok := GetVideoResolutionPrice(tc.model, tc.resolution)
@@ -72,11 +77,14 @@ func TestVideoInputRatioValues(t *testing.T) {
 		{model25, "480p", 42.0 / 70.0},
 		{model25, "720p", 42.0 / 70.0},
 		{model25, "1080p", 46.0 / 77.0},
+		{model25, "4k", 19.0 / 31.0},
 		{model20, "480p", 28.0 / 46.0},
 		{model20, "1080p", 31.0 / 51.0},
 		{model20, "4k", 16.0 / 26.0},
 		{modelFast, "720p", 22.0 / 37.0},
 		{modelMini, "720p", 14.0 / 23.0},
+		{modelFlash, "480p", 28.0 / 46.0},
+		{modelFlash, "720p", 28.0 / 46.0},
 	}
 	for _, tc := range cases {
 		without, with, ok := GetVideoResolutionPrice(tc.model, tc.resolution)
@@ -113,10 +121,7 @@ func TestUnlistedResolutionHasNoPrice(t *testing.T) {
 	if _, _, ok := GetVideoResolutionPrice(modelMini, "1080p"); ok {
 		t.Fatal("mini 未配置 1080p，不应回退返回价格")
 	}
-	// 2.5 未配置 4k
-	if _, _, ok := GetVideoResolutionPrice(model25, "4k"); ok {
-		t.Fatal("2.5 未配置 4k，不应回退返回价格")
-	}
+
 }
 
 // ---------------------------------------------------------------------------

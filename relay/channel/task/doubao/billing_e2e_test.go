@@ -48,6 +48,8 @@ func TestQuotaEndToEnd(t *testing.T) {
 		{"2.5/480p/含视频", model25, "480p", true, 42.0},
 		{"2.5/720p/含视频", model25, "720p", true, 42.0},
 		{"2.5/1080p/含视频", model25, "1080p", true, 46.0},
+		{"2.5/4k/不含视频", model25, "4k", false, 31.0},
+		{"2.5/4k/含视频", model25, "4k", true, 19.0},
 	}
 
 	for _, tc := range cases {
