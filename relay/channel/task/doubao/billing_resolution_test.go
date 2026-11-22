@@ -99,10 +99,7 @@ func TestVideoInputRatioValues(t *testing.T) {
 }
 
 func TestUnknownModelHasNoPrice(t *testing.T) {
-	if _, _, ok := GetVideoResolutionPrice("doubao-seedance-1-5-pro-251215", "720p"); ok {
-		t.Fatal("未配置价格表的模型不应返回价格")
-	}
-	if _, _, ok := GetVideoResolutionPrice("doubao-seedance-1-5-pro-251215", "720p"); ok {
+	if _, _, ok := GetVideoResolutionPrice("doubao-seedance-unknown", "720p"); ok {
 		t.Fatal("未配置价格表的模型不应返回价格")
 	}
 }
@@ -378,10 +375,10 @@ func TestEstimateBillingUnknownResolution(t *testing.T) {
 // 未配置价格表的模型不应产生任何倍率
 func TestEstimateBillingUnconfiguredModel(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	c, _ := newTestContext(`{"model":"doubao-seedance-1-5-pro-251215","resolution":"1080p","prompt":"p"}`)
+	c, _ := newTestContext(`{"model":"doubao-seedance-unknown","resolution":"1080p","prompt":"p"}`)
 	info := &relaycommon.RelayInfo{
-		OriginModelName: "doubao-seedance-1-5-pro-251215",
-		ChannelMeta:     &relaycommon.ChannelMeta{UpstreamModelName: "doubao-seedance-1-5-pro-251215"},
+		OriginModelName: "doubao-seedance-unknown",
+		ChannelMeta:     &relaycommon.ChannelMeta{UpstreamModelName: "doubao-seedance-unknown"},
 	}
 	if got := (&TaskAdaptor{}).EstimateBilling(c, info); len(got) != 0 {
 		t.Fatalf("未配置模型不应产生倍率, got=%v", got)
