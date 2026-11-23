@@ -145,6 +145,64 @@ func ChannelModelMappingReturnsToOrigin(mappingJSON string, fallbackModel string
 	return false
 }
 
+// IsAutoGroupRequest 本次请求的 API 密钥是否使用 auto 分组。
+//
+// 语义（与 auto 分组现有跨分组重试保持一致）：
+//   - 密钥 Group 为 "auto"：允许在多个分组间切换，只会在「用户有权限的分组」内选择；
+//   - 密钥指定了某个具体分组：不允许跨分组，所有选择都只能在该分组内完成。
+func IsAutoGroupRequest(c *gin.Context) bool {
+	if c == nil {
+		return false
+	}
+	return common.GetContextKeyString(c, constant.ContextKeyTokenGroup) == "auto"
+}
+
+// FallbackSearchGroups 返回「备用模型兜底时应当搜索的分组列表」及其顺序。
+//
+// 规则（用户明确要求）：
+//   - auto 分组：重走 auto 分组链，按 auto 顺序逐个分组查找备用模型渠道，
+//     只会包含用户有权限的分组（与 auto 现有跨分组重试语义一致）；
+//     走到哪个分组就用哪个分组的分组倍率。
+//   - 指定分组：只在密钥指定的那个分组内查找；查不到就放弃兜底，
+//     回到「原模型休眠池中的最后一个渠道」重试。
+//
+// currentGroup 是原模型本次实际命中的分组（auto 模式下即当前分组），
+// 作为搜索起点，保证优先在当前分组内兜底。
+func FallbackSearchGroups(c *gin.Context, currentGroup string) []string {
+	if c == nil {
+		return nil
+	}
+	groups := make([]string, 0, 4)
+
+	if !IsAutoGroupRequest(c) {
+		// 指定分组：只允许在该分组内兜底，绝不跨分组
+		if currentGroup != "" {
+			groups = append(groups, currentGroup)
+		}
+		return groups
+	}
+
+	// auto 分组：按 auto 分组链的顺序搜索，只保留用户有权限的分组
+	userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
+	usable := GetUserUsableGroups(userGroup)
+	seen := make(map[string]struct{}, len(groups))
+	// 当前分组优先
+	if currentGroup != "" {
+		if _, ok := usable[currentGroup]; ok {
+			groups = append(groups, currentGroup)
+			seen[currentGroup] = struct{}{}
+		}
+	}
+	for _, group := range GetUserAutoGroup(userGroup) {
+		if _, ok := seen[group]; ok {
+			continue
+		}
+		seen[group] = struct{}{}
+		groups = append(groups, group)
+	}
+	return groups
+}
+
 // FilterChannelsCausingFallbackCycle 从候选渠道中剔除「会把备用模型映射回原模型」的渠道。
 //
 // 返回可用于兜底的渠道 ID 列表，以及被剔除的渠道信息（供日志说明）。

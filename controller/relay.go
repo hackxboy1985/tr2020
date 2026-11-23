@@ -378,33 +378,59 @@ func tryFallbackModel(
 		return channel
 	}
 
-	candidates := model.GetSatisfiedChannelCandidates(selectGroup, fallbackModel)
-	if len(candidates) == 0 {
-		logger.LogInfo(c, fmt.Sprintf("备用模型兜底：备用模型 %s 在分组 %s 下没有可用渠道，回退到原模型的最后一个渠道", fallbackModel, selectGroup))
+	// 分组范围门控（关键，用户明确要求）：
+	//   - 密钥指定了某个具体分组：只在那个分组内查找备用模型渠道，查不到就放弃兜底，
+	//     回退到「原模型休眠池中的最后一个渠道」，绝不跨分组；
+	//   - 密钥是 auto 分组：重走 auto 分组链，按顺序在各分组内查找备用模型渠道，
+	//     只会在「用户有权限的分组」内查找（与 auto 现有跨分组重试语义一致），
+	//     最终走到哪个分组，就按哪个分组的分组倍率计费。
+	searchGroups := service.FallbackSearchGroups(c, selectGroup)
+	if len(searchGroups) == 0 {
+		logger.LogInfo(c, "备用模型兜底：当前请求没有可用于兜底的分组（密钥指定分组时不会跨分组），回退到原模型的最后一个渠道")
 		return channel
 	}
 
-	// 剔除「会把备用模型映射回原模型」的渠道，避免死循环
-	kept, skipped := service.FilterChannelsCausingFallbackCycle(c, candidates, originModel, fallbackModel)
-	if len(kept) == 0 {
-		logger.LogInfo(c, fmt.Sprintf("备用模型兜底：备用模型 %s 的渠道都会绕回原模型 %s（共跳过 %d 个渠道），放弃兜底，回退到原模型的最后一个渠道", fallbackModel, originModel, len(skipped)))
-		return channel
+	var (
+		result      *model.ChannelSelectionResult
+		resultGroup string
+		allSkipped  []string
+	)
+	for _, group := range searchGroups {
+		candidates := model.GetSatisfiedChannelCandidates(group, fallbackModel)
+		if len(candidates) == 0 {
+			continue
+		}
+		// 剔除「会把备用模型映射回原模型」的渠道，避免死循环
+		groupKept, skipped := service.FilterChannelsCausingFallbackCycle(c, candidates, originModel, fallbackModel)
+		allSkipped = append(allSkipped, skipped...)
+		if len(groupKept) == 0 {
+			continue
+		}
+		// 备用模型自身也要跳过处于休眠中的渠道
+		candidateIds := make([]int, 0, len(groupKept))
+		for _, candidate := range groupKept {
+			candidateIds = append(candidateIds, candidate.ChannelId)
+		}
+		sleeping := service.GetOverloadSleepExcludedChannels(fallbackModel, candidateIds)
+		exclude := make(map[int]struct{}, len(sleeping))
+		for channelId := range sleeping {
+			exclude[channelId] = struct{}{}
+		}
+		selected, selectErr := model.SelectChannelAvoidingExcluded(groupKept, retryParam.GetRetry(), exclude)
+		if selectErr != nil || selected == nil || selected.Channel == nil {
+			continue
+		}
+		result = selected
+		resultGroup = group
+		break
 	}
 
-	// 备用模型自身也要跳过处于休眠中的渠道
-	candidateIds := make([]int, 0, len(kept))
-	for _, candidate := range kept {
-		candidateIds = append(candidateIds, candidate.ChannelId)
-	}
-	sleeping := service.GetOverloadSleepExcludedChannels(fallbackModel, candidateIds)
-	exclude := make(map[int]struct{}, len(sleeping))
-	for channelId := range sleeping {
-		exclude[channelId] = struct{}{}
-	}
-
-	result, err := model.SelectChannelAvoidingExcluded(kept, retryParam.GetRetry(), exclude)
-	if err != nil || result == nil || result.Channel == nil {
-		logger.LogInfo(c, fmt.Sprintf("备用模型兜底：为备用模型 %s 选择渠道失败，回退到原模型的最后一个渠道", fallbackModel))
+	if result == nil || result.Channel == nil {
+		if len(allSkipped) > 0 {
+			logger.LogInfo(c, fmt.Sprintf("备用模型兜底：备用模型 %s 在可搜索分组的渠道都会绕回原模型 %s（共跳过 %d 个渠道），放弃兜底，回退到原模型的最后一个渠道", fallbackModel, originModel, len(allSkipped)))
+		} else {
+			logger.LogInfo(c, fmt.Sprintf("备用模型兜底：备用模型 %s 在可搜索分组 [%s] 下没有可用渠道，放弃兜底，回退到原模型的最后一个渠道", fallbackModel, strings.Join(searchGroups, ",")))
+		}
 		return channel
 	}
 
@@ -433,11 +459,10 @@ func tryFallbackModel(
 	// 分组倍率按「备用模型实际命中的分组」重算并补扣差额。
 	//
 	// 为什么要重算：分组倍率在选渠道前就已写进 PriceData.GroupRatioInfo，
-	// 而备用模型可能只存在于另一个分组（例如原模型在 default 组、备用模型在 vip 组），
-	// 两者分组倍率不同。按约定，兜底后应按实际使用的分组倍率计费。
-	// selectGroup 是本次从主导航流程一路传下来的分组，
-	// 备用模型的候选渠道就是从这个分组里检索的，因此它就是「实际命中的分组」。
-	applyFallbackGroupRatio(c, info, selectGroup)
+	// 而 auto 分组下备用模型可能命中另一个分组（例如原模型在 default 组、
+	// 备用模型只在 vip 组），两者分组倍率不同。
+	// 按约定（用户明确要求）：走到哪个分组，就按哪个分组的分组倍率计费。
+	applyFallbackGroupRatio(c, info, resultGroup)
 
 	return result.Channel
 }
@@ -460,15 +485,25 @@ func applyFallbackGroupRatio(c *gin.Context, info *relaycommon.RelayInfo, target
 	oldGroupRatio := info.PriceData.GroupRatioInfo.GroupRatio
 	previousGroup := info.UsingGroup
 
-	// 用「备用模型实际命中的分组」重新计算分组倍率
+	// 用「备用模型实际命中的分组」重新计算分组倍率。
+	// 注意：即使两个分组倍率恰好相同，也必须把 UsingGroup 与 auto_group 更新为目标分组，
+	// 否则日志、结算记录里的分组会与实际使用的渠道不一致。
 	info.UsingGroup = targetGroup
 	newGroupRatioInfo := helper.HandleGroupRatio(c, info)
-	if newGroupRatioInfo.GroupRatio == oldGroupRatio {
-		// 两个分组倍率相同（常见：多分组共用一个倍率），值不用改
-		return
-	}
 	info.PriceData.GroupRatioInfo = newGroupRatioInfo
 	common.SetContextKey(c, constant.ContextKeyAutoGroup, targetGroup)
+
+	// auto 分组下，后续重试必须从「备用模型命中的这个分组」重新开始找渠道，
+	// 否则会延续原模型遗留的分组游标，跳过本该命中的分组。
+	resetAutoGroupCursor(c, targetGroup)
+
+	if newGroupRatioInfo.GroupRatio == oldGroupRatio {
+		// 倍率恰好相同：只需同步分组信息，无需补扣
+		logger.LogInfo(c, fmt.Sprintf(
+			"备用模型兜底：实际使用分组 %s（原分组 %s），分组倍率保持 %v",
+			targetGroup, previousGroup, newGroupRatioInfo.GroupRatio))
+		return
+	}
 
 	logger.LogInfo(c, fmt.Sprintf(
 		"备用模型兜底：实际使用分组 %s（原分组 %s），分组倍率 %v -> %v",
@@ -484,6 +519,27 @@ func applyFallbackGroupRatio(c *gin.Context, info *relaycommon.RelayInfo, target
 			}
 		}
 	}
+}
+
+// resetAutoGroupCursor 把 auto 分组的选择游标重置到「目标分组」，
+// 保证备用模型兜底后的后续重试仍从该分组开始，而不是沿用原模型留下的游标。
+// 仅对 auto 分组请求生效；指定分组的请求不涉及分组游标。
+func resetAutoGroupCursor(c *gin.Context, targetGroup string) {
+	if c == nil || targetGroup == "" || !service.IsAutoGroupRequest(c) {
+		return
+	}
+	userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
+	autoGroups := service.GetUserAutoGroup(userGroup)
+	for index, group := range autoGroups {
+		if group == targetGroup {
+			common.SetContextKey(c, constant.ContextKeyAutoGroupIndex, index)
+			common.SetContextKey(c, constant.ContextKeyAutoGroupRetryIndex, 0)
+			return
+		}
+	}
+	// 目标分组不在 auto 链里（理论上不会发生），回到链首，避免卡在越界索引
+	common.SetContextKey(c, constant.ContextKeyAutoGroupIndex, 0)
+	common.SetContextKey(c, constant.ContextKeyAutoGroupRetryIndex, 0)
 }
 
 func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service.RetryParam) (*model.Channel, *types.NewAPIError) {
