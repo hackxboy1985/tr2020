@@ -2,6 +2,7 @@ package doubao
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -97,9 +98,9 @@ type responseTask struct {
 	Usage struct {
 		CompletionTokens int `json:"completion_tokens"`
 		TotalTokens      int `json:"total_tokens"`
-		ToolUsage        struct {
-			WebSearch int `json:"web_search,omitempty"`
-		} `json:"tool_usage,omitempty"`
+		// Tool usage is not used for billing. Preserve its raw JSON so upstream
+		// web_search type changes cannot block task status or result parsing.
+		ToolUsage json.RawMessage `json:"tool_usage,omitempty"`
 	} `json:"usage"`
 	Error struct {
 		Code    string `json:"code"`
