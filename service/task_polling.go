@@ -385,6 +385,25 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 
 	logger.LogDebug(ctx, "updateVideoSingleTask response: %s", responseBody)
 
+	return ApplyVideoTaskResult(ctx, adaptor, task, responseBody)
+}
+
+// ApplyVideoTaskResult is shared by polling and client-triggered upstream fetches.
+// Only the winner of a nonterminal-to-terminal transition may settle billing.
+func ApplyVideoTaskResult(ctx context.Context, adaptor TaskPollingAdaptor, task *model.Task, responseBody []byte) error {
+	if task == nil {
+		return fmt.Errorf("cannot apply video result to nil task")
+	}
+	if task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure || task.Status == model.TaskStatusCancelled {
+		return nil
+	}
+	// Work on a copy so a parse/write error cannot expose an uncommitted
+	// terminal state through the realtime caller's fallback response.
+	originalTask := task
+	workingTask := *task
+	task = &workingTask
+	taskId := task.GetUpstreamTaskID()
+	var err error
 	snap := task.Snapshot()
 
 	taskResult := &relaycommon.TaskInfo{}
@@ -403,6 +422,9 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		return fmt.Errorf("parseTaskResult failed for task %s: %w", taskId, err)
 	}
 
+	if taskResult == nil {
+		return fmt.Errorf("parseTaskResult returned nil for task %s", taskId)
+	}
 	task.Data = redactVideoResponseBody(responseBody)
 
 	// 若 adaptor 解析出源头任务 ID，存入 PrivateData 供计费日志使用
@@ -506,25 +528,23 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		task.Progress = taskResult.Progress
 	}
 
-	isDone := task.Status == model.TaskStatusSuccess || task.Status == model.TaskStatusFailure || task.Status == model.TaskStatusCancelled
-	if isDone && snap.Status != task.Status {
+	if !snap.Equal(task.Snapshot()) {
 		won, err := task.UpdateWithStatus(snap.Status)
 		if err != nil {
-			logger.LogError(ctx, fmt.Sprintf("UpdateWithStatus failed for task %s: %s", task.TaskID, err.Error()))
-			shouldRefund = false
-			shouldSettle = false
-		} else if !won {
-			logger.LogWarn(ctx, fmt.Sprintf("Task %s already transitioned by another process, skip billing", task.TaskID))
-			shouldRefund = false
-			shouldSettle = false
+			return fmt.Errorf("update video task %s: %w", task.TaskID, err)
 		}
-	} else if !snap.Equal(task.Snapshot()) {
-		if _, err := task.UpdateWithStatus(snap.Status); err != nil {
-			logger.LogError(ctx, fmt.Sprintf("Failed to update task %s: %s", task.TaskID, err.Error()))
+		if !won {
+			logger.LogInfo(ctx, fmt.Sprintf("Task %s already transitioned by another process, skip billing", task.TaskID))
+			latest, exists, err := model.GetByTaskId(task.UserId, task.TaskID)
+			if err != nil {
+				return err
+			}
+			if !exists {
+				return fmt.Errorf("task %s disappeared during update", task.TaskID)
+			}
+			*originalTask = *latest
+			return nil
 		}
-	} else {
-		// No changes, skip update
-		logger.LogDebug(ctx, "No update needed for task %s", task.TaskID)
 	}
 
 	if shouldSettle {
@@ -534,6 +554,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		RefundTaskQuota(ctx, task, task.FailReason, responseBody)
 	}
 
+	*originalTask = *task
 	return nil
 }
 

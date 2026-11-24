@@ -2,6 +2,7 @@ package relay
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -347,10 +348,10 @@ func recalcQuotaFromRatios(info *relaycommon.RelayInfo, ratios map[string]float6
 }
 
 var fetchRespBuilders = map[int]func(c *gin.Context) (respBody []byte, taskResp *dto.TaskError){
-	relayconstant.RelayModeSunoFetchByID:        sunoFetchByIDRespBodyBuilder,
-	relayconstant.RelayModeSunoFetch:            sunoFetchRespBodyBuilder,
-	relayconstant.RelayModeVideoFetchByID:       videoFetchByIDRespBodyBuilder,
-	relayconstant.RelayModeImageTaskFetchByID:   imageTaskFetchByIDRespBodyBuilder,
+	relayconstant.RelayModeSunoFetchByID:      sunoFetchByIDRespBodyBuilder,
+	relayconstant.RelayModeSunoFetch:          sunoFetchRespBodyBuilder,
+	relayconstant.RelayModeVideoFetchByID:     videoFetchByIDRespBodyBuilder,
+	relayconstant.RelayModeImageTaskFetchByID: imageTaskFetchByIDRespBodyBuilder,
 }
 
 func RelayTaskFetch(c *gin.Context, relayMode int) (taskResp *dto.TaskError) {
@@ -637,39 +638,16 @@ func tryDoubaoRealtimeFetch(task *model.Task, c *gin.Context) []byte {
 	logger.LogInfo(c, fmt.Sprintf("[Doubao实时查询] 上游响应状态码: %d", resp.StatusCode))
 	logger.LogInfo(c, fmt.Sprintf("[Doubao实时查询] 上游响应体: %s", string(body)))
 
-	logger.LogInfo(c, fmt.Sprintf("[Doubao实时查询] 上游响应: %s", string(body)))
-
-	ti, err := adaptor.ParseTaskResult(body)
-	if err != nil || ti == nil {
-		logger.LogError(c, fmt.Sprintf("[Doubao实时查询] 解析响应失败: %v", err))
+	if resp.StatusCode != http.StatusOK {
 		return nil
 	}
 
-	snap := task.Snapshot()
-
-	// 更新任务状态
-	if ti.Status != "" {
-		task.Status = model.TaskStatus(ti.Status)
+	if err := service.ApplyVideoTaskResult(c.Request.Context(), adaptor, task, body); err != nil {
+		logger.LogError(c, fmt.Sprintf("[Doubao实时查询] 处理任务结果失败: %v", err))
+		return nil
 	}
-	if ti.Progress != "" {
-		task.Progress = ti.Progress
-	}
-	if ti.Url != "" {
-		task.PrivateData.ResultURL = ti.Url
-	}
-
-	// 保存上游完整的原始响应到 Data 字段（不修改，便于调试和分析）
-	task.Data = body
-
-	// 保存到数据库
-	if !snap.Equal(task.Snapshot()) {
-		_, err := task.UpdateWithStatus(snap.Status)
-		if err != nil {
-			logger.LogError(c, fmt.Sprintf("[Doubao实时查询] 更新任务失败: %v", err))
-		} else {
-			logger.LogInfo(c, fmt.Sprintf("[Doubao实时查询] 任务 %s 状态已更新: %s", task.TaskID, ti.Status))
-		}
-	}
+	// A competing poller may already have committed a different result.
+	body = task.Data
 
 	// 构建返回给下游的响应：删除内部字段，保持 id 为上游任务ID
 	var responseData map[string]interface{}
@@ -804,42 +782,9 @@ func tryOpenAIVideoRealtimeFetch(task *model.Task, c *gin.Context) []byte {
 		return nil
 	}
 
-	// 解析上游响应（Doubao 格式）
-	var upstreamResp map[string]interface{}
-	if err := common.Unmarshal(body, &upstreamResp); err != nil {
-		logger.LogError(c, fmt.Sprintf("[OpenAI Video实时查询] 解析响应失败: %v", err))
+	if err := service.ApplyVideoTaskResult(c.Request.Context(), adaptor, task, body); err != nil {
+		logger.LogError(c, fmt.Sprintf("[OpenAI Video实时查询] 处理任务结果失败: %v", err))
 		return nil
-	}
-
-	// 更新本地任务状态
-	snap := task.Snapshot()
-
-	// 提取状态信息
-	if status, ok := upstreamResp["status"].(string); ok {
-		task.Status = model.DoubaoStatusToInternal(status)
-	}
-	if progress, ok := upstreamResp["progress"].(float64); ok {
-		task.Progress = fmt.Sprintf("%.0f", progress)
-	}
-	if videoResults, ok := upstreamResp["video_result"].([]interface{}); ok && len(videoResults) > 0 {
-		if firstResult, ok := videoResults[0].(map[string]interface{}); ok {
-			if url, ok := firstResult["url"].(string); ok {
-				task.PrivateData.ResultURL = url
-			}
-		}
-	}
-
-	// 保存上游完整的原始响应到 Data 字段
-	task.Data = body
-
-	// 保存到数据库
-	if !snap.Equal(task.Snapshot()) {
-		_, err := task.UpdateWithStatus(snap.Status)
-		if err != nil {
-			logger.LogError(c, fmt.Sprintf("[OpenAI Video实时查询] 更新任务失败: %v", err))
-		} else {
-			logger.LogInfo(c, fmt.Sprintf("[OpenAI Video实时查询] 任务 %s 状态已更新: %s", task.TaskID, task.Status))
-		}
 	}
 
 	// 转换为 OpenAI Video 格式
@@ -894,32 +839,15 @@ func tryRealtimeFetch(task *model.Task, isOpenAIVideoAPI bool) []byte {
 		return nil
 	}
 
-	ti, err := adaptor.ParseTaskResult(body)
-	if err != nil || ti == nil {
+	if resp.StatusCode != http.StatusOK {
 		return nil
 	}
 
-	snap := task.Snapshot()
-
-	// 将上游最新状态更新到 task
-	if ti.Status != "" {
-		task.Status = model.TaskStatus(ti.Status)
+	if err := service.ApplyVideoTaskResult(context.Background(), adaptor, task, body); err != nil {
+		logger.LogError(context.Background(), fmt.Sprintf("[Video实时查询] 处理任务结果失败: %v", err))
+		return nil
 	}
-	if ti.Progress != "" {
-		task.Progress = ti.Progress
-	}
-	if strings.HasPrefix(ti.Url, "data:") {
-		// data: URI — kept in Data, not ResultURL
-	} else if ti.Url != "" {
-		task.PrivateData.ResultURL = ti.Url
-	} else if task.Status == model.TaskStatusSuccess {
-		// No URL from adaptor — construct proxy URL using public task ID
-		task.PrivateData.ResultURL = taskcommon.BuildProxyURL(task.TaskID)
-	}
-
-	if !snap.Equal(task.Snapshot()) {
-		_, _ = task.UpdateWithStatus(snap.Status)
-	}
+	body = task.Data
 
 	// OpenAI Video API 由调用者的 ConvertToOpenAIVideo 分支处理
 	if isOpenAIVideoAPI {
