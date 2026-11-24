@@ -212,17 +212,18 @@ func GetAssetAdapter(userGroup string) (AssetAdapter, *model.Channel, error) {
 
 		case UpstreamVersionNaxis:
 			// n-axis 火山方舟原生 Action 入口：POST /?Action=…&Version=2024-01-01
+			// 入口挂在子路径的上游（如 /api/material）用 asset_action_path 指定，留空则为根路径。
 			baseURL := settings.SeedanceAssetBaseUrl
 			if baseURL == "" {
 				baseURL = fullCh.GetBaseURL()
 			}
 
 			common.SysLog(fmt.Sprintf(
-				"[AssetAdapter] selected Naxis Action adapter for group '%s': channel=%d, url=%s",
-				userGroup, fullCh.Id, baseURL,
+				"[AssetAdapter] selected Naxis Action adapter for group '%s': channel=%d, url=%s, action_path=%s",
+				userGroup, fullCh.Id, baseURL, settings.AssetActionPath,
 			))
 
-			adapter = NewNaxisActionAssetAdapter(baseURL, key)
+			adapter = NewNaxisActionAssetAdapterWithPath(baseURL, key, settings.AssetActionPath)
 
 		case UpstreamVersionNaxisRest:
 			// n-axis 平台 REST 入口：/v1/asset-groups、/v1/assets
@@ -368,17 +369,18 @@ func createAdapter(fullCh *model.Channel, key string) (AssetAdapter, error) {
 
 	case UpstreamVersionNaxis:
 		// n-axis 火山方舟原生 Action 入口：POST /?Action=…&Version=2024-01-01
+		// 入口挂在子路径的上游（如 /api/material）用 asset_action_path 指定，留空则为根路径。
 		baseURL := settings.SeedanceAssetBaseUrl
 		if baseURL == "" {
 			baseURL = fullCh.GetBaseURL()
 		}
 
 		common.SysLog(fmt.Sprintf(
-			"[AssetAdapter] creating Naxis Action adapter: channel=%d, url=%s",
-			fullCh.Id, baseURL,
+			"[AssetAdapter] creating Naxis Action adapter: channel=%d, url=%s, action_path=%s",
+			fullCh.Id, baseURL, settings.AssetActionPath,
 		))
 
-		return NewNaxisActionAssetAdapter(baseURL, key), nil
+		return NewNaxisActionAssetAdapterWithPath(baseURL, key, settings.AssetActionPath), nil
 
 	case UpstreamVersionNaxisRest:
 		// n-axis 平台 REST 入口：/v1/asset-groups、/v1/assets

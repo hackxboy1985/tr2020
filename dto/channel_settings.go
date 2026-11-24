@@ -55,6 +55,11 @@ type ChannelOtherSettings struct {
 	// "gatewayMg": 咪咕 Gateway RESTful 格式（默认）- /api/seedance/proxy/assets/groups
 	// "official": 火山官方 Action 格式 - /?Action=CreateAssetGroup&Version=2024-01-01
 	SeedanceAssetAPIFormat string `json:"seedance_asset_api_format,omitempty"`
+	// AssetActionPath 火山方舟 Action 入口的路径前缀，仅 naxis 系列适配器使用。
+	// 留空（默认）表示 Action 入口在域名根路径，即 POST /?Action=…（n-axis 即此形态）；
+	// 部分上游把 Action 入口挂在子路径下（如 /api/material），此时填 "/api/material"，
+	// 适配器会拼成 POST /api/material?Action=…&Version=2024-01-01。
+	AssetActionPath string `json:"asset_action_path,omitempty"`
 	// KWJM 素材库配置（新增）
 	KwjmAssetBaseUrl string `json:"kwjm_asset_base_url,omitempty"` // KWJM 基础URL，例如 https://kwjm.com
 	KwjmAssetModel   string `json:"kwjm_asset_model,omitempty"`    // KWJM 默认模型，例如 sd-video-v2

@@ -32,14 +32,41 @@ const naxisActionVersion = "2024-01-01"
 type NaxisActionAssetAdapter struct {
 	baseURL string
 	token   string
+	// actionPath 是 Action 入口的路径前缀。
+	// 空字符串（默认）表示入口在域名根路径，即 POST /?Action=…&Version=…（n-axis 形态）；
+	// 非空时（如 "/api/material"）拼成 POST {baseURL}/api/material?Action=…&Version=…。
+	actionPath string
 }
 
-// NewNaxisActionAssetAdapter 创建 n-axis Action（火山方舟原生）适配器
+// NewNaxisActionAssetAdapter 创建 n-axis Action（火山方舟原生）适配器。
+// 默认 Action 入口在域名根路径，与历史行为完全一致（n-axis 渠道无需改配置）。
 func NewNaxisActionAssetAdapter(baseURL, token string) *NaxisActionAssetAdapter {
+	return NewNaxisActionAssetAdapterWithPath(baseURL, token, "")
+}
+
+// NewNaxisActionAssetAdapterWithPath 创建 Action 适配器并指定入口路径前缀。
+// actionPath 为空时等价于 NewNaxisActionAssetAdapter（根路径入口）。
+func NewNaxisActionAssetAdapterWithPath(baseURL, token, actionPath string) *NaxisActionAssetAdapter {
 	return &NaxisActionAssetAdapter{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		token:   token,
+		baseURL:    strings.TrimRight(baseURL, "/"),
+		token:      token,
+		actionPath: normalizeActionPath(actionPath),
 	}
+}
+
+// normalizeActionPath 归一化 Action 入口前缀：空→""（根路径）；否则补前导 "/" 并去掉尾部 "/"。
+//
+// 之所以要单独归一化，是因为 URL 拼接用的是 baseURL+actionPath+"?"+query：
+// 若前缀带尾斜杠会拼出 "/api/material?" 之外的 "/api/material/?"，多数上游会 404。
+func normalizeActionPath(p string) string {
+	trimmed := strings.TrimSpace(p)
+	if trimmed == "" || trimmed == "/" {
+		return ""
+	}
+	if !strings.HasPrefix(trimmed, "/") {
+		trimmed = "/" + trimmed
+	}
+	return strings.TrimRight(trimmed, "/")
 }
 
 // ===== 上游响应结构（PascalCase + Result 外壳）=====
@@ -419,7 +446,7 @@ func (a *NaxisActionAssetAdapter) doAction(action string, extraQuery url.Values,
 			query.Add(key, value)
 		}
 	}
-	return naxisDoRequest(a.baseURL, a.token, http.MethodPost, "/?"+query.Encode(), nil, payload)
+	return naxisDoRequest(a.baseURL, a.token, http.MethodPost, a.actionPath+"?"+query.Encode(), nil, payload)
 }
 
 // parseNaxisActionResult 解析 {ResponseMetadata, Result} 外壳中的 Result
