@@ -127,6 +127,7 @@ type TaskAdaptor struct {
 	// enforceOfficialVideoURL 是否强制成片地址必须是火山官方域名（.volces.com）。
 	// 仅 n-axis 上游开启：老咪咕 gateway / sdos2 等保持原有行为，避免误伤。
 	enforceOfficialVideoURL bool
+	tokenFix                *float64
 }
 
 func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
@@ -143,6 +144,7 @@ func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
 
 	common.SysLog("[Init] ChannelMeta 不为空，继续初始化")
 	settings := info.ChannelMeta.ChannelOtherSettings
+	a.tokenFix = settings.TokenFix
 
 	common.SysLog(fmt.Sprintf("[Init] asset_upstream_version=%s", settings.AssetUpstreamVersion))
 	common.SysLog(fmt.Sprintf("[Init] doubao_video_generate_path=%s", settings.DoubaoVideoGeneratePath))
@@ -796,6 +798,8 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 				taskResult.Url = a.resolveResultURLForChannel(u)
 			}
 		}
+		taskResult.CompletionTokens = resTask.Usage.CompletionTokens
+		taskResult.TotalTokens = resTask.Usage.TotalTokens
 		a.applyResultURLValidation(&taskResult, resTask)
 	case "in_progress":
 		taskResult.Status = model.TaskStatusInProgress

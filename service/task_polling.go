@@ -406,10 +406,20 @@ func ApplyVideoTaskResult(ctx context.Context, adaptor TaskPollingAdaptor, task 
 	var err error
 	snap := task.Snapshot()
 
+	// 原文只用于日志 Other.response_body；解析、落库、计费统一使用修正后的响应。
+	resultBody := responseBody
+	if normalizer, ok := adaptor.(interface {
+		NormalizeTaskResponse([]byte) ([]byte, error)
+	}); ok {
+		resultBody, err = normalizer.NormalizeTaskResponse(responseBody)
+		if err != nil {
+			return fmt.Errorf("normalize video usage: %w", err)
+		}
+	}
 	taskResult := &relaycommon.TaskInfo{}
 	// try parse as New API response format
 	var responseItems dto.TaskResponse[model.Task]
-	if err = common.Unmarshal(responseBody, &responseItems); err == nil && responseItems.IsSuccess() {
+	if err = common.Unmarshal(resultBody, &responseItems); err == nil && responseItems.IsSuccess() {
 		logger.LogDebug(ctx, "updateVideoSingleTask parsed as new api response format: %+v", responseItems)
 		t := responseItems.Data
 		taskResult.TaskID = t.TaskID
@@ -418,14 +428,14 @@ func ApplyVideoTaskResult(ctx context.Context, adaptor TaskPollingAdaptor, task 
 		taskResult.Progress = t.Progress
 		taskResult.Reason = t.FailReason
 		task.Data = t.Data
-	} else if taskResult, err = adaptor.ParseTaskResult(responseBody); err != nil {
+	} else if taskResult, err = adaptor.ParseTaskResult(resultBody); err != nil {
 		return fmt.Errorf("parseTaskResult failed for task %s: %w", taskId, err)
 	}
 
 	if taskResult == nil {
 		return fmt.Errorf("parseTaskResult returned nil for task %s", taskId)
 	}
-	task.Data = redactVideoResponseBody(responseBody)
+	task.Data = redactVideoResponseBody(resultBody)
 
 	// 若 adaptor 解析出源头任务 ID，存入 PrivateData 供计费日志使用
 	if taskResult.OriTaskID != "" {

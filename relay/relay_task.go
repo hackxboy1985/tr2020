@@ -28,8 +28,10 @@ import (
 type TaskSubmitResult struct {
 	UpstreamTaskID string
 	TaskData       []byte
-	Platform       constant.TaskPlatform
-	Quota          int
+	// RawTaskData 保留提交响应原文，仅用于日志 Other.response_body。
+	RawTaskData []byte
+	Platform    constant.TaskPlatform
+	Quota       int
 	//PerCallPrice   types.PriceData
 }
 
@@ -254,6 +256,16 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 
 	// 11. 解析响应
 	upstreamTaskID, taskData, taskErr := adaptor.DoResponse(c, resp, info)
+	rawTaskData := append([]byte(nil), taskData...)
+	if normalizer, ok := adaptor.(interface {
+		NormalizeTaskResponse([]byte) ([]byte, error)
+	}); ok {
+		normalized, normalizeErr := normalizer.NormalizeTaskResponse(taskData)
+		if normalizeErr != nil {
+			return nil, service.TaskErrorWrapper(normalizeErr, "normalize_video_usage_failed", http.StatusInternalServerError)
+		}
+		taskData = normalized
+	}
 	if taskErr != nil {
 		if firstByteElapsed >= 120*time.Second {
 			logSlowTaskSubmit(c, info, firstByteElapsed, resp.StatusCode, requestBodyBytes, taskData)
@@ -290,6 +302,7 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	return &TaskSubmitResult{
 		UpstreamTaskID: upstreamTaskID,
 		TaskData:       taskData,
+		RawTaskData:    rawTaskData,
 		Platform:       platform,
 		Quota:          finalQuota,
 	}, nil
@@ -546,13 +559,8 @@ func tryDoubaoRealtimeFetch(task *model.Task, c *gin.Context) []byte {
 	}
 
 	settings := channelModel.GetSetting()
-	alwaysFetch := false
-	if channelModel.Other != "" {
-		var otherSettings dto.ChannelOtherSettings
-		if err := common.Unmarshal([]byte(channelModel.Other), &otherSettings); err == nil {
-			alwaysFetch = otherSettings.DoubaoVideoAlwaysFetchUpstream
-		}
-	}
+	channelOtherSettings := channelModel.GetOtherSettings()
+	alwaysFetch := channelOtherSettings.DoubaoVideoAlwaysFetchUpstream
 
 	// 检查 task.Data 是否完整
 	var taskData map[string]interface{}
@@ -605,12 +613,7 @@ func tryDoubaoRealtimeFetch(task *model.Task, c *gin.Context) []byte {
 	c.Set(string(constant.ContextKeyChannelId), channelModel.Id)
 	c.Set(string(constant.ContextKeyChannelBaseUrl), baseURL)
 	c.Set(string(constant.ContextKeyChannelKey), channelModel.Key)
-	if channelModel.Other != "" {
-		var otherSettings dto.ChannelOtherSettings
-		if err := common.Unmarshal([]byte(channelModel.Other), &otherSettings); err == nil {
-			c.Set(string(constant.ContextKeyChannelOtherSetting), otherSettings)
-		}
-	}
+	c.Set(string(constant.ContextKeyChannelOtherSetting), channelOtherSettings)
 	info.InitChannelMeta(c)
 	adaptor.Init(info)
 
@@ -710,13 +713,8 @@ func tryOpenAIVideoRealtimeFetch(task *model.Task, c *gin.Context) []byte {
 	}
 
 	// 检查是否开启了强制查询
-	alwaysFetch := false
-	if channelModel.Other != "" {
-		var otherSettings dto.ChannelOtherSettings
-		if err := common.Unmarshal([]byte(channelModel.Other), &otherSettings); err == nil {
-			alwaysFetch = otherSettings.OpenAIVideoAlwaysFetchUpstream
-		}
-	}
+	channelOtherSettings := channelModel.GetOtherSettings()
+	alwaysFetch := channelOtherSettings.OpenAIVideoAlwaysFetchUpstream
 
 	if !alwaysFetch {
 		// 未开启强制查询，使用默认行为（不查询上游）
@@ -744,12 +742,7 @@ func tryOpenAIVideoRealtimeFetch(task *model.Task, c *gin.Context) []byte {
 	c.Set(string(constant.ContextKeyChannelId), channelModel.Id)
 	c.Set(string(constant.ContextKeyChannelBaseUrl), baseURL)
 	c.Set(string(constant.ContextKeyChannelKey), channelModel.Key)
-	if channelModel.Other != "" {
-		var otherSettings dto.ChannelOtherSettings
-		if err := common.Unmarshal([]byte(channelModel.Other), &otherSettings); err == nil {
-			c.Set(string(constant.ContextKeyChannelOtherSetting), otherSettings)
-		}
-	}
+	c.Set(string(constant.ContextKeyChannelOtherSetting), channelOtherSettings)
 	info.InitChannelMeta(c)
 	adaptor.Init(info)
 

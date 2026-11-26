@@ -423,6 +423,8 @@ type RecordTaskBillingLogParams struct {
 }
 
 func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
+	completionTokens, _ := params.Other["completion_tokens"].(int)
+	totalTokens, _ := params.Other["total_tokens"].(int)
 	if params.LogType == LogTypeConsume && !common.LogConsumeEnabled {
 		return
 	}
@@ -439,6 +441,8 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 		CreatedAt:         common.GetTimestamp(),
 		Type:              params.LogType,
 		Content:           params.Content,
+		CompletionTokens:  completionTokens,
+		PromptTokens:      totalTokens - completionTokens,
 		TokenName:         tokenName,
 		ModelName:         params.ModelName,
 		Quota:             params.Quota,
@@ -463,7 +467,7 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 		common.SysLog("failed to record task billing log: " + err.Error())
 	}
 	if common.DataExportEnabled {
-		LogQuotaData(params.UserId, username, params.ModelName, params.Quota, common.GetTimestamp(), 0)
+		LogQuotaData(params.UserId, username, params.ModelName, params.Quota, common.GetTimestamp(), totalTokens)
 	}
 }
 

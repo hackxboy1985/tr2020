@@ -639,7 +639,9 @@ func RelayTask(c *gin.Context) {
 		if rb := c.GetString(string(constant.ContextKeyVideoRequestBody)); rb != "" {
 			task.PrivateData.RequestBody = service.TruncateBody(rb)
 		}
-		if len(result.TaskData) > 0 {
+		if len(result.RawTaskData) > 0 {
+			task.PrivateData.SubmitRespBody = service.TruncateBody(string(result.RawTaskData))
+		} else if len(result.TaskData) > 0 {
 			task.PrivateData.SubmitRespBody = service.TruncateBody(string(result.TaskData))
 		}
 		if insertErr := task.Insert(); insertErr != nil {
@@ -866,8 +868,8 @@ func RelayTaskDelete(c *gin.Context) {
 
 	// 允许取消的状态：NOT_START, SUBMITTED, QUEUED（官方格式都是 queued）
 	if task.Status != model.TaskStatusNotStart &&
-	   task.Status != model.TaskStatusQueued &&
-	   task.Status != model.TaskStatusSubmitted {
+		task.Status != model.TaskStatusQueued &&
+		task.Status != model.TaskStatusSubmitted {
 		// 已完成/失败/已取消的任务不能取消
 		logger.LogInfo(c, fmt.Sprintf("[Cancel] 任务状态为 %s (%s)，无法取消，未调用上游", task.Status, task.Status.ToDoubaoStatus()))
 		c.JSON(http.StatusBadRequest, &dto.TaskError{

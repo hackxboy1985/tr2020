@@ -150,6 +150,17 @@ func TruncateBody(s string) string {
 // taskBillingOther 从 task 的 BillingContext 构建日志 Other 字段。
 func taskBillingOther(task *model.Task) map[string]interface{} {
 	other := make(map[string]interface{})
+	// task.Data 已修正；仅 response_body 保留上游原文。
+	var result struct {
+		Usage struct {
+			CompletionTokens int `json:"completion_tokens"`
+			TotalTokens      int `json:"total_tokens"`
+		} `json:"usage"`
+	}
+	if common.Unmarshal(task.Data, &result) == nil && result.Usage.TotalTokens > 0 {
+		other["completion_tokens"] = result.Usage.CompletionTokens
+		other["total_tokens"] = result.Usage.TotalTokens
+	}
 	if bc := task.PrivateData.BillingContext; bc != nil {
 		other["model_price"] = bc.ModelPrice
 		if bc.ModelRatio > 0 {

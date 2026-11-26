@@ -60,6 +60,8 @@ type ChannelOtherSettings struct {
 	// 部分上游把 Action 入口挂在子路径下（如 /api/material），此时填 "/api/material"，
 	// 适配器会拼成 POST /api/material?Action=…&Version=2024-01-01。
 	AssetActionPath string `json:"asset_action_path,omitempty"`
+	// TokenFix：上游视频 token / 此系数，四舍五入为整数；不配不修正，配置时必须 >=0.5。
+	TokenFix *float64 `json:"tokenFix,omitempty"`
 	// KWJM 素材库配置（新增）
 	KwjmAssetBaseUrl string `json:"kwjm_asset_base_url,omitempty"` // KWJM 基础URL，例如 https://kwjm.com
 	KwjmAssetModel   string `json:"kwjm_asset_model,omitempty"`    // KWJM 默认模型，例如 sd-video-v2

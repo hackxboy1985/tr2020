@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"strings"
 	"sync"
@@ -957,6 +958,21 @@ func SearchTags(keyword string, group string, model string, idSort bool) ([]*str
 }
 
 func (channel *Channel) ValidateSettings() error {
+	// 校验必须是纯函数：不能调用 GetOtherSettings（其历史实现可能写库）。
+	var other dto.ChannelOtherSettings
+	if channel.Other != "" {
+		if err := common.UnmarshalJsonStr(channel.Other, &other); err != nil {
+			return fmt.Errorf("渠道 other JSON 格式错误: %w", err)
+		}
+	}
+	if channel.OtherSettings != "" {
+		if err := common.UnmarshalJsonStr(channel.OtherSettings, &other); err != nil {
+			return fmt.Errorf("渠道 other_settings JSON 格式错误: %w", err)
+		}
+	}
+	if other.TokenFix != nil && (*other.TokenFix < 0.5 || math.IsNaN(*other.TokenFix) || math.IsInf(*other.TokenFix, 0)) {
+		return fmt.Errorf("tokenFix 必须是 >= 0.5 的有限数值")
+	}
 	channelParams := &dto.ChannelSettings{}
 	if channel.Setting != nil && *channel.Setting != "" {
 		err := common.Unmarshal([]byte(*channel.Setting), channelParams)
@@ -997,11 +1013,8 @@ func (channel *Channel) GetOtherSettings() dto.ChannelOtherSettings {
 	}
 	// 再用 OtherSettings（settings 列）覆盖，优先级更高
 	if channel.OtherSettings != "" {
-		err := common.UnmarshalJsonStr(channel.OtherSettings, &setting)
-		if err != nil {
+		if err := common.UnmarshalJsonStr(channel.OtherSettings, &setting); err != nil {
 			common.SysLog(fmt.Sprintf("failed to unmarshal setting: channel_id=%d, error=%v", channel.Id, err))
-			channel.OtherSettings = "{}" // 清空设置以避免后续错误
-			_ = channel.Save()           // 保存修改
 		}
 	}
 	return setting
