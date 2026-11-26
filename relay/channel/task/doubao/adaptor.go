@@ -515,6 +515,13 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		return
 	}
 
+	// 上游 billing 是供应商内部折扣明细，不属于 Ark 任务响应协议，不透传给下游。
+	responseBody, err = stripBillingField(responseBody)
+	if err != nil {
+		taskErr = service.TaskErrorWrapper(err, "sanitize_video_response_failed", http.StatusInternalServerError)
+		return
+	}
+
 	// Check if should return Doubao official format
 	if c.GetBool("doubao_official_format") {
 		// Return Doubao official format: just {"id": "task_id"}
