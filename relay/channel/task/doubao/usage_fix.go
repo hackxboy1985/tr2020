@@ -12,9 +12,30 @@ func stripBillingField(body []byte) ([]byte, error) {
 	if err := common.Unmarshal(body, &response); err != nil {
 		return nil, err
 	}
-	if _, ok := response["billing"]; !ok {
+	changed := false
+	if _, ok := response["billing"]; ok {
+		delete(response, "billing")
+		changed = true
+	}
+	if rawUsage, ok := response["usage"]; ok && string(rawUsage) != "null" {
+		var usage map[string]json.RawMessage
+		if err := common.Unmarshal(rawUsage, &usage); err != nil {
+			return nil, err
+		}
+		for key := range usage {
+			if key != "completion_tokens" && key != "total_tokens" {
+				delete(usage, key)
+				changed = true
+			}
+		}
+		cleanUsage, err := common.Marshal(usage)
+		if err != nil {
+			return nil, err
+		}
+		response["usage"] = cleanUsage
+	}
+	if !changed {
 		return body, nil
 	}
-	delete(response, "billing")
 	return common.Marshal(response)
 }

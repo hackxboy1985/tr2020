@@ -515,12 +515,9 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		return
 	}
 
-	// 上游 billing 是供应商内部折扣明细，不属于 Ark 任务响应协议，不透传给下游。
-	responseBody, err = stripBillingField(responseBody)
-	if err != nil {
-		taskErr = service.TaskErrorWrapper(err, "sanitize_video_response_failed", http.StatusInternalServerError)
-		return
-	}
+	// 保存上游原始 body 供 Other.response_body 使用；返回给下游/落库的副本
+	// 会在 controller 保存日志原文之后过滤 billing 和 usage 扩展字段。
+	c.Set(string(constant.ContextKeyVideoResponseBody), string(responseBody))
 
 	// Check if should return Doubao official format
 	if c.GetBool("doubao_official_format") {
@@ -536,7 +533,6 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		c.JSON(http.StatusOK, ov)
 	}
 
-	c.Set(string(constant.ContextKeyVideoResponseBody), string(responseBody))
 	return dResp.ID, responseBody, nil
 }
 

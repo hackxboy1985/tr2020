@@ -3,6 +3,7 @@ package relay
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -289,10 +290,50 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 
 	return &TaskSubmitResult{
 		UpstreamTaskID: upstreamTaskID,
-		TaskData:       taskData,
+		TaskData:       sanitizeDoubaoTaskData(platform, taskData),
 		Platform:       platform,
 		Quota:          finalQuota,
 	}, nil
+}
+
+// sanitizeDoubaoTaskData 清理任务中持久化及返回给下游的 Doubao Ark 响应字段。
+// Other.response_body 使用调用前捕获的原始响应，因此这里不会影响审计原文。
+func sanitizeDoubaoTaskData(platform constant.TaskPlatform, body []byte) []byte {
+	if platform != constant.TaskPlatform(strconv.Itoa(constant.ChannelTypeDoubaoVideo)) {
+		return body
+	}
+	clean, err := stripDoubaoInternalFields(body)
+	if err != nil {
+		common.SysError(fmt.Sprintf("[Doubao Video] failed to sanitize task data: %v", err))
+		return body
+	}
+	return clean
+}
+
+// stripDoubaoInternalFields 删除上游私有 billing 元数据，并将 usage 收窄到兼容响应的两字段。
+func stripDoubaoInternalFields(body []byte) ([]byte, error) {
+	var response map[string]json.RawMessage
+	if err := common.Unmarshal(body, &response); err != nil {
+		return nil, err
+	}
+	delete(response, "billing")
+	if rawUsage, ok := response["usage"]; ok && string(rawUsage) != "null" {
+		var usage map[string]json.RawMessage
+		if err := common.Unmarshal(rawUsage, &usage); err != nil {
+			return nil, err
+		}
+		for key := range usage {
+			if key != "completion_tokens" && key != "total_tokens" {
+				delete(usage, key)
+			}
+		}
+		encoded, err := common.Marshal(usage)
+		if err != nil {
+			return nil, err
+		}
+		response["usage"] = encoded
+	}
+	return common.Marshal(response)
 }
 
 // logSlowTaskSubmit 记录"首字节返回超过 120 秒"的完整请求与响应（含用户、渠道、耗时），
