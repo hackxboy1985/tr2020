@@ -927,8 +927,9 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         const [dialogOpen, setDialogOpen] = useState(false)
         const log = row.original
 
-        // Only show for CONSUME logs (type=2) that have prompt log
-        if (log.type !== 2 || !log.has_prompt_log) {
+        // Show for CONSUME (2) and ERROR (5) logs that have prompt log.
+        // 失败请求的请求体会写入 prompt_log，所以错误日志同样可以查看。
+        if ((log.type !== 2 && log.type !== 5) || !log.has_prompt_log) {
           return <span className='text-muted-foreground/40'>—</span>
         }
 

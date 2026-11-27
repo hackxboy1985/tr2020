@@ -190,8 +190,14 @@ func RecordTopupLog(userId int, content string, callerIp string, paymentMethod s
 	}
 }
 
+// RecordErrorLog 写入一条错误日志。
+// 返回值：成功写入时返回日志 ID；写入失败或未落库返回 0。
+//
+// 为什么要返回 ID：失败请求的请求体不再写入 other（other 随日志列表整体加载，
+// 体积大会放大查询与解析开销），改由调用方按该 ID 写入提示词日志（prompt_log），
+// 通过 /api/log/:id/prompt 查询，与成功请求的提示词记录保持一致。
 func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string, tokenName string, content string, tokenId int, useTimeSeconds int,
-	isStream bool, group string, other map[string]interface{}) {
+	isStream bool, group string, other map[string]interface{}) int {
 	logger.LogInfo(c, fmt.Sprintf("record error log: userId=%d, channelId=%d, modelName=%s, tokenName=%s, content=%s", userId, channelId, modelName, tokenName, common.LocalLogPreview(content)))
 	username := c.GetString("username")
 	requestId := c.GetString(common.RequestIdKey)
@@ -236,7 +242,9 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 	err := LOG_DB.Create(log).Error
 	if err != nil {
 		logger.LogError(c, "failed to record log: "+err.Error())
+		return 0
 	}
+	return log.Id
 }
 
 type RecordConsumeLogParams struct {

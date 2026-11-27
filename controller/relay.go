@@ -665,19 +665,23 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		}
 		service.AppendChannelAffinityAdminInfo(c, adminInfo)
 		other["admin_info"] = adminInfo
-		// 添加 request_body 和 response_body 到 other 中，以便在日志详情中显示
-		if requestBody := c.GetString(string(constant.ContextKeyVideoRequestBody)); requestBody != "" {
-			other["request_body"] = service.TruncateBody(requestBody)
-		}
-		if responseBody := c.GetString(string(constant.ContextKeyVideoResponseBody)); responseBody != "" {
-			other["response_body"] = service.TruncateBody(responseBody)
-		}
+		// 失败请求的请求体 / 响应体不写入 other：other 会随日志列表整体加载，
+		// 体积变大会放大查询与解析开销。请求体改写到提示词日志（prompt_log），
+		// 可复用 /api/log/:id/prompt 接口查询；上游响应体本身已在错误日志 content 中。
+		requestBody := service.RequestBodyPreview(c)
 		startTime := common.GetContextKeyTime(c, constant.ContextKeyRequestStartTime)
 		if startTime.IsZero() {
 			startTime = time.Now()
 		}
 		useTimeSeconds := int(time.Since(startTime).Seconds())
-		model.RecordErrorLog(c, userId, channelId, modelName, tokenName, err.MaskSensitiveErrorWithStatusCode(), tokenId, useTimeSeconds, common.GetContextKeyBool(c, constant.ContextKeyIsStream), userGroup, other)
+		logId := model.RecordErrorLog(c, userId, channelId, modelName, tokenName, err.MaskSensitiveErrorWithStatusCode(), tokenId, useTimeSeconds, common.GetContextKeyBool(c, constant.ContextKeyIsStream), userGroup, other)
+		// 失败请求的请求体写入提示词日志，与成功请求同表（prompt_log）：
+		// 日志列表只查存在性、点开才加载内容，避免把大字段塞进 logs.other。
+		// 长度沿用现有配置 SavePromptBodyMaxBytes（EnqueuePromptLog 内部再截断一次）；
+		// 仍受 SavePromptEnabled 总开关约束。
+		if logId > 0 && requestBody != "" {
+			model.EnqueuePromptLog(logId, c.GetString(string(constant.ContextKeyPromptToSave)), requestBody, "")
+		}
 	}
 
 }

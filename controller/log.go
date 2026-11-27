@@ -52,7 +52,9 @@ func GetAllLogs(c *gin.Context) {
 	if common.SavePromptEnabled {
 		logIds := make([]int, 0, len(logs))
 		for _, l := range logs {
-			if l.Type == model.LogTypeConsume {
+			// 消费日志与错误日志都可能带提示词记录：
+			// 失败请求的请求体会写入 prompt_log（不再塞进 logs.other）。
+			if l.Type == model.LogTypeConsume || l.Type == model.LogTypeError {
 				logIds = append(logIds, l.Id)
 			}
 		}
