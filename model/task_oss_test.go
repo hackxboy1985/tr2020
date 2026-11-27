@@ -9,6 +9,7 @@ import (
 
 func TestOssEnabledChannelsFilter(t *testing.T) {
 	truncateTables(t)
+	enabled, disabled := true, false
 	for i, tc := range []struct {
 		channelType int
 		settings    dto.ChannelOtherSettings
@@ -19,6 +20,9 @@ func TestOssEnabledChannelsFilter(t *testing.T) {
 		{constant.ChannelTypeZy, dto.ChannelOtherSettings{}, false},
 		{constant.ChannelTypeZy, dto.ChannelOtherSettings{TdOssImageEnabled: true}, false},
 		{constant.ChannelTypeRR, dto.ChannelOtherSettings{ZyOssImageEnabled: true}, false},
+		{constant.ChannelTypeOpenAI, dto.ChannelOtherSettings{OssTransferEnabledOverride: &enabled}, true},
+		{constant.ChannelTypeTudou, dto.ChannelOtherSettings{OssTransferEnabledOverride: &enabled}, false},
+		{constant.ChannelTypeTudou, dto.ChannelOtherSettings{OssTransferEnabledOverride: &disabled, TdOssVideoEnabled: true}, true},
 	} {
 		ch := &Channel{Id: 8800 + i, Type: tc.channelType}
 		ch.SetOtherSettings(tc.settings)
@@ -30,11 +34,11 @@ func TestOssEnabledChannelsFilter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(channels) != 2 {
-		t.Fatalf("enabled channels = %d, want 2", len(channels))
+	if len(channels) != 4 {
+		t.Fatalf("enabled channels = %d, want 4", len(channels))
 	}
 	for _, ch := range channels {
-		if ch.Id != 8800 && ch.Id != 8801 {
+		if ch.Id != 8800 && ch.Id != 8801 && ch.Id != 8805 && ch.Id != 8807 {
 			t.Fatalf("unexpected channel: %d", ch.Id)
 		}
 	}

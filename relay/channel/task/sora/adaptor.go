@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -304,7 +305,7 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 		taskResult.Status = model.TaskStatusInProgress
 	case "completed":
 		taskResult.Status = model.TaskStatusSuccess
-		// Url intentionally left empty — the caller constructs the proxy URL using the public task ID
+		taskResult.Url = originalVideoURL(respBody)
 	case "failed", "cancelled":
 		taskResult.Status = model.TaskStatusFailure
 		if resTask.Error != nil {
@@ -319,6 +320,51 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 	}
 
 	return &taskResult, nil
+}
+
+// Parse optional result fields separately so unexpected URL metadata cannot break status parsing.
+func originalVideoURL(respBody []byte) string {
+	var response map[string]any
+	if err := common.Unmarshal(respBody, &response); err != nil {
+		return ""
+	}
+	data, _ := response["data"].(map[string]any)
+	dataResult, _ := data["result"].(map[string]any)
+	result, _ := response["result"].(map[string]any)
+	for _, fields := range []map[string]any{dataResult, result, data, response} {
+		for _, key := range []string{"video_url", "download_url"} {
+			if u := downloadableURL(fields[key]); u != "" {
+				return u
+			}
+		}
+		videos, _ := fields["videos"].([]any)
+		for _, item := range videos {
+			video, _ := item.(map[string]any)
+			if u := downloadableURL(video["url"]); u != "" {
+				return u
+			}
+			urls, _ := video["url"].([]any)
+			for _, candidate := range urls {
+				if u := downloadableURL(candidate); u != "" {
+					return u
+				}
+			}
+		}
+		if u := downloadableURL(fields["url"]); u != "" {
+			return u
+		}
+	}
+	return ""
+}
+
+func downloadableURL(value any) string {
+	raw, _ := value.(string)
+	raw = strings.TrimSpace(raw)
+	u, err := url.Parse(raw)
+	if err == nil && u.Hostname() != "" && (u.Scheme == "https" || u.Scheme == "http") {
+		return raw
+	}
+	return ""
 }
 
 func (a *TaskAdaptor) ConvertToOpenAIVideo(task *model.Task) ([]byte, error) {

@@ -183,6 +183,8 @@ export const channelFormSchema = z
     pass_through_body_enabled: z.boolean().optional(),
     system_prompt: z.string().optional(),
     system_prompt_override: z.boolean().optional(),
+    // General settings (stored in settings JSON)
+    oss_transfer_enabled: z.boolean().optional(),
     // Type-specific settings (stored in settings JSON)
     is_enterprise_account: z.boolean().optional(), // OpenRouter specific
     vertex_key_type: z.enum(['json', 'api_key']).optional(), // Vertex AI specific
@@ -376,6 +378,7 @@ export function transformChannelToFormDefaults(
   let upstreamModelUpdateAutoSyncEnabled = false
   let upstreamModelUpdateIgnoredModels = ''
   let saveResponseBody = false
+  let ossTransferEnabled: boolean | undefined
 
   if (channel.settings) {
     try {
@@ -401,6 +404,9 @@ export function transformChannelToFormDefaults(
         ? parsed.upstream_model_update_ignored_models.join(',')
         : ''
       saveResponseBody = parsed.save_response_body === true
+      if (typeof parsed.oss_transfer_enabled === 'boolean') {
+        ossTransferEnabled = parsed.oss_transfer_enabled
+      }
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Failed to parse channel settings:', error)
@@ -452,6 +458,7 @@ export function transformChannelToFormDefaults(
     upstream_model_update_auto_sync_enabled: upstreamModelUpdateAutoSyncEnabled,
     upstream_model_update_ignored_models: upstreamModelUpdateIgnoredModels,
     save_response_body: saveResponseBody,
+    oss_transfer_enabled: ossTransferEnabled,
   }
 }
 
@@ -574,6 +581,13 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
     if (typeof settingsObj.upstream_model_update_last_check_time !== 'number') {
       settingsObj.upstream_model_update_last_check_time = 0
     }
+  }
+
+  // Omit an unset override to preserve existing provider-specific behavior.
+  if (typeof formData.oss_transfer_enabled === 'boolean') {
+    settingsObj.oss_transfer_enabled = formData.oss_transfer_enabled
+  } else {
+    delete settingsObj.oss_transfer_enabled
   }
 
   // save_response_body: all channel types

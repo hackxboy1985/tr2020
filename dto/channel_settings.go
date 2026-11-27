@@ -26,6 +26,8 @@ const (
 )
 
 type ChannelOtherSettings struct {
+	// OssTransferEnabledOverride 用于没有独立媒体开关的渠道。
+	OssTransferEnabledOverride            *bool         `json:"oss_transfer_enabled,omitempty"`
 	AzureResponsesVersion                 string        `json:"azure_responses_version,omitempty"`
 	VertexKeyType                         VertexKeyType `json:"vertex_key_type,omitempty"` // "json" or "api_key"
 	OpenRouterEnterprise                  *bool         `json:"openrouter_enterprise,omitempty"`
@@ -123,7 +125,7 @@ func (s *ChannelOtherSettings) OssTransferEnabled(channelType int, isVideo bool)
 		}
 		return s.ZyOssImageEnabled
 	default:
-		return false
+		return s.OssTransferEnabledOverride != nil && *s.OssTransferEnabledOverride
 	}
 }
 

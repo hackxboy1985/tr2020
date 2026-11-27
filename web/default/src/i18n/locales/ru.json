@@ -3468,6 +3468,8 @@
     "Save Stripe settings": "Сохранить настройки Stripe",
     "Save these backup codes in a safe place. Each code can only be used once.": "Сохраните эти резервные коды в безопасном месте. Каждый код может быть использован только один раз.",
     "Save these codes in a safe place. Each code can only be used once.": "Сохраните эти коды в безопасном месте. Каждый код может быть использован только один раз.",
+    "Save image and video task results with downloadable upstream URLs to the configured object storage (S3/OSS). Failed transfers fall back to upstream URLs.": "Переносить результаты задач генерации изображений и видео с доступными для скачивания URL провайдера в настроенное объектное хранилище (S3/OSS). При ошибке переноса используются исходные URL.",
+    "Save to OSS": "Сохранять в OSS",
     "Save tool prices": "Сохранить цены инструментов",
     "Save Waffo Pancake settings": "Сохранить настройки Waffo Pancake",
     "Save Worker settings": "Сохранить настройки Worker",

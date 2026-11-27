@@ -64,6 +64,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
+import { Field, FieldContent, FieldGroup } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -2774,6 +2775,33 @@ export function ChannelMutateDrawer({
                             </FormItem>
                           )}
                         />
+
+                        {currentType !== 60 && currentType !== 61 && (
+                          <FieldGroup>
+                            <FormField
+                              control={form.control}
+                              name='oss_transfer_enabled'
+                              render={({ field }) => (
+                                <FormItem>
+                                  <Field orientation='horizontal'>
+                                    <FieldContent>
+                                      <FormLabel>{t('Save to OSS')}</FormLabel>
+                                      <FormDescription>
+                                        {t('Save image and video task results with downloadable upstream URLs to the configured object storage (S3/OSS). Failed transfers fall back to upstream URLs.')}
+                                      </FormDescription>
+                                    </FieldContent>
+                                    <FormControl>
+                                      <Switch
+                                        checked={field.value === true}
+                                        onCheckedChange={field.onChange}
+                                      />
+                                    </FormControl>
+                                  </Field>
+                                </FormItem>
+                              )}
+                            />
+                          </FieldGroup>
+                        )}
 
                         <FormField
                           control={form.control}

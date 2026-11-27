@@ -3468,6 +3468,8 @@
     "Save Stripe settings": "Lưu cài đặt Stripe",
     "Save these backup codes in a safe place. Each code can only be used once.": "Lưu các mã dự phòng này ở nơi an toàn. Mỗi mã chỉ được sử dụng một lần.",
     "Save these codes in a safe place. Each code can only be used once.": "Hãy lưu các mã này ở nơi an toàn. Mỗi mã chỉ có thể được sử dụng một lần.",
+    "Save image and video task results with downloadable upstream URLs to the configured object storage (S3/OSS). Failed transfers fall back to upstream URLs.": "Chuyển kết quả tác vụ hình ảnh và video có URL nguồn tải xuống được sang kho lưu trữ đối tượng đã cấu hình (S3/OSS). Nếu chuyển thất bại, sử dụng URL nguồn.",
+    "Save to OSS": "Lưu vào OSS",
     "Save tool prices": "Lưu giá công cụ",
     "Save Waffo Pancake settings": "Lưu cài đặt Waffo Pancake",
     "Save Worker settings": "Lưu cài đặt Worker",

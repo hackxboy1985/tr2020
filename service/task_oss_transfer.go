@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -39,13 +40,8 @@ func acquireOssTransfer(taskID string) (func(), bool) {
 
 // ShouldTransferToOss 判断某任务结果是否需要转存到对象存储。
 //
-// 全部前置条件（须同时满足）：
-//  1. 渠道类型为 Td 或 Zy；
-//  2. 对象存储配置完整 —— 未配置时全部短路，行为与未引入该功能时一致；
-//  3. 对应媒体类型的渠道开关已开启（图片/视频各一个开关）；
-//  4. 尚未成功转存 —— 保证幂等，避免轮询重复上传；
-//  5. 未达重试上限且上游 URL 未过期；
-//  6. URL 有效（非空、非 data: 前缀、非本系统代理地址）。
+// 仅在对象存储已配置、渠道转存已启用、任务可重试且结果为 HTTP(S) URL 时转存。
+// Td / Zy 沿用原有开关与 URL 判定；其他渠道排除本任务的内容代理地址。
 //
 // isVideo 由响应体结构判定（见 mediaTypeIsVideo），不能用适配器状态——
 // 轮询会重建适配器实例，提交阶段的标记不会带过来。
@@ -53,25 +49,17 @@ func ShouldTransferToOss(ch *model.Channel, task *model.Task, srcURL string, isV
 	if ch == nil || task == nil {
 		return false
 	}
-	// 1. 仅显式接入的渠道类型
-	if ch.Type != constant.ChannelTypeTudou && ch.Type != constant.ChannelTypeZy {
-		return false
-	}
-	// 2. 对象存储配置完整
 	if !oss.IsConfigured() {
 		return false
 	}
-	// 3. 对应开关已开启
 	settings := ch.GetOtherSettings()
 	if !settings.OssTransferEnabled(ch.Type, isVideo) {
 		return false
 	}
-	// 4/5. 幂等、重试上限、过期检查
 	if !task.CanRetryOssTransfer(ossTransferMaxAttempts) {
 		return false
 	}
-	// 6. URL 有效性
-	if !isTransferableURL(srcURL) {
+	if !isTransferableURL(srcURL) || (ch.Type != constant.ChannelTypeTudou && ch.Type != constant.ChannelTypeZy && !isTaskOssSourceURL(task, srcURL)) {
 		return false
 	}
 	return true
@@ -82,8 +70,6 @@ func ShouldTransferToOss(ch *model.Channel, task *model.Task, srcURL string, isV
 // 排除的情况：
 //   - 空值
 //   - data: URI（内联数据，不是可下载资源）
-//   - 本系统代理地址（形如 {ServerAddress}/v1/videos/{id}/content）——
-//     这类地址指向本系统自身，转存会产生自引用请求。
 func isTransferableURL(srcURL string) bool {
 	u := strings.TrimSpace(srcURL)
 	if u == "" {
@@ -96,6 +82,12 @@ func isTransferableURL(srcURL string) bool {
 		return false
 	}
 	return true
+}
+
+// isTaskOssSourceURL 排除本任务自己的内容代理地址，防止转存请求回流。
+func isTaskOssSourceURL(task *model.Task, srcURL string) bool {
+	u, err := url.Parse(strings.TrimSpace(srcURL))
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Hostname() != "" && !strings.HasSuffix(u.Path, "/v1/videos/"+task.TaskID+"/content")
 }
 
 // MediaTypeIsVideo 按查询响应体结构判定结果是否为视频。
@@ -113,8 +105,10 @@ func channelDirName(channelType int) string {
 		return "td"
 	case constant.ChannelTypeZy:
 		return "zy"
+	case constant.ChannelTypeOpenAI:
+		return "openai"
 	default:
-		return ""
+		return fmt.Sprintf("channel-%d", channelType)
 	}
 }
 
@@ -133,13 +127,31 @@ func taskResultIsVideo(channelType int, respBody []byte, resultURL string) bool 
 	return MediaTypeIsVideo(respBody) || looksLikeVideoURL(resultURL)
 }
 
+// taskOssSourceURL 从 OpenAI 兼容任务的已保存报文恢复原始地址，供旧任务补扫。
+func taskOssSourceURL(task *model.Task, channelType int) string {
+	srcURL := task.GetResultURL()
+	if channelType != constant.ChannelTypeOpenAI && channelType != constant.ChannelTypeSora {
+		return srcURL
+	}
+	if isTaskOssSourceURL(task, srcURL) || GetTaskAdaptorFunc == nil || len(task.Data) == 0 {
+		return srcURL
+	}
+	if adaptor := GetTaskAdaptorFunc(task.Platform); adaptor != nil {
+		if parsed, err := adaptor.ParseTaskResult(task.Data); err == nil && parsed != nil && parsed.Status == model.TaskStatusSuccess && isTaskOssSourceURL(task, parsed.Url) {
+			return parsed.Url
+		}
+	}
+	return srcURL
+}
+
 // TaskWaitingForOss 仅控制对外展示，不修改生成状态或计费。
 // 三次失败、源 URL 已过期、开关关闭或配置缺失时维持原来的回退行为。
 func TaskWaitingForOss(task *model.Task, ch *model.Channel) bool {
 	if task == nil || ch == nil || task.Status != model.TaskStatusSuccess {
 		return false
 	}
-	return ShouldTransferToOss(ch, task, task.GetResultURL(), taskResultIsVideo(ch.Type, task.Data, task.GetResultURL()))
+	srcURL := taskOssSourceURL(task, ch.Type)
+	return ShouldTransferToOss(ch, task, srcURL, taskResultIsVideo(ch.Type, task.Data, srcURL))
 }
 
 // TaskForResultResponse 返回用于用户查询的副本；不得将此副本保存到数据库。
@@ -355,12 +367,27 @@ func RunOssTransferCompensation(ctx context.Context) {
 		return
 	}
 
-	// 收集开启了转存开关的 Td / Zy 渠道
+	// 收集开启了转存开关的渠道
 	channels := getOssEnabledChannels()
 	if len(channels) == 0 {
 		return
 	}
 
+	// 保留 Td/Zy 原有的补扫名额，新增渠道不能挤占。
+	var legacy, generic []*model.Channel
+	for _, ch := range channels {
+		switch ch.Type {
+		case constant.ChannelTypeTudou, constant.ChannelTypeZy:
+			legacy = append(legacy, ch)
+		default:
+			generic = append(generic, ch)
+		}
+	}
+	runOssTransferCompensation(ctx, legacy)
+	runOssTransferCompensation(ctx, generic)
+}
+
+func runOssTransferCompensation(ctx context.Context, channels []*model.Channel) {
 	channelIds := make([]int, 0, len(channels))
 	channelByID := make(map[int]*model.Channel, len(channels))
 	for _, ch := range channels {
@@ -388,7 +415,7 @@ func RunOssTransferCompensation(ctx context.Context) {
 			continue
 		}
 
-		srcURL := task.GetResultURL()
+		srcURL := taskOssSourceURL(task, ch.Type)
 		if !isTransferableURL(srcURL) {
 			continue
 		}
@@ -412,7 +439,7 @@ func RunOssTransferCompensation(ctx context.Context) {
 	}
 }
 
-// getOssEnabledChannels 返回开启了对象存储转存开关的 Td / Zy 渠道。
+// getOssEnabledChannels 返回开启了对象存储转存开关的渠道。
 // 查询失败时返回空列表（补扫直接跳过），不影响其他逻辑。
 func getOssEnabledChannels() []*model.Channel {
 	channels, err := model.GetChannelsWithOssTransferEnabled()

@@ -195,6 +195,24 @@ func TestShouldTransferToOss(t *testing.T) {
 	}
 }
 
+func TestGenericOssSwitchOpenAIVideo(t *testing.T) {
+	setOssConfigured(t, true)
+	enabled := true
+	ch := mkChannel(constant.ChannelTypeOpenAI, dto.ChannelOtherSettings{OssTransferEnabledOverride: &enabled})
+	task := &model.Task{TaskID: "task_sample", Status: model.TaskStatusSuccess, PrivateData: model.TaskPrivateData{ResultURL: "https://cdn.example/sample.mp4"}}
+	if !TaskWaitingForOss(task, ch) {
+		t.Fatal("downloadable video should wait for OSS")
+	}
+	if ShouldTransferToOss(ch, task, "https://gateway.example/v1/videos/task_sample/content", true) {
+		t.Fatal("must not transfer our own content proxy URL")
+	}
+	enabled = false
+	ch.SetOtherSettings(dto.ChannelOtherSettings{OssTransferEnabledOverride: &enabled})
+	if TaskWaitingForOss(task, ch) {
+		t.Fatal("disabled switch must not change task result status")
+	}
+}
+
 func TestShouldTransferToOss_NilSafety(t *testing.T) {
 	setOssConfigured(t, true)
 
