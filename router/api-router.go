@@ -203,7 +203,10 @@ func SetApiRouter(router *gin.Engine) {
 		sleepPoolRoute := apiRouter.Group("/channel_sleep_pool")
 		sleepPoolRoute.Use(middleware.AdminAuth())
 		{
+			// 与渠道路由同理：两种尾斜杠形式都显式注册，不依赖 gin 的跳转。
+			sleepPoolRoute.GET("", controller.GetChannelSleepPool)
 			sleepPoolRoute.GET("/", controller.GetChannelSleepPool)
+			sleepPoolRoute.DELETE("", controller.DeleteChannelSleepPoolEntry)
 			sleepPoolRoute.DELETE("/", controller.DeleteChannelSleepPoolEntry)
 		}
 
@@ -237,6 +240,15 @@ func SetApiRouter(router *gin.Engine) {
 		channelRoute := apiRouter.Group("/channel")
 		channelRoute.Use(middleware.AdminAuth())
 		{
+			// 同时注册「不带尾斜杠」与「带尾斜杠」两种形式。
+			//
+			// 原因：gin 的尾斜杠重定向（RedirectTrailingSlash，301 到带斜杠地址）
+			// 在同一路由树里存在「共享前缀的兄弟路由」时会失效。
+			// 本文件注册了 /api/channel_sleep_pool 后，/api/channel 与它共享
+			// "/api/channel" 前缀，导致 GET /api/channel 不再 301，而是落到 NoRoute
+			// 返回 404（前端调用的是不带斜杠的 /api/channel，页面因此不可用）。
+			// 显式注册两种形式后，完全不依赖跳转，对任何客户端都稳定。
+			channelRoute.GET("", controller.GetAllChannels)
 			channelRoute.GET("/", controller.GetAllChannels)
 			channelRoute.GET("/search", controller.SearchChannels)
 			channelRoute.GET("/models", controller.ChannelListModels)
@@ -247,7 +259,9 @@ func SetApiRouter(router *gin.Engine) {
 			channelRoute.GET("/test/:id", controller.TestChannel)
 			channelRoute.GET("/update_balance", controller.UpdateAllChannelsBalance)
 			channelRoute.GET("/update_balance/:id", controller.UpdateChannelBalance)
+			channelRoute.POST("", controller.AddChannel)
 			channelRoute.POST("/", controller.AddChannel)
+			channelRoute.PUT("", controller.UpdateChannel)
 			channelRoute.PUT("/", controller.UpdateChannel)
 			channelRoute.DELETE("/disabled", controller.DeleteDisabledChannel)
 			channelRoute.POST("/tag/disabled", controller.DisableTagChannels)
