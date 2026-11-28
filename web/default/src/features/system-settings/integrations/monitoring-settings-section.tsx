@@ -557,6 +557,7 @@ export function MonitoringSettingsSection({
                       min={1}
                       max={10}
                       {...field}
+                      value={field.value as number}
                       onChange={(e) => field.onChange(Number(e.target.value))}
                     />
                   </FormControl>

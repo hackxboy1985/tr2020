@@ -230,7 +230,7 @@ export function parseSidebarModulesAdmin(
             // 普通的 boolean 模块配置
             sectionConfig[moduleKey] = toBoolean(
               moduleValue,
-              defaultSection[moduleKey] ?? true
+              (defaultSection[moduleKey] as boolean | undefined) ?? true
             )
           }
         }

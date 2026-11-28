@@ -1,5 +1,5 @@
-import { useEffect, useState, useMemo } from 'react'
-import { useForm } from 'react-hook-form'
+import { useEffect, useState } from 'react'
+import { type Resolver, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -72,7 +72,11 @@ export function VideoChannelMutateDrawer({
   const isEdit = !!currentRow
 
   const form = useForm<VideoChannelFormValues>({
-    resolver: zodResolver(videoChannelFormSchema),
+    // schema 里大量 .default() 会让 z.input 全为可选，与 z.output 不一致；
+    // 表单值以 z.output 为准（与现有 child 组件的类型一致），此处仅做类型对齐，运行时不变。
+    resolver: zodResolver(
+      videoChannelFormSchema
+    ) as unknown as Resolver<VideoChannelFormValues>,
     defaultValues,
   })
 

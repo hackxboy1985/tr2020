@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useMemo, useState } from 'react'
 import * as z from 'zod'
-import { useForm } from 'react-hook-form'
+import { type Resolver, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -110,7 +110,11 @@ export function LogSettingsSection({
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
   const form = useForm<LogSettingsFormValues>({
-    resolver: zodResolver(logSettingsSchema),
+    // SavePromptBodyMaxBytes 用了 z.coerce.number()，其 z.input 为 unknown，
+    // 与 z.output 的 number 不一致；表单值以 z.output 为准，此处仅做类型对齐，运行时不变。
+    resolver: zodResolver(
+      logSettingsSchema
+    ) as unknown as Resolver<LogSettingsFormValues>,
     defaultValues: {
       LogConsumeEnabled: defaultEnabled,
       SavePromptEnabled: defaultSavePromptEnabled,

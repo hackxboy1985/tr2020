@@ -1164,7 +1164,6 @@ type PerCallEstimatorProps = {
 
 function PerCallCostEstimator({ effectiveExpr }: PerCallEstimatorProps) {
   const { t } = useTranslation()
-  const [paramValues, setParamValues] = useState<Record<string, string>>({})
   const [paramInput, setParamInput] = useState('')
 
   const result = useMemo(() => {

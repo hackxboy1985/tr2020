@@ -99,7 +99,7 @@ export function ApiKeysMutateDrawer({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const defaultUseAutoGroup = status?.default_use_auto_group === true
-  const isAdmin = (status?.role ?? 0) >= 10 // ROLE.ADMIN
+  const isAdmin = ((status?.role as number | undefined) ?? 0) >= 10 // ROLE.ADMIN
   const savePromptEnabled = status?.save_prompt_enabled === true
   const savePromptUserVisible = status?.save_prompt_user_visible === true
   const shouldShowSavePrompt = savePromptEnabled && (isAdmin || savePromptUserVisible)

@@ -77,13 +77,11 @@ function Pagination({
   total,
   pageSize,
   onPageChange,
-  t,
 }: {
   page: number
   total: number
   pageSize: number
   onPageChange: (p: number) => void
-  t: (k: string) => string
 }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   return (
@@ -296,10 +294,10 @@ export function UserRecordsDialog({ open, onOpenChange, user }: Props) {
 
         {/* Pagination */}
         {tab === 'topup' && topupTotal > PAGE_SIZE && (
-          <Pagination page={topupPage} total={topupTotal} pageSize={PAGE_SIZE} onPageChange={setTopupPage} t={t} />
+          <Pagination page={topupPage} total={topupTotal} pageSize={PAGE_SIZE} onPageChange={setTopupPage} />
         )}
         {tab !== 'topup' && logTotal > PAGE_SIZE && (
-          <Pagination page={logPage} total={logTotal} pageSize={PAGE_SIZE} onPageChange={setLogPage} t={t} />
+          <Pagination page={logPage} total={logTotal} pageSize={PAGE_SIZE} onPageChange={setLogPage} />
         )}
       </DialogContent>
     </Dialog>

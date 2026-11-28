@@ -52,7 +52,9 @@ export function SearchableFilterInput({
   const { t } = useTranslation()
   const [options, setOptions] = useState<ComboboxInputOption[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined
+  )
   const lastKeywordRef = useRef('')
 
   const fetchAndSetOptions = useCallback(

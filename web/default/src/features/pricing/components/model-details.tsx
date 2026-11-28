@@ -54,7 +54,6 @@ import {
 import { DEFAULT_TOKEN_UNIT, QUOTA_TYPE_VALUES } from '../constants'
 import { usePricingData } from '../hooks/use-pricing-data'
 import {
-  formatDynamicUnitPrice,
   formatPerCallPrice,
   getDynamicPriceEntries,
   getDynamicPricingSummary,

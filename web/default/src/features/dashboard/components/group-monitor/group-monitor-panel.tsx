@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { RefreshCw, AlertTriangle, CheckCircle, XCircle, TrendingDown, Clock, Zap, ChevronDown, ChevronUp, Cpu } from 'lucide-react'
+import { RefreshCw, AlertTriangle, CheckCircle, XCircle, TrendingDown, Clock, Zap, Cpu } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'

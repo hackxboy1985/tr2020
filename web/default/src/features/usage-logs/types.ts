@@ -184,6 +184,10 @@ export interface LogOtherData {
   task_id?: string
   upstream_task_id?: string
   reason?: string
+  // 任务日志/重算补扣相关字段（后端会写入 other，前端类型补齐）
+  response_body?: string
+  actual_quota?: number
+  pre_consumed_quota?: number
   // Subscription billing fields
   subscription_plan_id?: string
   subscription_plan_title?: string
